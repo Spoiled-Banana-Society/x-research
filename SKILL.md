@@ -123,7 +123,6 @@ Include a metadata footer:
 - **Date**: YYYY-MM-DD
 - **API calls**: N search queries + N deep-dives
 - **Tweets scanned**: ~N
-- **Est. cost**: ~$X.XX (at $0.005/tweet read)
 - **Queries used**: [list the actual search strings]
 - **Limitations**: [any gaps — e.g., min_likes unavailable, topic too new, non-English results excluded]
 ```

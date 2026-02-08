@@ -103,10 +103,6 @@ External URLs from tweets are in `entities.urls[].expanded_url`. Use WebFetch to
 - 450 requests per 15-minute window (app-level)
 - 300 requests per 15-minute window (user-level)
 
-### Cost
-
-Pay-per-use: ~$0.005 per post returned (not per API request). A search returning 100 tweets costs ~$0.50. Same post returned across multiple queries in one day only counts once (daily dedup). A typical research session of 5 queries returning ~300 unique posts = ~$1.50.
-
 ## Single Tweet Lookup
 
 ```
