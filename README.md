@@ -1,4 +1,3 @@
 # SBS Shared Workspace
 
-Shared Claude Code workspace for Richard + Boris.
-Boris: add your CLAUDE.md and local repo files here.
+Shared Claude Code workspace. Put repos in `repos/` and memory in `CLAUDE.md`.
