@@ -1,0 +1,13 @@
+# List the start up tasks. Learn more https://www.gitpod.io/docs/config-start-tasks/
+tasks:
+  - name: 🔥McGuff Workspace
+    before: echo '...🍌 Growing the Banana!'
+    env:
+      NODE_ENV: dev
+    init: 'cd functions && npm install && npm install -g firebase-tools && npm audit fix'
+    command: firebase login --no-localhost
+
+# List the ports to expose. Learn more https://www.gitpod.io/docs/config-ports/
+ports:
+  - port: 9005
+    onOpen: open-preview

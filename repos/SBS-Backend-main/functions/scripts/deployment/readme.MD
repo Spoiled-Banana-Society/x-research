@@ -1,0 +1,1 @@
+`functions/scripts/deployment`  contain scripts needed to get an environment in a certain state for deployment.  This may include setting up in collection, documents, etc for use in an environment.  

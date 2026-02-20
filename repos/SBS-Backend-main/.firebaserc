@@ -1,0 +1,10 @@
+{
+  "projects": {
+    "default": "sbs-fantasy-dev",
+    "dev": "sbs-fantasy-dev",
+    "prod": "sbs-fantasy-prod",
+    "triggers": "sbs-triggers-fantasy",
+    "prod-env": "sbs-prod-env",
+    "test-env": "sbs-test-env"
+  }
+}

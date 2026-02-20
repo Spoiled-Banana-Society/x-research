@@ -1,0 +1,214 @@
+.page {
+  position: relative;
+  min-height: calc(100vh - 64px);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: radial-gradient(circle at 15% 10%, rgba(243, 226, 22, 0.18), transparent 35%),
+    radial-gradient(circle at 90% 90%, rgba(251, 191, 36, 0.12), transparent 40%),
+    #0a0a0f;
+  overflow: hidden;
+}
+
+.backgroundGlow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(130deg, rgba(243, 226, 22, 0.05), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.gridOverlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(243, 226, 22, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(243, 226, 22, 0.12) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+}
+
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 38rem;
+  border: 1px solid rgba(243, 226, 22, 0.24);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  background: rgba(10, 10, 15, 0.86);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.statusPill {
+  display: inline-block;
+  margin: 0 0 0.9rem;
+  padding: 0.32rem 0.7rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  font-weight: 700;
+  border-radius: 999px;
+  color: #f3e216;
+  background: rgba(243, 226, 22, 0.13);
+  border: 1px solid rgba(243, 226, 22, 0.28);
+}
+
+.headline {
+  margin: 0;
+  font-size: 1.62rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.subhead {
+  margin: 0.62rem 0 1rem;
+  color: #c4c4d4;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.loaderBlock {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  padding: 0.82rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(243, 226, 22, 0.09), rgba(255, 255, 255, 0.03));
+  background-size: 220% 100%;
+  animation: scan 2.6s linear infinite;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #f3e216;
+  border-right-color: #f3e216;
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+.loaderLabel {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #fff;
+}
+
+.loaderHint {
+  margin: 0.2rem 0 0;
+  color: #b6b6c5;
+  font-size: 0.82rem;
+}
+
+.prizePanel {
+  margin: 0 0 1.1rem;
+  padding: 1rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(243, 226, 22, 0.38);
+  background: linear-gradient(160deg, rgba(243, 226, 22, 0.17), rgba(243, 226, 22, 0.06));
+}
+
+.prizeLabel {
+  margin: 0;
+  color: #2b2500;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
+.prizeAmount {
+  margin: 0.32rem 0;
+  color: #111;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.prizeFootnote {
+  margin: 0;
+  color: #2f2a08;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.actions {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.primaryCta,
+.secondaryCta {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 2.7rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primaryCta {
+  background: #f3e216;
+  color: #111;
+}
+
+.primaryCta:hover {
+  background: #fff17a;
+}
+
+.secondaryCta {
+  color: #f4f4f8;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.secondaryCta:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes scan {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+@media (min-width: 640px) {
+  .page {
+    padding: 1.5rem;
+  }
+
+  .card {
+    padding: 1.7rem;
+  }
+
+  .headline {
+    font-size: 2.15rem;
+  }
+
+  .prizeAmount {
+    font-size: 2.45rem;
+  }
+
+  .actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

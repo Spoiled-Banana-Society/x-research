@@ -1,0 +1,649 @@
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
+import { Promo } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
+
+interface PromoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  promo: Promo | null;
+  onClaim: (promo: Promo) => void;
+  isPromoClaimed?: boolean;
+}
+
+export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = false }: PromoModalProps) {
+  const router = useRouter();
+  const { user, updateUser } = useAuth();
+  const [copied, setCopied] = useState(false);
+  const [showAdditionalRules, setShowAdditionalRules] = useState(false);
+  const [claimedRewards, setClaimedRewards] = useState<Set<string>>(new Set());
+  const [claimSuccess, setClaimSuccess] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
+  const [_timerTick, setTimerTick] = useState(0);
+  const hasNotifiedParent = useRef(false);
+
+  // Timer tick for countdown updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimerTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Format time remaining - shows 24:00:00 if timer hasn't started
+  const formatTimeRemaining = (endTime?: string) => {
+    if (!endTime) return '24:00:00';
+
+    const now = Date.now();
+    const end = new Date(endTime).getTime();
+    const diff = end - now;
+
+    if (diff <= 0) return '0:00:00';
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Notify parent when all claims are exhausted through history items
+  useEffect(() => {
+    if (!promo || hasNotifiedParent.current || isPromoClaimed) return;
+
+    const originalClaimCount = promo.claimCount || 0;
+    const claimedCount = claimedRewards.size;
+
+    if (originalClaimCount > 0 && claimedCount >= originalClaimCount) {
+      hasNotifiedParent.current = true;
+      onClaim(promo);
+    }
+  }, [claimedRewards, promo, onClaim, isPromoClaimed]);
+
+  // Reset state when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setClaimedRewards(new Set());
+      setClaimSuccess({ show: false, count: 0 });
+      hasNotifiedParent.current = false;
+    }
+  }, [isOpen]);
+
+  if (!promo) return null;
+
+  // Calculate remaining claims by subtracting claimed history items
+  const claimedCount = claimedRewards.size;
+  const originalClaimCount = promo.claimCount || 0;
+  const remainingClaims = Math.max(0, originalClaimCount - claimedCount);
+
+  const hasProgress = promo.progressMax !== undefined && promo.progressMax > 0;
+  const progressPercent = hasProgress
+    ? ((promo.progressCurrent || 0) / promo.progressMax!) * 100
+    : 0;
+
+  const _handleCopy = () => {
+    if (promo.modalContent.inviteCode) {
+      navigator.clipboard.writeText(promo.modalContent.inviteCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleClaim = () => {
+    // Claim all remaining at once
+    if (remainingClaims > 0) {
+      const claimCount = remainingClaims;
+      // Update user's wheel spins for all remaining claims
+      if (user) {
+        updateUser({ wheelSpins: (user.wheelSpins || 0) + claimCount });
+      }
+      // Mark all as claimed locally
+      for (let i = 0; i < claimCount; i++) {
+        setClaimedRewards(prev => new Set([...Array.from(prev), `main-claim-${i}`]));
+      }
+      // Tell parent this promo is fully claimed
+      onClaim(promo);
+      setClaimSuccess({ show: true, count: claimCount });
+    }
+  };
+
+  const renderProgressSection = () => {
+    if (!hasProgress) return null;
+
+    return (
+      <div className="bg-bg-tertiary rounded-xl p-4">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm text-text-secondary text-sm">Progress</span>
+          <span className="text-text-primary font-semibold">
+            {promo.progressCurrent}/{promo.progressMax}
+          </span>
+        </div>
+        <div className="h-3 bg-bg-elevated rounded-full overflow-hidden">
+          <div
+            className="h-full bg-success rounded-full transition-all duration-500"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+        <p className="text-text-muted text-sm mt-2">
+          {promo.progressCurrent === promo.progressMax
+            ? 'Completed! Claim your reward below.'
+            : `Complete ${promo.progressMax! - (promo.progressCurrent || 0)} more to claim your reward.`}
+        </p>
+      </div>
+    );
+  };
+
+  const renderDailyDraftsContent = () => (
+    <>
+      {renderProgressSection()}
+      {/* Timer display - always show, 24:00:00 if not started */}
+      <div className="bg-bg-tertiary rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-text-secondary">Time Remaining</span>
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-banana">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span className="text-xl font-bold text-banana">{formatTimeRemaining(promo.timerEndTime)}</span>
+          </div>
+        </div>
+        {!promo.timerEndTime && (
+          <p className="text-text-muted text-xs mt-2">Timer starts when you begin your first draft</p>
+        )}
+      </div>
+      <p className="text-text-secondary text-sm">
+        You&apos;ve completed {promo.progressCurrent || 0} of {promo.progressMax} drafts towards your next spin.
+        {promo.claimable && promo.claimCount && promo.claimCount > 0 && (
+          <span className="text-banana font-medium"> You have {promo.claimCount} {promo.claimCount === 1 ? 'spin' : 'spins'} ready to claim!</span>
+        )}
+      </p>
+    </>
+  );
+
+  const renderPick10Content = () => {
+    const handleClaimPick10 = (rewardKey: string) => {
+      setClaimedRewards(prev => new Set([...Array.from(prev), rewardKey]));
+      if (user) {
+        updateUser({ wheelSpins: (user.wheelSpins || 0) + 1 });
+      }
+      setClaimSuccess({ show: true, count: 1 });
+    };
+
+    const getPick10Badge = (status: 'pending' | 'claim' | 'claimed', draftName: string) => {
+      const badgeClass = "w-16 py-1 rounded text-[10px] font-medium text-center";
+      const rewardKey = `pick10-${draftName}`;
+      const isClaimedLocally = claimedRewards.has(rewardKey);
+
+      if (isClaimedLocally || status === 'claimed') {
+        return <span className={`${badgeClass} bg-success/20 text-success`}>Claimed</span>;
+      }
+
+      if (status === 'claim') {
+        return (
+          <button
+            onClick={() => handleClaimPick10(rewardKey)}
+            className={`${badgeClass} bg-banana text-bg-primary hover:bg-banana/80 hover:scale-110  transition-all`}
+          >
+            Claim
+          </button>
+        );
+      }
+
+      return <span className={`${badgeClass} bg-bg-elevated text-text-muted`}>Pending</span>;
+    };
+
+    return (
+      <>
+        {/* Total Pick 10s */}
+        {promo.modalContent.totalPick10s !== undefined && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <div className="flex justify-between items-center">
+              <span className="text-text-primary font-medium">Total Pick 10s Hit</span>
+              <span className="text-2xl font-bold text-banana">{promo.modalContent.totalPick10s}</span>
+            </div>
+            <p className="text-text-muted text-sm mt-2">
+              You&apos;ve earned {promo.modalContent.totalPick10s} spins from Pick 10s!
+            </p>
+          </div>
+        )}
+
+        {/* Pick 10 History */}
+        {promo.modalContent.pick10History && promo.modalContent.pick10History.length > 0 && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <h4 className="font-semibold mb-3 text-text-primary">Pick 10 History</h4>
+            <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-hover pr-3">
+              {promo.modalContent.pick10History.map((entry, index) => (
+                <div key={index} className="flex items-center justify-between py-2 border-b border-bg-elevated last:border-0">
+                  <div>
+                    <p className="text-text-secondary text-sm">{entry.draftName}</p>
+                    <p className="text-text-muted text-xs">{entry.date}</p>
+                  </div>
+                  {getPick10Badge(entry.status, entry.draftName)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(!promo.modalContent.pick10History || promo.modalContent.pick10History.length === 0) && (
+          <p className="text-text-muted text-sm text-center py-4">
+            No Pick 10s earned yet. Enter more drafts for a chance!
+          </p>
+        )}
+      </>
+    );
+  };
+
+  const renderReferralContent = () => {
+    const handleCopyLink = () => {
+      if (promo.modalContent.referralLink) {
+        navigator.clipboard.writeText(promo.modalContent.referralLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    };
+
+    const handleClaimReferral = (rewardKey: string) => {
+      setClaimedRewards(prev => new Set([...Array.from(prev), rewardKey]));
+      // Update user's wheel spins
+      if (user) {
+        updateUser({ wheelSpins: (user.wheelSpins || 0) + 1 });
+      }
+      setClaimSuccess({ show: true, count: 1 });
+    };
+
+    const _getStatusDisplay = (status: string, pendingReason?: string, username?: string) => {
+      const badgeClass = "w-20 py-1.5 rounded-lg text-xs font-medium text-center";
+      const statusKey = `${username}-status`;
+      const isClaimedLocally = claimedRewards.has(statusKey);
+
+      if (isClaimedLocally || status === 'claimed') {
+        return (
+          <span className={`${badgeClass} bg-success/20 text-success`}>
+            Claimed
+          </span>
+        );
+      }
+
+      switch (status) {
+        case 'pending':
+          return (
+            <div className="flex flex-col items-end gap-1">
+              <span className={`${badgeClass} bg-banana/20 text-banana`}>
+                Pending
+              </span>
+              {pendingReason && (
+                <span className="text-[10px] text-text-muted whitespace-nowrap text-right">
+                  {pendingReason}
+                </span>
+              )}
+            </div>
+          );
+        case 'claim':
+          return (
+            <button
+              onClick={() => handleClaimReferral(statusKey)}
+              className={`${badgeClass} bg-banana text-bg-primary hover:bg-banana/80 hover:scale-110  transition-all`}
+            >
+              Claim
+            </button>
+          );
+        default:
+          return null;
+      }
+    };
+
+    const getRewardBadge = (status: 'pending' | 'claim' | 'claimed', rewardType: string, username: string) => {
+      const smallBadgeClass = "w-16 py-1 rounded text-[10px] font-medium text-center";
+      const rewardKey = `${username}-${rewardType}`;
+      const isClaimedLocally = claimedRewards.has(rewardKey);
+
+      if (isClaimedLocally || status === 'claimed') {
+        return <span className={`${smallBadgeClass} bg-success/20 text-success`}>Claimed</span>;
+      }
+
+      switch (status) {
+        case 'pending':
+          return <span className={`${smallBadgeClass} bg-bg-elevated text-text-muted`}>Pending</span>;
+        case 'claim':
+          return (
+            <button
+              onClick={() => handleClaimReferral(rewardKey)}
+              className={`${smallBadgeClass} bg-banana text-bg-primary hover:bg-banana/80 hover:scale-110  transition-all`}
+            >
+              Claim
+            </button>
+          );
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <>
+        {/* Referral Link */}
+        {promo.modalContent.referralLink && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <h4 className="font-semibold mb-2 text-text-primary">Your Referral Link</h4>
+            <p className="text-text-muted text-xs mb-3">Share this link with friends to earn spins together</p>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-bg-elevated rounded-lg px-4 py-3 font-mono text-banana text-sm truncate">
+                {promo.modalContent.referralLink}
+              </div>
+              <Button variant="secondary" size="sm" onClick={handleCopyLink}>
+                {copied ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Rewards Tiers */}
+        {promo.modalContent.referralRewards && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <h4 className="font-semibold mb-3 text-text-primary">Earn Spins</h4>
+            <div className="space-y-2">
+              {promo.modalContent.referralRewards.map((reward, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-bg-elevated last:border-0">
+                  <span className="text-text-secondary text-sm">{reward.milestone}</span>
+                  <span className="text-banana font-medium text-sm">{reward.reward}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Referral History */}
+        {promo.modalContent.referralHistory && promo.modalContent.referralHistory.length > 0 && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <h4 className="font-semibold mb-3 text-text-primary">Referral History</h4>
+            <div className="space-y-4 max-h-56 overflow-y-auto scrollbar-hover pr-3">
+              {[...promo.modalContent.referralHistory].sort((a, b) => {
+                // Sort by reward status: claim first, pending second, claimed last
+                const getOrder = (entry: typeof a) => {
+                  if (!entry.rewards) return 2;
+                  const statuses = [entry.rewards.verified, entry.rewards.bought1, entry.rewards.bought10];
+                  if (statuses.some(s => s === 'claim')) return 0;
+                  if (statuses.some(s => s === 'pending')) return 1;
+                  return 2;
+                };
+                return getOrder(a) - getOrder(b);
+              }).map((entry, index) => (
+                <div key={index} className="border-b border-bg-elevated last:border-0 pb-3 last:pb-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-text-primary font-medium">{entry.username}</p>
+                      <p className="text-text-muted text-xs">{entry.dateJoined}</p>
+                    </div>
+                    {entry.draftsPurchased !== undefined && (
+                      <span className="text-text-muted text-xs">{Math.min(entry.draftsPurchased, 10)} drafts purchased</span>
+                    )}
+                  </div>
+                  {entry.rewards && (
+                    <div className="flex gap-3 mt-2 justify-end">
+                      <div className="flex flex-col items-center gap-1 w-16">
+                        <span className="text-[8px] text-text-muted">Verified</span>
+                        {getRewardBadge(entry.rewards.verified, 'Verified', entry.username)}
+                      </div>
+                      <div className="flex flex-col items-center gap-1 w-16">
+                        <span className="text-[8px] text-text-muted">Bought 1</span>
+                        {getRewardBadge(entry.rewards.bought1, 'Bought 1', entry.username)}
+                      </div>
+                      <div className="flex flex-col items-center gap-1 w-16">
+                        <span className="text-[8px] text-text-muted">Bought 10</span>
+                        {getRewardBadge(entry.rewards.bought10, 'Bought 10', entry.username)}
+                      </div>
+                    </div>
+                  )}
+                  {entry.pendingReason && entry.status === 'pending' && (
+                    <p className="text-text-muted text-xs mt-2">{entry.pendingReason}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderJackpotContent = () => (
+    <>
+      {renderProgressSection()}
+      {promo.modalContent.jackpotHistory && promo.modalContent.jackpotHistory.length > 0 ? (
+        <div className="bg-bg-tertiary rounded-xl p-4">
+          <h4 className="font-semibold mb-3 text-text-primary">Jackpot Wins</h4>
+          <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-hover pr-3">
+            {promo.modalContent.jackpotHistory.map((entry, index) => (
+              <div key={index} className="flex justify-between py-2 border-b border-bg-elevated last:border-0">
+                <span className="text-text-secondary">{entry.draftName}</span>
+                <span className="text-jackpot font-semibold">${entry.amount}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-text-muted text-sm text-center py-4">
+          No Jackpots hit yet. Keep drafting for a chance to win!
+        </p>
+      )}
+    </>
+  );
+
+  const renderMintContent = () => {
+    return (
+      <>
+        {renderProgressSection()}
+        {promo.modalContent.totalMinted !== undefined && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <div className="flex justify-between items-center">
+              <span className="text-text-primary font-medium">Total Passes Purchased</span>
+              <span className="text-2xl font-bold text-banana">{promo.modalContent.totalMinted}</span>
+            </div>
+            <p className="text-text-muted text-sm mt-2">
+              You&apos;ve earned {Math.floor(promo.modalContent.totalMinted / 10)} spins from buying!
+            </p>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderNewUserContent = () => (
+    <div className="bg-bg-tertiary rounded-xl p-4">
+      <div className="flex items-center gap-3">
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center ${
+            promo.modalContent.twitterConnected ? 'bg-success/20' : 'bg-bg-elevated'
+          }`}
+        >
+          <svg
+            className={`w-5 h-5 ${promo.modalContent.twitterConnected ? 'text-success' : 'text-text-muted'}`}
+            fill="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <p className="font-medium text-text-primary">Twitter/X Verification</p>
+          <p className={`text-sm ${promo.modalContent.twitterConnected ? 'text-success' : 'text-text-muted'}`}>
+            {promo.modalContent.twitterConnected ? 'Verified' : 'Connect to claim'}
+          </p>
+        </div>
+        {!promo.modalContent.twitterConnected && (
+          <Button size="sm">Connect</Button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderBuyBonusContent = () => (
+    <div className="bg-bg-tertiary rounded-xl p-4 text-center">
+      <div className="text-4xl mb-3">🎁</div>
+      <p className="font-semibold mb-2 text-text-primary">Limited Time Offer!</p>
+      <p className="text-text-secondary text-sm">
+        Head to the Buy Drafts page to take advantage of this promotion.
+      </p>
+      <Button className="mt-4" onClick={() => window.location.href = '/buy-drafts'}>
+        Buy Drafts
+      </Button>
+    </div>
+  );
+
+  const renderTweetEngagementContent = () => (
+    <div className="bg-bg-tertiary rounded-xl p-4 text-center">
+      <div className="text-4xl mb-3">🐦</div>
+      <p className="font-semibold mb-2 text-text-primary">Tweet Engagement Reward</p>
+      <p className="text-text-secondary text-sm">
+        Like, repost, or reply to the official SBS launch tweet to qualify for a spin reward.
+      </p>
+      <Button className="mt-4" onClick={() => window.open(promo.ctaLink, '_blank', 'noopener,noreferrer')}>
+        Open Tweet
+      </Button>
+    </div>
+  );
+
+  const renderPromoContent = () => {
+    switch (promo.type) {
+      case 'daily-drafts':
+        return renderDailyDraftsContent();
+      case 'pick-10':
+        return renderPick10Content();
+      case 'referral':
+        return renderReferralContent();
+      case 'jackpot':
+        return renderJackpotContent();
+      case 'mint':
+        return renderMintContent();
+      case 'new-user':
+        return renderNewUserContent();
+      case 'buy-bonus':
+        return renderBuyBonusContent();
+      case 'tweet-engagement':
+        return renderTweetEngagementContent();
+      default:
+        return null;
+    }
+  };
+
+  const canClaim = promo.claimable && remainingClaims > 0 && !isPromoClaimed;
+  const claimButtonText = remainingClaims > 1
+    ? `CLAIM (${remainingClaims})`
+    : 'CLAIM';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={promo.modalContent.title} size="lg">
+      <div className="space-y-5">
+        {/* Explanation */}
+        <div className="text-text-secondary leading-relaxed">
+          <div className="flex items-start gap-2">
+            <p className="whitespace-pre-line flex-1">
+              {promo.type === 'buy-bonus' ? (
+                <>
+                  {promo.modalContent.explanation.split('free draft pass').map((part, i, arr) => (
+                    <React.Fragment key={i}>
+                      {part}
+                      {i < arr.length - 1 && (
+                        <span className="relative inline-block group">
+                          <em className="italic text-white cursor-help">free draft pass</em>
+                          <span className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-bg-elevated text-text-primary text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-[100] shadow-lg w-64 pointer-events-none">
+                            Free drafts can only be used to draft. They cannot be used for promos.
+                          </span>
+                        </span>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </>
+              ) : (
+                promo.modalContent.explanation
+              )}
+            </p>
+            {promo.modalContent.additionalRules && (
+              <button
+                onClick={() => setShowAdditionalRules(!showAdditionalRules)}
+                className="p-1 hover:bg-bg-tertiary rounded-full transition-colors flex-shrink-0"
+                title="View additional rules"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-text-muted hover:text-text-primary"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {showAdditionalRules && promo.modalContent.additionalRules && (
+            <div className="mt-3 p-3 bg-bg-tertiary rounded-lg text-sm text-text-muted">
+              {promo.modalContent.additionalRules}
+            </div>
+          )}
+        </div>
+
+        {/* Dynamic Content Based on Promo Type */}
+        {renderPromoContent()}
+
+        {/* Claim Button */}
+        {promo.type !== 'buy-bonus' && (
+          <div className="pt-4 border-t border-bg-tertiary">
+            <Button
+              className={`w-full transition-all ${canClaim ? 'hover:scale-105  hover:!bg-banana' : ''}`}
+              disabled={!canClaim}
+              onClick={handleClaim}
+            >
+              {claimButtonText}
+            </Button>
+            {!canClaim && (
+              <p className="text-text-muted text-xs text-center mt-2">
+                Complete the requirements above to claim your reward
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Referral Claim Success Popup */}
+      {claimSuccess.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <div className="bg-bg-secondary rounded-2xl p-6 w-80 text-center shadow-2xl">
+            <div className="text-4xl mb-4">🎉</div>
+            <h3 className="text-xl font-bold text-text-primary mb-2">Success!</h3>
+            <p className="text-text-secondary mb-6">
+              You got {claimSuccess.count} free {claimSuccess.count === 1 ? 'spin' : 'spins'}!
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  setClaimSuccess({ show: false, count: 0 });
+                  router.push('/banana-wheel');
+                }}
+                className="w-full py-3 bg-banana text-bg-primary font-bold rounded-lg hover:bg-banana/90 transition-all"
+              >
+                Spin the Wheel 🎡
+              </button>
+              <button
+                onClick={() => setClaimSuccess({ show: false, count: 0 })}
+                className="w-full py-3 bg-bg-tertiary text-text-secondary font-medium rounded-lg hover:bg-bg-elevated transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}

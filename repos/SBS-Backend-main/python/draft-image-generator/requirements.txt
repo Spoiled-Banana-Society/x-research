@@ -1,0 +1,8 @@
+# Function dependencies, for example:
+# package>=version
+# Function dependencies, for example:
+# package>=version
+Pillow
+google-cloud-storage
+uuid
+google-cloud-logging

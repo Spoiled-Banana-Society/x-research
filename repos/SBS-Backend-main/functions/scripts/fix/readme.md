@@ -1,0 +1,1 @@
+This folder contains all scripts that will fix one off type issues.  If something is happened before and we coded a fix for it, we will get it placed in here. 

@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.production
+.env.*.local
+*.pem
+credentials.json
+configs/*.json
