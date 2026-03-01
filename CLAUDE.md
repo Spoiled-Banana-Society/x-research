@@ -5,6 +5,30 @@
 > - If you cause an error, fix it immediately without waiting for the user to report it. Check the dev server output after edits.
 > - **Always commit and push after completing changes.** Do not wait for the user to ask — deploy to Vercel automatically by pushing to main.
 
+## Shared Workspace Sync (IMPORTANT — Read First)
+
+This repo (`sbs-claude-shared-workspace`) is the bridge between Boris and Richard. Both work on banana-fantasy from their own machines and sync through this repo.
+
+### At the START of every session:
+```bash
+cd ~/sbs-claude-shared-workspace && git pull
+```
+Then check if Boris pushed any updates — look at recent commits for changed files.
+
+### At the END of every session (after ANY changes):
+```bash
+cd ~/sbs-claude-shared-workspace
+git add -A
+git commit -m "Richard: <brief description of what changed>"
+git push
+```
+
+### Rules:
+- **ALWAYS pull before starting work** — otherwise you'll work on stale code.
+- **ALWAYS commit and push when done** — otherwise Boris won't have your changes.
+- **Never do partial syncs** — always commit all changed files, not just a few.
+- If there's a merge conflict, resolve it carefully — don't discard either side without checking.
+
 ## Company Overview
 - **Company:** Spoiled Banana Society (SBS)
 - **Founded:** 2021
