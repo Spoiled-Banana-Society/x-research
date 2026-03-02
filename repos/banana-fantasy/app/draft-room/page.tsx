@@ -98,6 +98,7 @@ function DraftRoomContent() {
           phase: 'filling',
           fillingStartedAt: Date.now(),
           fillingInitialPlayers: draftRoom.players || 1,
+          liveWalletAddress: walletParam,
         });
 
         // Fire off bot fill in background (staging only)
@@ -566,6 +567,7 @@ function DraftRoomContent() {
       phase: 'filling',
       fillingStartedAt: Date.now(),
       fillingInitialPlayers: Math.max(initialPlayers, 1),
+      liveWalletAddress: walletParam,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
@@ -575,16 +577,22 @@ function DraftRoomContent() {
     if (!draftId || phase !== 'drafting') return;
     if (engine.draftStatus === 'completed') return;
     draftStore.updateDraft(draftId, {
+      status: 'drafting',
+      type: draftType,
+      draftType: draftType,
+      phase: 'drafting',
+      players: 10,
       currentPick: engine.turnsUntilUserPick,
       totalPicks: engine.picks.length,
       isYourTurn: engine.isUserTurn,
       timeRemaining: engine.isUserTurn ? engine.timeRemaining : undefined,
+      pickEndTimestamp: engine.isUserTurn ? Math.ceil(Date.now() / 1000) + (engine.timeRemaining || 0) : undefined,
       // Save engine state so draft can resume after leaving
       enginePicks: engine.picks,
       enginePickNumber: engine.currentPickNumber,
       engineQueue: engine.queuedPlayers,
     });
-  }, [draftId, phase, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
+  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
 
   // Write 6: Draft completes — remove from active drafts
   useEffect(() => {

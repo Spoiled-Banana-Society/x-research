@@ -30,6 +30,10 @@ export interface DraftState {
   draftOrder?: Array<{ id: string; name: string; displayName: string; isYou: boolean; avatar: string }>;
   userDraftPosition?: number;
 
+  // Live sync metadata (for REST polling on drafting page)
+  liveWalletAddress?: string;    // Wallet address for API calls
+  pickEndTimestamp?: number;     // Absolute Unix seconds — when current pick expires
+
   // Engine state for resuming mid-draft
   enginePicks?: Array<{
     pickNumber: number; round: number; pickInRound: number;

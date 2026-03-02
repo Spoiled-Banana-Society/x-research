@@ -16,8 +16,45 @@ import * as draftStore from '@/lib/draftStore';
 import type { DraftState } from '@/lib/draftStore';
 import type { ApiDraftToken } from '@/lib/api/owner';
 import { DRAFT_PLAYERS } from '@/lib/draftRoomConstants';
+import * as draftApi from '@/lib/draftApi';
 
 type Draft = DraftState;
+
+/** Snake draft: get drafter index for a given pick number (10 players) */
+function getSnakeDrafterIndex(pickNumber: number): number {
+  const round = Math.ceil(pickNumber / 10);
+  const posInRound = ((pickNumber - 1) % 10);
+  return round % 2 === 1 ? posInRound : 9 - posInRound;
+}
+
+/** Compute turnsUntilUserPick + isUserTurn from server draft info */
+function computeTurnsFromServer(
+  info: draftApi.DraftInfoResponse,
+  walletAddress: string,
+): { turnsUntilUserPick: number; isUserTurn: boolean; pickEndTimestamp: number | undefined } {
+  const wallet = walletAddress.toLowerCase();
+  const currentDrafter = (info.currentDrafter || '').toLowerCase();
+  const isUserTurn = wallet !== '' && wallet === currentDrafter;
+
+  const userIndex = info.draftOrder.findIndex(
+    entry => entry.ownerId.toLowerCase() === wallet,
+  );
+
+  let turnsUntilUserPick = 0;
+  if (!isUserTurn && userIndex >= 0) {
+    const totalPicks = (info.draftOrder.length || 10) * 15;
+    for (let i = 1; i <= totalPicks - info.pickNumber + 1; i++) {
+      if (getSnakeDrafterIndex(info.pickNumber + i) === userIndex) {
+        turnsUntilUserPick = i;
+        break;
+      }
+    }
+  }
+
+  const pickEndTimestamp = info.currentPickEndTime || undefined;
+
+  return { turnsUntilUserPick, isUserTurn, pickEndTimestamp };
+}
 
 // Format relative time (e.g., "5 min ago", "2 hrs ago")
 function formatRelativeTime(timestamp: number): string {
@@ -167,6 +204,71 @@ export default function DraftingPage() {
   useEffect(() => {
     if (!isLive) setIsLoading(false);
   }, [isLive]);
+
+  // REST polling: refresh live draft state on mount, focus, and every 10s
+  useEffect(() => {
+    if (!isLive || !user?.walletAddress) return;
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const syncLiveDrafts = async () => {
+      const allDrafts = draftStore.getActiveDrafts();
+      const draftingDrafts = allDrafts.filter(
+        d => d.liveWalletAddress && (d.status === 'drafting' || d.phase === 'drafting'),
+      );
+
+      for (const draft of draftingDrafts) {
+        if (cancelled) return;
+        try {
+          const info = await draftApi.getDraftInfo(draft.id);
+          if (cancelled) return;
+
+          const { turnsUntilUserPick, isUserTurn, pickEndTimestamp } =
+            computeTurnsFromServer(info, draft.liveWalletAddress!);
+
+          const totalPicks = (info.draftOrder?.length || 10) * 15;
+          const isCompleted = info.pickNumber > totalPicks;
+
+          if (isCompleted) {
+            draftStore.removeDraft(draft.id);
+          } else {
+            draftStore.updateDraft(draft.id, {
+              currentPick: turnsUntilUserPick,
+              isYourTurn: isUserTurn,
+              pickEndTimestamp,
+              timeRemaining: isUserTurn && pickEndTimestamp
+                ? Math.max(0, Math.ceil(pickEndTimestamp - Date.now() / 1000))
+                : undefined,
+              status: 'drafting',
+            });
+          }
+        } catch (err) {
+          console.warn(`[Drafting] Failed to sync draft ${draft.id}:`, err);
+        }
+      }
+    };
+
+    // Sync immediately on mount
+    syncLiveDrafts();
+
+    // Sync on window focus (debounced)
+    let focusTimeout: ReturnType<typeof setTimeout> | null = null;
+    const onFocus = () => {
+      if (focusTimeout) clearTimeout(focusTimeout);
+      focusTimeout = setTimeout(syncLiveDrafts, 500);
+    };
+    window.addEventListener('focus', onFocus);
+
+    // Poll every 10 seconds
+    intervalId = setInterval(syncLiveDrafts, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      if (focusTimeout) clearTimeout(focusTimeout);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isLive, user?.walletAddress]);
 
   // Merge local + live drafts: localStorage drafts are the source of truth for
   // filling/pre-spin phases (they have timestamps). API drafts supplement with
@@ -456,9 +558,17 @@ export default function DraftingPage() {
                     ) : live.countdown !== null ? (
                       <span className="text-white/50 text-sm">Starting in {live.countdown}s</span>
                     ) : isYourTurn ? (
-                      <span className="text-banana font-bold">{draft.timeRemaining}s</span>
+                      <span className="text-banana font-bold">
+                        {draft.pickEndTimestamp
+                          ? Math.max(0, Math.ceil(draft.pickEndTimestamp - Date.now() / 1000))
+                          : (draft.timeRemaining ?? 30)}s
+                      </span>
+                    ) : draft.currentPick != null ? (
+                      <span className="text-white/50 text-sm">
+                        {draft.currentPick === 0 ? 'Next up' : `${draft.currentPick} pick${draft.currentPick !== 1 ? 's' : ''} away`}
+                      </span>
                     ) : (
-                      <span className="text-white/50 text-sm">{draft.currentPick} picks away</span>
+                      <span className="text-white/50 text-sm">In progress</span>
                     )}
                   </div>
 
