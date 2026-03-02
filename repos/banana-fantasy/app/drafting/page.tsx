@@ -213,36 +213,57 @@ export default function DraftingPage() {
 
     const syncLiveDrafts = async () => {
       const allDrafts = draftStore.getActiveDrafts();
-      const draftingDrafts = allDrafts.filter(
-        d => d.liveWalletAddress && (d.status === 'drafting' || d.phase === 'drafting'),
+      const liveDraftsToSync = allDrafts.filter(
+        d => d.liveWalletAddress && (d.status === 'filling' || d.status === 'drafting' || d.phase === 'drafting'),
       );
 
-      for (const draft of draftingDrafts) {
+      for (const draft of liveDraftsToSync) {
         if (cancelled) return;
         try {
           const info = await draftApi.getDraftInfo(draft.id);
           if (cancelled) return;
 
-          const { turnsUntilUserPick, isUserTurn, pickEndTimestamp } =
-            computeTurnsFromServer(info, draft.liveWalletAddress!);
+          const playerCount = info.draftOrder?.length || 0;
+          const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
+          const isFull = playerCount >= 10;
 
-          const totalPicks = (info.draftOrder?.length || 10) * 15;
-          const isCompleted = info.pickNumber > totalPicks;
+          if (hasDraftStarted) {
+            // Draft is actively in progress — compute picks away
+            const { turnsUntilUserPick, isUserTurn, pickEndTimestamp } =
+              computeTurnsFromServer(info, draft.liveWalletAddress!);
 
-          if (isCompleted) {
-            draftStore.removeDraft(draft.id);
-          } else {
+            const totalPicks = (info.draftOrder?.length || 10) * 15;
+            const isCompleted = info.pickNumber > totalPicks;
+
+            if (isCompleted) {
+              draftStore.removeDraft(draft.id);
+            } else {
+              draftStore.updateDraft(draft.id, {
+                status: 'drafting',
+                phase: 'drafting',
+                players: 10,
+                currentPick: turnsUntilUserPick,
+                isYourTurn: isUserTurn,
+                pickEndTimestamp,
+                timeRemaining: isUserTurn && pickEndTimestamp
+                  ? Math.max(0, Math.ceil(pickEndTimestamp - Date.now() / 1000))
+                  : undefined,
+              });
+            }
+          } else if (isFull) {
+            // 10/10 but draft hasn't started yet — in countdown
             draftStore.updateDraft(draft.id, {
-              currentPick: turnsUntilUserPick,
-              isYourTurn: isUserTurn,
-              pickEndTimestamp,
-              timeRemaining: isUserTurn && pickEndTimestamp
-                ? Math.max(0, Math.ceil(pickEndTimestamp - Date.now() / 1000))
-                : undefined,
-              status: 'drafting',
+              players: 10,
+              phase: 'pre-spin',
+            });
+          } else if (playerCount > 0 && draft.status === 'filling') {
+            // Still filling — update player count
+            draftStore.updateDraft(draft.id, {
+              players: playerCount,
             });
           }
         } catch (err) {
+          // getDraftInfo may 404/500 for very new drafts — that's fine
           console.warn(`[Drafting] Failed to sync draft ${draft.id}:`, err);
         }
       }
