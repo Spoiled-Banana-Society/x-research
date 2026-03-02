@@ -875,28 +875,22 @@ function DraftRoomContent() {
       // draftStartTime with real wallet addresses visible from the start.
       setWaitingForServer(true);
       setServerWaitProgress(0);
-      let cancelled = false;
       const randomizingStartedAt = Date.now();
-      const EXPECTED_WAIT_MS = 10000; // Expected ~8-10s, progress fills over this duration
       const MIN_RANDOMIZING_MS = 3000; // Always show progress bar for at least 3s
 
-      // Smooth progress animation — fills to ~90% over expected wait, last 10% on completion
-      const progressInterval = setInterval(() => {
-        const elapsed = Date.now() - randomizingStartedAt;
-        const raw = Math.min(0.92, elapsed / EXPECTED_WAIT_MS);
-        // Ease-out curve for natural feel
-        const eased = 1 - Math.pow(1 - raw, 2.5);
-        setServerWaitProgress(eased);
-      }, 80);
-
-      const pollUntilReady = async () => {
+      // Fetch server state immediately — no progress animation needed since it's fast.
+      // The old approach used setInterval for progress which caused re-renders that
+      // could cancel the async poll via effect cleanup. Now we just show a bar that
+      // snaps to 100% when done.
+      const doServerPoll = async () => {
         let attempts = 0;
-        while (!cancelled) {
+        while (attempts < 30) { // max ~60 seconds of polling
           attempts++;
           try {
             console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
+            // Animate progress based on attempt count
+            setServerWaitProgress(Math.min(0.92, attempts / 15));
             const info = await draftApi.getDraftInfo(draftId);
-            if (cancelled) return;
 
             if (!info.draftOrder || info.draftOrder.length < 10) {
               throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
@@ -916,7 +910,6 @@ function DraftRoomContent() {
             // Put wallets in boxes NOW (still in "Randomizing" state so user sees them)
             setDraftOrder(realOrder);
             setServerWaitProgress(1); // Snap to 100%
-            clearInterval(progressInterval);
             console.log(`[Draft Room] Wallets loaded:`, realOrder.map(p => p.displayName));
 
             // Show completed bar briefly before transitioning
@@ -924,28 +917,25 @@ function DraftRoomContent() {
             if (elapsed < MIN_RANDOMIZING_MS) {
               await new Promise(resolve => setTimeout(resolve, MIN_RANDOMIZING_MS - elapsed));
             }
-            if (cancelled) return;
 
-            // Start countdown from NOW so user always sees a full 60 seconds.
-            // The server's draftStartTime will finish before our visual countdown
-            // reaches 0, so timer_update will already be available — no glitch.
+            // Start countdown — transition to pre-spin immediately
             const countdownStart = Date.now();
-
             const remaining = Math.ceil((info.draftStartTime * 1000 - Date.now()) / 1000);
             console.log(`[Draft Room] Starting countdown — draftStartTime in ${remaining}s`);
             startPreSpin(realOrder, countdownStart);
             return;
           } catch (err) {
             console.warn(`[Draft Room] Server not ready (attempt ${attempts}):`, err instanceof Error ? err.message : err);
-            if (!cancelled) {
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
+        // If we exhausted all attempts, fall back to local mode
+        console.log('[Draft Room] Server poll exhausted — falling back to local');
+        const shuffled = buildLocalOrder();
+        startPreSpin(shuffled, Date.now());
       };
 
-      pollUntilReady();
-      return () => { cancelled = true; clearInterval(progressInterval); };
+      doServerPoll();
     } else {
       // LOCAL MODE: use DRAFT_PLAYERS with frontend countdown
       const shuffled = buildLocalOrder();
