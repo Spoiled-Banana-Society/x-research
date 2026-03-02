@@ -67,6 +67,12 @@ function DraftRoomContent() {
   // Track whether we're waiting for server to create draft documents after filling
   const [waitingForServer, setWaitingForServer] = useState(false);
   const [serverWaitProgress, setServerWaitProgress] = useState(0);
+  // State-driven approach: when poll succeeds, store result here; a separate effect transitions
+  const [serverPollResult, setServerPollResult] = useState<{
+    order: typeof DRAFT_PLAYERS;
+    countdownStart: number;
+  } | null>(null);
+  const serverPollStartedRef = useRef(false);
   // Queue WS messages that arrive before engine initialization (instead of dropping them)
   // Messages are replayed after initializeFromServer completes — matches production behavior
   const pendingWsMessagesRef = useRef<Array<{type: string, payload: any}>>([]);
@@ -832,117 +838,112 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLiveMode, phase, draftId, walletParam]);
 
+  // ---- "At 10" effect: triggers server poll (live) or immediate transition (local) ----
   useEffect(() => {
     if (phase !== 'filling' || playerCount < 10) return;
-    // In live mode, wait until draftId is available (joinDraft is async)
     if (isLiveMode && !draftId) return;
 
-    // Helper: build draft order from local DRAFT_PLAYERS (local/fallback mode)
-    const buildLocalOrder = () => {
+    if (!isLiveMode) {
+      // LOCAL MODE: transition immediately
       const shuffled = [...DRAFT_PLAYERS].sort(() => Math.random() - 0.5);
-      return shuffled;
-    };
-
-    // Helper: start the pre-spin countdown
-    const startPreSpin = (order: typeof draftOrder, countdownStartRef: number) => {
-      const userPos = order.findIndex(p => p.isYou);
-      setDraftOrder(order);
-      setUserDraftPosition(userPos);
-
-      preSpinStartedAtRef.current = countdownStartRef;
-      setWaitingForServer(false);
-      setPhase('pre-spin');
-      setPreSpinCountdown(15);
-      // mainCountdown is calculated by the pre-spin tick from preSpinStartedAtRef
-      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStartRef) / 1000));
-      setMainCountdown(remaining);
-
-      if (isLiveMode) setLiveDataReady(true);
-      if (draftId) {
-        draftStore.updateDraft(draftId, {
-          phase: 'pre-spin',
-          preSpinStartedAt: countdownStartRef,
-          draftOrder: order,
-          userDraftPosition: userPos,
-        });
-      }
-    };
-
-    if (isLiveMode && draftId) {
-      // LIVE MODE: Wait for server to create draft documents before starting countdown.
-      // After filling, the Go backend needs a few seconds to write Firestore docs.
-      // We poll getDraftInfo until it succeeds, then start the countdown synced to
-      // draftStartTime with real wallet addresses visible from the start.
-      setWaitingForServer(true);
-      setServerWaitProgress(0);
-      const randomizingStartedAt = Date.now();
-      const MIN_RANDOMIZING_MS = 3000; // Always show progress bar for at least 3s
-
-      // Fetch server state immediately — no progress animation needed since it's fast.
-      // The old approach used setInterval for progress which caused re-renders that
-      // could cancel the async poll via effect cleanup. Now we just show a bar that
-      // snaps to 100% when done.
-      const doServerPoll = async () => {
-        let attempts = 0;
-        while (attempts < 30) { // max ~60 seconds of polling
-          attempts++;
-          try {
-            console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
-            // Animate progress based on attempt count
-            setServerWaitProgress(Math.min(0.92, attempts / 15));
-            const info = await draftApi.getDraftInfo(draftId);
-
-            if (!info.draftOrder || info.draftOrder.length < 10) {
-              throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
-            }
-
-            // Server is ready — build draft order from real wallet addresses
-            const realOrder: typeof draftOrder = info.draftOrder.map((u, idx) => ({
-              id: String(idx + 1),
-              name: u.ownerId,
-              displayName: u.ownerId.length > 10
-                ? u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4)
-                : u.ownerId,
-              isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
-              avatar: '🍌',
-            }));
-
-            // Put wallets in boxes NOW (still in "Randomizing" state so user sees them)
-            setDraftOrder(realOrder);
-            setServerWaitProgress(1); // Snap to 100%
-            console.log(`[Draft Room] Wallets loaded:`, realOrder.map(p => p.displayName));
-
-            // Show completed bar briefly before transitioning
-            const elapsed = Date.now() - randomizingStartedAt;
-            if (elapsed < MIN_RANDOMIZING_MS) {
-              await new Promise(resolve => setTimeout(resolve, MIN_RANDOMIZING_MS - elapsed));
-            }
-
-            // Start countdown — transition to pre-spin immediately
-            const countdownStart = Date.now();
-            const remaining = Math.ceil((info.draftStartTime * 1000 - Date.now()) / 1000);
-            console.log(`[Draft Room] Starting countdown — draftStartTime in ${remaining}s`);
-            startPreSpin(realOrder, countdownStart);
-            return;
-          } catch (err) {
-            console.warn(`[Draft Room] Server not ready (attempt ${attempts}):`, err instanceof Error ? err.message : err);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-        // If we exhausted all attempts, fall back to local mode
-        console.log('[Draft Room] Server poll exhausted — falling back to local');
-        const shuffled = buildLocalOrder();
-        startPreSpin(shuffled, Date.now());
-      };
-
-      doServerPoll();
-    } else {
-      // LOCAL MODE: use DRAFT_PLAYERS with frontend countdown
-      const shuffled = buildLocalOrder();
-      startPreSpin(shuffled, Date.now());
+      setServerPollResult({ order: shuffled, countdownStart: Date.now() });
+      return;
     }
+
+    // LIVE MODE: poll server for draft order
+    if (serverPollStartedRef.current) return; // Already polling
+    serverPollStartedRef.current = true;
+    setWaitingForServer(true);
+    setServerWaitProgress(0);
+
+    const randomizingStartedAt = Date.now();
+    const MIN_RANDOMIZING_MS = 3000;
+    const pollDraftId = draftId; // Capture for async closure
+
+    (async () => {
+      let attempts = 0;
+      while (attempts < 30) {
+        attempts++;
+        try {
+          console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
+          setServerWaitProgress(Math.min(0.92, attempts / 15));
+          const info = await draftApi.getDraftInfo(pollDraftId);
+
+          if (!info.draftOrder || info.draftOrder.length < 10) {
+            throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
+          }
+
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+            id: String(idx + 1),
+            name: u.ownerId,
+            displayName: u.ownerId.length > 10
+              ? u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4)
+              : u.ownerId,
+            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
+            avatar: '🍌',
+          }));
+
+          setDraftOrder(realOrder);
+          setServerWaitProgress(1);
+          console.log('[Draft Room] Wallets loaded:', realOrder.map((p: { displayName: string }) => p.displayName));
+
+          // Brief delay so user sees 100% green bar
+          const elapsed = Date.now() - randomizingStartedAt;
+          if (elapsed < MIN_RANDOMIZING_MS) {
+            await new Promise(r => setTimeout(r, MIN_RANDOMIZING_MS - elapsed));
+          }
+
+          // Store result in state — the transition effect below will pick it up
+          console.log('[Draft Room] Setting serverPollResult to trigger transition');
+          setServerPollResult({ order: realOrder, countdownStart: Date.now() });
+          return;
+        } catch (err) {
+          console.warn(`[Draft Room] Server not ready (attempt ${attempts}):`, err instanceof Error ? err.message : err);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+      // Exhausted — fall back to local
+      console.log('[Draft Room] Server poll exhausted — falling back to local');
+      const shuffled = [...DRAFT_PLAYERS].sort(() => Math.random() - 0.5);
+      setServerPollResult({ order: shuffled, countdownStart: Date.now() });
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, playerCount, draftId]);
+
+  // ---- Transition effect: when serverPollResult is set, move to pre-spin ----
+  useEffect(() => {
+    if (!serverPollResult) return;
+    // Only transition if we're still in filling phase
+    if (phase !== 'filling') {
+      setServerPollResult(null);
+      return;
+    }
+
+    const { order, countdownStart } = serverPollResult;
+    setServerPollResult(null); // Consume the result
+
+    const userPos = order.findIndex((p: { isYou: boolean }) => p.isYou);
+    setDraftOrder(order);
+    setUserDraftPosition(userPos);
+    preSpinStartedAtRef.current = countdownStart;
+    setWaitingForServer(false);
+    setPhase('pre-spin');
+    setPreSpinCountdown(15);
+    const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
+    setMainCountdown(remaining);
+
+    if (isLiveMode) setLiveDataReady(true);
+    if (draftId) {
+      draftStore.updateDraft(draftId, {
+        phase: 'pre-spin',
+        preSpinStartedAt: countdownStart,
+        draftOrder: order,
+        userDraftPosition: userPos,
+      });
+    }
+    console.log('[Draft Room] Transitioned to pre-spin phase');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverPollResult]);
 
   // ==================== PRE-SPIN COUNTDOWN (timestamp-based) ====================
   useEffect(() => {
