@@ -60,8 +60,8 @@ function DraftRoomContent() {
   const [liveError, setLiveError] = useState<string | null>(null);
   const liveInitializedRef = useRef(false);
   const storedForInit = draftId ? draftStore.getDraft(draftId) : undefined;
-  const skipToLive = isLiveMode && storedForInit?.status === 'drafting';
-  const [liveDataReady, setLiveDataReady] = useState(skipToLive);
+  // liveDataReady gates the loadLiveData effect — set true when loading phase resolves to drafting
+  const [liveDataReady, setLiveDataReady] = useState(false);
   const [engineReady, setEngineReady] = useState(false);
   const liveRetryCountRef = useRef(0);
   // Track whether we're waiting for server to create draft documents after filling
@@ -127,8 +127,10 @@ function DraftRoomContent() {
 
   // ==================== PHASE STATE ====================
   const [phase, setPhase] = useState<RoomPhase>(() => {
-    // In live mode, skip to drafting if stored state shows draft already in progress
-    if (isLiveMode && stored?.status === 'drafting') return 'drafting';
+    // In live mode, if stored state shows draft is past filling, start in 'loading'
+    // to check server state BEFORE showing any UI/animations. This prevents replaying
+    // RANDOMIZING/slot machine on re-entry.
+    if (isLiveMode && stored && stored.phase && stored.phase !== 'filling') return 'loading';
     if (!isLiveMode && stored?.phase) return stored.phase;
     return 'filling';
   });
@@ -195,6 +197,130 @@ function DraftRoomContent() {
   const fillingStartedAtRef = useRef<number | null>(stored?.fillingStartedAt ?? null);
   const preSpinStartedAtRef = useRef<number | null>(stored?.preSpinStartedAt ?? null);
   const lastWsUpdateRef = useRef<number>(Date.now());
+
+  // ==================== LOADING PHASE: Check server state before showing any UI ====================
+  // When re-entering a live draft, we start in 'loading' phase to avoid replaying animations.
+  // This effect fetches server state and jumps to the exact correct phase.
+  const loadingHandledRef = useRef(false);
+  useEffect(() => {
+    if (phase !== 'loading' || !isLiveMode || !draftId || loadingHandledRef.current) return;
+    loadingHandledRef.current = true;
+
+    let cancelled = false;
+
+    async function checkServerState() {
+      try {
+        console.log('[Draft Room] Loading phase — checking server state for', draftId);
+        const info = await draftApi.getDraftInfo(draftId);
+        if (cancelled) return;
+
+        const playerCount = info.draftOrder?.length || 0;
+        const draftAlreadyStarted = info.pickNumber > 1 ||
+          (info.draftStartTime && info.draftStartTime * 1000 < Date.now());
+
+        if (draftAlreadyStarted) {
+          // Draft is actively picking — jump straight to drafting
+          console.log(`[Draft Room] Server shows draft at pick ${info.pickNumber} — jumping to drafting`);
+
+          // Build draft order from server data
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+            id: String(idx + 1),
+            name: u.ownerId,
+            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
+              ? 'You'
+              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
+            avatar: '🍌',
+          }));
+          setDraftOrder(realOrder);
+          const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+          if (userPos >= 0) setUserDraftPosition(userPos);
+
+          setPlayerCount(10);
+          setPhase('drafting');
+          setMainCountdown(0);
+          setShowSlotMachine(false);
+          setLiveDataReady(true);
+
+          // Restore draft type from stored state
+          if (stored?.draftType) setDraftType(stored.draftType);
+
+          draftStore.updateDraft(draftId, {
+            phase: 'drafting', status: 'drafting', players: 10,
+          });
+        } else if (playerCount >= 10 && info.draftStartTime) {
+          // Draft is full but not started yet — in pre-spin/countdown phase
+          console.log('[Draft Room] Server shows draft full, starting countdown');
+
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+            id: String(idx + 1),
+            name: u.ownerId,
+            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
+              ? 'You'
+              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
+            avatar: '🍌',
+          }));
+          setDraftOrder(realOrder);
+          const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+          if (userPos >= 0) setUserDraftPosition(userPos);
+
+          setPlayerCount(10);
+
+          // Calculate remaining time
+          const countdownStart = stored?.preSpinStartedAt || (info.draftStartTime * 1000 - 60000);
+          preSpinStartedAtRef.current = countdownStart;
+          const elapsed = (Date.now() - countdownStart) / 1000;
+
+          if (elapsed >= 60) {
+            // Countdown already expired — jump to drafting
+            setPhase('drafting');
+            setMainCountdown(0);
+            setLiveDataReady(true);
+            if (stored?.draftType) setDraftType(stored.draftType);
+            draftStore.updateDraft(draftId, { phase: 'drafting', status: 'drafting', players: 10 });
+          } else if (elapsed >= 15) {
+            // Past slot machine phase — show result with remaining countdown
+            setPhase('result');
+            setSlotAnimationDone(true);
+            setShowSlotMachine(false);
+            setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
+            setLiveDataReady(true);
+            if (stored?.draftType) setDraftType(stored.draftType);
+            draftStore.updateDraft(draftId, { phase: 'result', preSpinStartedAt: countdownStart });
+          } else {
+            // Still in pre-spin countdown — resume with remaining time
+            setPhase('pre-spin');
+            setPreSpinCountdown(Math.max(0, Math.floor(15 - elapsed)));
+            setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
+            setLiveDataReady(true);
+            draftStore.updateDraft(draftId, { phase: 'pre-spin', preSpinStartedAt: countdownStart, draftOrder: realOrder, userDraftPosition: userPos });
+          }
+        } else {
+          // Still filling — go back to filling phase (normal flow)
+          console.log('[Draft Room] Server shows draft still filling — resuming fill');
+          setPlayerCount(Math.max(playerCount, 1));
+          setPhase('filling');
+        }
+      } catch (err) {
+        console.warn('[Draft Room] Loading phase server check failed, falling back to stored state:', err);
+        // Fall back to stored phase or filling
+        if (stored?.status === 'drafting') {
+          setPhase('drafting');
+          setLiveDataReady(true);
+          if (stored.draftOrder) setDraftOrder(stored.draftOrder);
+          if (stored.userDraftPosition !== undefined) setUserDraftPosition(stored.userDraftPosition);
+          if (stored.draftType) setDraftType(stored.draftType);
+        } else {
+          setPhase('filling');
+        }
+      }
+    }
+
+    checkServerState();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, isLiveMode, draftId]);
 
   // ==================== RESUME: Handle re-mount into mid-phase ====================
   const resumeHandledRef = useRef(false);
@@ -653,7 +779,7 @@ function DraftRoomContent() {
   // document after bots join, so we keep polling to pick up wallet addresses.
   useEffect(() => {
     if (!isLiveMode || !draftId) return;
-    if (phase === 'drafting') return; // Stop polling once drafting starts (engine handles state)
+    if (phase === 'drafting' || phase === 'loading') return; // Stop polling during loading (loading effect handles it) and drafting (engine handles state)
 
     let cancelled = false;
 
@@ -1205,8 +1331,8 @@ function DraftRoomContent() {
         </div>
       )}
 
-      {/* Top Bar — only during filling or when draft completed */}
-      {(phase === 'filling' || engine.draftStatus === 'completed') && (
+      {/* Top Bar — during filling, loading, or when draft completed */}
+      {(phase === 'filling' || phase === 'loading' || engine.draftStatus === 'completed') && (
         <div className="h-14 bg-black/30 border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-4">
             <span className="font-bold">{contestName}</span>
@@ -1287,10 +1413,20 @@ function DraftRoomContent() {
         </div>
       )}
 
+      {/* Loading phase — brief spinner while checking server state on re-entry */}
+      {phase === 'loading' && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-10 h-10 border-2 border-banana border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-white/60 text-sm">Reconnecting to draft...</p>
+          </div>
+        </div>
+      )}
+
       {/* Filling/pre-drafting overlays removed — all status shown inline in unified banner */}
 
-      {/* ==================== UNIFIED BANNER (ALL phases) ==================== */}
-      {engine.draftStatus !== 'completed' && (
+      {/* ==================== UNIFIED BANNER (ALL phases except loading) ==================== */}
+      {engine.draftStatus !== 'completed' && phase !== 'loading' && (
         <>
           {/* Pick Cards Banner */}
           <div className="fixed top-0 left-0 z-20 w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (draftType === 'jackpot' ? '#ef4444' : draftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
@@ -1589,8 +1725,8 @@ function DraftRoomContent() {
         </>
       )}
 
-      {/* Main Content — single column, no sidebar */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content — single column, no sidebar (hidden during loading) */}
+      <div className={`flex-1 flex flex-col overflow-hidden ${phase === 'loading' ? 'hidden' : ''}`}>
         {/* Tab navigation — inside content so it centers on the same width */}
         <DraftTabs activeTab={activeTab} onTabChange={setActiveTab} queueCount={engine.queuedPlayers.length} />
 
