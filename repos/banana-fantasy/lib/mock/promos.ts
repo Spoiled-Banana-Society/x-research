@@ -88,7 +88,7 @@ export const mockPromos: Promo[] = [
   {
     id: '6',
     type: 'new-user',
-    title: 'New Users → FREE SPIN',
+    title: 'New User → FREE SPIN',
     description: 'Connect Twitter to claim',
     ctaText: 'Verify',
     ctaLink: '#',

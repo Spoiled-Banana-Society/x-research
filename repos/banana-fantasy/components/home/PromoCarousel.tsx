@@ -18,10 +18,26 @@ const GAP = 20; // gap-5 = 1.25rem = 20px
 
 export function PromoCarousel({ promos }: PromoCarouselProps) {
   const router = useRouter();
-  const { user, updateUser, isLoggedIn, setShowLoginModal, newUserPromoClaimed } = useAuth();
+  const { user, updateUser, isLoggedIn, isTwitterVerified, setShowLoginModal, newUserPromoClaimed } = useAuth();
+
+  const [currentIndex, setCurrentIndex] = useState(promos.length);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+  const [claimSuccess, setClaimSuccess] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
+  const [claimedPromos, setClaimedPromos] = useState<Set<string>>(new Set());
+  const [_timerTick, setTimerTick] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Filter out claimed new-user promo entirely
+  const filteredPromos = promos.filter(p => {
+    if (p.type === 'new-user' && (newUserPromoClaimed || claimedPromos.has(p.id))) return false;
+    return true;
+  });
 
   // Sort promos: claimable first, then by progress percent (highest first), then others
-  const sortedPromos = [...promos].sort((a, b) => {
+  const sortedPromos = [...filteredPromos].sort((a, b) => {
     // Claimable promos come first
     if (a.claimable && !b.claimable) return -1;
     if (!a.claimable && b.claimable) return 1;
@@ -37,16 +53,6 @@ export function PromoCarousel({ promos }: PromoCarouselProps) {
   // Create extended array with clones for infinite loop
   const extendedPromos = [...sortedPromos, ...sortedPromos, ...sortedPromos];
   const startOffset = sortedPromos.length; // Start at the middle copy
-
-  const [currentIndex, setCurrentIndex] = useState(startOffset);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(true);
-  const [claimSuccess, setClaimSuccess] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
-  const [claimedPromos, setClaimedPromos] = useState<Set<string>>(new Set());
-  const [_timerTick, setTimerTick] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Timer tick for countdown updates
   useEffect(() => {
@@ -212,7 +218,7 @@ export function PromoCarousel({ promos }: PromoCarouselProps) {
                   <div className={`absolute inset-0 bg-[#f5f5f7] pointer-events-none transition-opacity duration-300 z-10 ${isHovered ? 'opacity-50' : 'opacity-0'}`} />
 
                   {/* Hover text - positioned between title and bottom content (for promos without progress bar or claim) */}
-                  <div className={`absolute left-0 right-0 top-1/2 text-center pointer-events-none transition-opacity duration-300 z-20 ${isHovered && !promo.claimable && !showProgressBar ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className={`absolute left-0 right-0 top-1/2 text-center pointer-events-none transition-opacity duration-300 z-20 ${isHovered && ((!promo.claimable && !showProgressBar) || (promo.type === 'new-user' && !(isLoggedIn && isTwitterVerified))) ? 'opacity-100' : 'opacity-0'}`}>
                     <span className="text-[#1d1d1f] text-xs font-semibold">
                       Learn more
                     </span>
@@ -330,7 +336,7 @@ export function PromoCarousel({ promos }: PromoCarouselProps) {
                       )}
 
                       {/* Claimable button - for other promos (not daily-drafts, mint, or pick-10) */}
-                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.claimable && !isClaimed && (
+                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.claimable && !isClaimed && (promo.type !== 'new-user' || (isLoggedIn && isTwitterVerified)) && (
                         <div className="pt-6">
                           <button
                             onClick={(e) => handleClaim(promo, e)}
