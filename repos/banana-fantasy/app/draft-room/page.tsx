@@ -981,12 +981,11 @@ function DraftRoomContent() {
     const selectedResult: DraftType = draftType || 'pro';
     const reelResults: DraftType[] = [selectedResult, selectedResult, selectedResult];
     setDraftType(selectedResult);
-    // Sync revealed type + draft position to drafting page
+    // Don't write type to store yet — reveal hasn't happened.
+    // Type is written to store when slot animation completes (result phase).
     if (draftId) {
       draftStore.updateDraft(draftId, {
-        type: selectedResult,
         phase: 'spinning',
-        draftType: selectedResult,
         yourPosition: userDraftPosition >= 0 ? userDraftPosition + 1 : undefined,
       });
     }
@@ -1174,7 +1173,8 @@ function DraftRoomContent() {
           setSlotAnimationDone(true);
           setPhase('result');
           if (draftId) {
-            draftStore.updateDraft(draftId, { phase: 'result' });
+            // NOW reveal the type to draftStore — slot machine animation is done
+            draftStore.updateDraft(draftId, { phase: 'result', type: draftType, draftType: draftType });
           }
         }, 400);
       }
