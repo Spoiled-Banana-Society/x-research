@@ -311,8 +311,8 @@ export function PromoCarousel({ promos }: PromoCarouselProps) {
                         </div>
                       )}
 
-                      {/* Progress bar - show for other promos with progress (not daily-drafts, mint, or pick-10) */}
-                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && (showProgressBar && (!promo.claimable || isClaimed)) && (
+                      {/* Progress bar - show for other promos with progress (not daily-drafts, mint, pick-10, new-user, tweet-engagement) */}
+                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.type !== 'new-user' && promo.type !== 'tweet-engagement' && (showProgressBar && (!promo.claimable || isClaimed)) && (
                         <div className="-mt-2">
                           <div className="flex justify-center text-xs text-[#4a4a4a] mb-1">
                             <span className="font-semibold">{progressCurrent}/{progressMax}</span>
