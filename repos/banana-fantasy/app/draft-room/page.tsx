@@ -67,6 +67,7 @@ function DraftRoomContent() {
   // Track whether we're waiting for server to create draft documents after filling
   const [waitingForServer, setWaitingForServer] = useState(false);
   const [serverWaitProgress, setServerWaitProgress] = useState(0);
+  const serverWaitProgressRef = useRef(0);
   // State-driven approach: when poll succeeds, store result here; a separate effect transitions
   const [serverPollResult, setServerPollResult] = useState<{
     order: typeof DRAFT_PLAYERS;
@@ -860,15 +861,16 @@ function DraftRoomContent() {
     const MIN_RANDOMIZING_MS = 3000;
     const pollDraftId = draftId; // Capture for async closure
 
-    // Smooth progress animation — ticks every 50ms, reaches ~92% over ~10s
+    // Smooth progress animation — ticks every 50ms, reaches ~99% over ~15s
     // Independent of API attempts so the bar moves smoothly
     let pollDone = false;
     const progressInterval = setInterval(() => {
       if (pollDone) { clearInterval(progressInterval); return; }
       const elapsed = Date.now() - randomizingStartedAt;
-      // Ease-out curve: fast at start, slows down as it approaches 92%
-      const t = Math.min(1, elapsed / 12000); // 12s to reach max
-      const progress = 0.92 * (1 - Math.pow(1 - t, 2)); // quadratic ease-out
+      // Cubic ease-out: decelerates more gradually than quadratic
+      const t = Math.min(1, elapsed / 15000); // 15s to reach max
+      const progress = 0.99 * (1 - Math.pow(1 - t, 3)); // cubic ease-out, cap 99%
+      serverWaitProgressRef.current = progress;
       setServerWaitProgress(progress);
     }, 50);
 
@@ -897,11 +899,27 @@ function DraftRoomContent() {
           pollDone = true;
           clearInterval(progressInterval);
           setDraftOrder(realOrder);
-          setServerWaitProgress(1);
           console.log('[Draft Room] Wallets loaded:', realOrder.map((p: { displayName: string }) => p.displayName));
 
-          // Always wait at least 700ms so the bar visually animates to 100%
-          await new Promise(r => setTimeout(r, 700));
+          // Smoothly animate remaining progress to 100% over ~300ms
+          const currentProgress = serverWaitProgressRef.current;
+          await new Promise<void>(resolve => {
+            const steps = 10;
+            const stepTime = 30; // 30ms per step = 300ms total
+            let step = 0;
+            const finishInterval = setInterval(() => {
+              step++;
+              const t = step / steps;
+              const smoothed = currentProgress + (1 - currentProgress) * t;
+              serverWaitProgressRef.current = smoothed;
+              setServerWaitProgress(smoothed);
+              if (step >= steps) {
+                clearInterval(finishInterval);
+                setServerWaitProgress(1);
+                resolve();
+              }
+            }, stepTime);
+          });
 
           // Ensure minimum total display time
           const elapsed = Date.now() - randomizingStartedAt;
@@ -1672,7 +1690,7 @@ function DraftRoomContent() {
                   <span className="text-white/70 text-xs tracking-widest uppercase">Randomizing Draft Order</span>
                   <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden backdrop-blur-sm">
                     <div
-                      className="h-full rounded-full transition-all duration-500 ease-out"
+                      className="h-full rounded-full"
                       style={{
                         width: `${Math.round(serverWaitProgress * 100)}%`,
                         background: serverWaitProgress >= 1
