@@ -18,10 +18,10 @@ const GAP = 20; // gap-5 = 1.25rem = 20px
 
 export function PromoCarousel({ promos }: PromoCarouselProps) {
   const router = useRouter();
-  const { user, updateUser, isLoggedIn, setShowLoginModal, newUserPromoClaimed, isTwitterVerified } = useAuth();
+  const { user, updateUser, isLoggedIn, setShowLoginModal, newUserPromoClaimed, isTwitterVerified, isBB3Holder } = useAuth();
 
-  // Sort promos: claimable first, then by progress percent (highest first), then others
-  const sortedPromos = [...promos].sort((a, b) => {
+  // Filter out new-user promo for returning BB3 holders, then sort
+  const sortedPromos = [...promos].filter(promo => !(promo.type === 'new-user' && isBB3Holder)).sort((a, b) => {
     // Claimable promos come first
     if (a.claimable && !b.claimable) return -1;
     if (!a.claimable && b.claimable) return 1;

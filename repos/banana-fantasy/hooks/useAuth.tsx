@@ -43,6 +43,7 @@ interface AuthContextType {
   linkTwitter: () => void;
   newUserPromoClaimed: boolean;
   claimNewUserPromo: () => Promise<void>;
+  isBB3Holder: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isTwitterLinking, setIsTwitterLinking] = useState(false);
   const [twitterError, setTwitterError] = useState<string | null>(null);
   const [newUserPromoClaimed, setNewUserPromoClaimed] = useState(false);
+  const [isBB3Holder, setIsBB3Holder] = useState(false);
 
   // Verify Twitter link with backend (anti-sybil check + Firestore storage)
   const verifyTwitterWithBackend = useCallback(async (
@@ -357,6 +359,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [walletAddress, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Check BB3 (Eth mainnet) to identify returning players
+  useEffect(() => {
+    if (MOCK_AUTH) return;
+    if (!walletAddress) return;
+
+    const BB3_ADDRESS = '0x2BfF6f4284774836d867CEd2e9B96c27aAee55B7';
+    const balanceOfSig = '0x70a08231';
+    const paddedAddr = walletAddress.slice(2).toLowerCase().padStart(64, '0');
+
+    fetch('https://eth.llamarpc.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'eth_call',
+        params: [{ to: BB3_ADDRESS, data: balanceOfSig + paddedAddr }, 'latest'],
+      }),
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (result?.result) {
+          setIsBB3Holder(parseInt(result.result, 16) > 0);
+        }
+      })
+      .catch(() => { /* silent */ });
+  }, [walletAddress]);
+
   const login = useCallback((_method?: 'wallet' | 'social') => {
     privy.login();
   }, [privy]);
@@ -437,6 +465,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         linkTwitter: handleLinkTwitter,
         newUserPromoClaimed,
         claimNewUserPromo,
+        isBB3Holder,
       }}
     >
       {children}
