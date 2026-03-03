@@ -91,6 +91,13 @@ export default function DraftingPage() {
   const [promoIndex, setPromoIndex] = useState(0);
   const [promoAutoRotate, setPromoAutoRotate] = useState(true);
   const [showEntryFlow, setShowEntryFlow] = useState(false);
+  const [hiddenDraftIds, setHiddenDraftIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const stored = localStorage.getItem('banana-hidden-drafts');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
 
 
   const handleClaim = async (promo: Promo, e?: React.MouseEvent) => {
@@ -179,7 +186,7 @@ export default function DraftingPage() {
         const tokens: ApiDraftToken[] = Array.isArray(raw) ? raw : [];
         // Only show tokens that are actively in a league (have a leagueId).
         // Available/unused tokens have empty leagueId and should not appear as drafts.
-        const activeTokens = tokens.filter((t) => !!t.leagueId);
+        const activeTokens = tokens.filter((t) => !!t.leagueId && !hiddenDraftIds.has(t.leagueId) && !hiddenDraftIds.has(t.cardId));
         const mapped: Draft[] = activeTokens.map((t) => ({
           id: t.leagueId || t.cardId,
           contestName: t.leagueDisplayName || `BBB #${t.leagueId || t.cardId}`,
@@ -199,7 +206,7 @@ export default function DraftingPage() {
     }
     loadLiveDrafts();
     return () => { cancelled = true; };
-  }, [isLive, user]);
+  }, [isLive, user, hiddenDraftIds]);
 
   // In local mode, just mark loading done (useActiveDrafts handles reactivity)
   useEffect(() => {
@@ -481,16 +488,19 @@ export default function DraftingPage() {
           <h1 className="text-2xl font-semibold text-white">My Drafts</h1>
           <button
             onClick={async () => {
-              // Leave all active drafts server-side
-              const wallet = user?.walletAddress;
-              if (wallet && activeDrafts.length > 0) {
-                await Promise.allSettled(
-                  activeDrafts.map(d => leaveDraft(d.id, wallet))
-                );
-              }
+              // Hide all current drafts (both local and server-side)
+              const allIds = activeDrafts.map(d => d.id);
+              const newHidden = new Set([...Array.from(hiddenDraftIds), ...allIds]);
+              localStorage.setItem('banana-hidden-drafts', JSON.stringify(Array.from(newHidden)));
+              setHiddenDraftIds(newHidden);
+              setLiveDrafts([]);
               localStorage.removeItem('banana-active-drafts');
               localStorage.removeItem('banana-completed-drafts');
-              window.location.reload();
+              // Also try leaving server-side (best effort)
+              const wallet = user?.walletAddress;
+              if (wallet && allIds.length > 0) {
+                Promise.allSettled(allIds.map(id => leaveDraft(id, wallet)));
+              }
             }}
             className="text-xs text-white/40 hover:text-white/70 transition-colors"
           >
