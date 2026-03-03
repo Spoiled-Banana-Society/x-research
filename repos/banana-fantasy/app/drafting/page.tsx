@@ -17,6 +17,7 @@ import type { DraftState } from '@/lib/draftStore';
 import type { ApiDraftToken } from '@/lib/api/owner';
 import { DRAFT_PLAYERS } from '@/lib/draftRoomConstants';
 import * as draftApi from '@/lib/draftApi';
+import { leaveDraft } from '@/lib/api/leagues';
 
 type Draft = DraftState;
 
@@ -479,7 +480,14 @@ export default function DraftingPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-white">My Drafts</h1>
           <button
-            onClick={() => {
+            onClick={async () => {
+              // Leave all active drafts server-side
+              const wallet = user?.walletAddress;
+              if (wallet && activeDrafts.length > 0) {
+                await Promise.allSettled(
+                  activeDrafts.map(d => leaveDraft(d.id, wallet))
+                );
+              }
               localStorage.removeItem('banana-active-drafts');
               localStorage.removeItem('banana-completed-drafts');
               window.location.reload();
