@@ -224,14 +224,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       getOwnerUser(walletAddress)
         .then((backendUser) => {
           // Merge backend data with any locally saved profile overrides
-          // Use cached draftPasses as initial value — on-chain read will confirm/update
+          // Always use backend draftPasses (real token count from API)
           const merged: User = {
             ...backendUser,
             loginMethod,
             username: savedProfile?.username || backendUser.username,
             profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
             nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
-            draftPasses: savedProfile?.draftPasses ?? backendUser.draftPasses,
           };
           setUser(merged);
           setIsNewUser(false);
