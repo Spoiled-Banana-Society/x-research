@@ -65,9 +65,14 @@ function DraftRoomContent() {
   const [engineReady, setEngineReady] = useState(false);
   const liveRetryCountRef = useRef(0);
   // Track whether we're waiting for server to create draft documents after filling
-  const [waitingForServer, setWaitingForServer] = useState(false);
-  const [serverWaitProgress, setServerWaitProgress] = useState(0);
-  const serverWaitProgressRef = useRef(0);
+  // Initialize from stored state so re-entry renders correctly on first frame (no flash)
+  const _isResumingRandomize = !!(storedForInit?.randomizingStartedAt && !storedForInit?.preSpinStartedAt);
+  const _resumeProgress = _isResumingRandomize
+    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / 15000); return 0.99 * (1 - Math.pow(1 - t, 3)); })()
+    : 0;
+  const [waitingForServer, setWaitingForServer] = useState(_isResumingRandomize);
+  const [serverWaitProgress, setServerWaitProgress] = useState(_resumeProgress);
+  const serverWaitProgressRef = useRef(_resumeProgress);
   // State-driven approach: when poll succeeds, store result here; a separate effect transitions
   const [serverPollResult, setServerPollResult] = useState<{
     order: typeof DRAFT_PLAYERS;
@@ -876,12 +881,19 @@ function DraftRoomContent() {
     if (serverPollStartedRef.current) return; // Already polling
     serverPollStartedRef.current = true;
     setWaitingForServer(true);
-    setServerWaitProgress(0);
 
     // Reuse existing timestamp if resuming (e.g., re-entering from drafting page)
     // so the progress bar continues from where it was, not restarting
     const existingTimestamp = draftId ? draftStore.getDraft(draftId)?.randomizingStartedAt : undefined;
     const randomizingStartedAt = existingTimestamp || Date.now();
+
+    // Compute initial progress from elapsed time so the bar doesn't flash to 0%
+    const initialElapsed = Date.now() - randomizingStartedAt;
+    const initialT = Math.min(1, initialElapsed / 15000);
+    const initialProgress = 0.99 * (1 - Math.pow(1 - initialT, 3));
+    setServerWaitProgress(initialProgress);
+    serverWaitProgressRef.current = initialProgress;
+
     // Sync to draftStore so drafting page can show progress bar
     if (draftId) {
       draftStore.updateDraft(draftId, { randomizingStartedAt, players: 10 });
