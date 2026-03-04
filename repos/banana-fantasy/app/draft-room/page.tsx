@@ -858,6 +858,10 @@ function DraftRoomContent() {
     setServerWaitProgress(0);
 
     const randomizingStartedAt = Date.now();
+    // Sync to draftStore so drafting page can show progress bar
+    if (draftId) {
+      draftStore.updateDraft(draftId, { randomizingStartedAt, players: 10 });
+    }
     const MIN_RANDOMIZING_MS = 3000;
     const pollDraftId = draftId; // Capture for async closure
 
@@ -973,6 +977,7 @@ function DraftRoomContent() {
       draftStore.updateDraft(draftId, {
         phase: 'pre-spin',
         preSpinStartedAt: countdownStart,
+        randomizingStartedAt: undefined,  // Clear — no longer randomizing
         draftOrder: order,
         userDraftPosition: userPos,
       });

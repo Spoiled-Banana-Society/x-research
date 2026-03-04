@@ -26,6 +26,7 @@ export interface DraftState {
   fillingStartedAt?: number;
   fillingInitialPlayers?: number; // player count when filling began (for deriving live count)
   preSpinStartedAt?: number;
+  randomizingStartedAt?: number;  // Timestamp when "Randomizing Draft Order" began (10/10 reached)
   draftType?: 'pro' | 'hof' | 'jackpot' | null;
   draftOrder?: Array<{ id: string; name: string; displayName: string; isYou: boolean; avatar: string }>;
   userDraftPosition?: number;

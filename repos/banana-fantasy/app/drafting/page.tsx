@@ -381,17 +381,27 @@ export default function DraftingPage() {
             draftStore.updateDraft(d.id, { players: count });
           }
 
-          // Auto-advance: filling → pre-spin when count reaches 10
+          // Auto-advance: filling → randomizing → pre-spin when count reaches 10
           if (count >= 10 && !d.preSpinStartedAt) {
-            const fillDoneAt = d.fillingStartedAt + (10 - d.fillingInitialPlayers) * 800;
-            const shuffled = [...DRAFT_PLAYERS].sort(() => Math.random() - 0.5);
-            const userPos = shuffled.findIndex(p => p.isYou);
-            draftStore.updateDraft(d.id, {
-              phase: 'pre-spin', players: 10,
-              preSpinStartedAt: fillDoneAt,
-              draftOrder: shuffled, userDraftPosition: userPos,
-              draftType: 'pro', type: 'pro',
-            });
+            // Start randomizing phase if not already started
+            if (!d.randomizingStartedAt) {
+              draftStore.updateDraft(d.id, { players: 10, randomizingStartedAt: now });
+              continue;
+            }
+            // For local-mode drafts: auto-transition to pre-spin after 3s randomizing
+            const randomizingElapsed = now - d.randomizingStartedAt;
+            if (randomizingElapsed >= 3000 && !d.liveWalletAddress) {
+              const shuffled = [...DRAFT_PLAYERS].sort(() => Math.random() - 0.5);
+              const userPos = shuffled.findIndex(p => p.isYou);
+              draftStore.updateDraft(d.id, {
+                phase: 'pre-spin', players: 10,
+                preSpinStartedAt: now,
+                randomizingStartedAt: undefined,
+                draftOrder: shuffled, userDraftPosition: userPos,
+                draftType: 'pro', type: 'pro',
+              });
+            }
+            // For live drafts: the draft room handles the transition
           }
           continue;
         }
@@ -414,19 +424,47 @@ export default function DraftingPage() {
   }, []);
 
   // Derive live display state from timestamps (called fresh each render)
-  const getLiveState = (draft: Draft): { isFilling: boolean; playerCount: number; countdown: number | null } => {
-    // Filling: compute count from timestamps
-    if (draft.fillingStartedAt != null && draft.fillingInitialPlayers != null && !draft.preSpinStartedAt) {
-      const count = Math.min(10, draft.fillingInitialPlayers + Math.floor((Date.now() - draft.fillingStartedAt) / 800));
-      return { isFilling: true, playerCount: count, countdown: null };
+  type LiveState = {
+    displayPhase: 'filling' | 'randomizing' | 'pre-spin-countdown' | 'draft-starting' | 'drafting';
+    playerCount: number;
+    countdown: number | null;
+    randomizingProgress: number | null; // 0-1
+    // Legacy compat
+    isFilling: boolean;
+  };
+  const getLiveState = (draft: Draft): LiveState => {
+    const now = Date.now();
+
+    // Randomizing: 10/10 reached, randomizingStartedAt set, preSpinStartedAt NOT set
+    if (draft.randomizingStartedAt && !draft.preSpinStartedAt) {
+      const elapsed = now - draft.randomizingStartedAt;
+      const t = Math.min(1, elapsed / 15000);
+      const progress = 0.99 * (1 - Math.pow(1 - t, 3)); // cubic ease-out, cap 99%
+      return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
     }
-    // Pre-spin / spinning / result: compute countdown from timestamp
-    if (draft.preSpinStartedAt && ['pre-spin', 'spinning', 'result'].includes(draft.phase || '')) {
-      const c = Math.max(0, Math.floor(60 - (Date.now() - draft.preSpinStartedAt) / 1000));
-      return { isFilling: false, playerCount: 10, countdown: c > 0 ? c : null };
+
+    // Pre-spin: countdown to reveal (first 15s)
+    if (draft.preSpinStartedAt && draft.phase === 'pre-spin') {
+      const elapsed = (now - draft.preSpinStartedAt) / 1000;
+      const revealIn = Math.max(0, Math.ceil(15 - elapsed));
+      return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: revealIn, randomizingProgress: null, isFilling: false };
     }
+
+    // Spinning/result: countdown to draft start
+    if (draft.preSpinStartedAt && ['spinning', 'result'].includes(draft.phase || '')) {
+      const elapsed = (now - draft.preSpinStartedAt) / 1000;
+      const startIn = Math.max(0, Math.ceil(60 - elapsed));
+      return { displayPhase: 'draft-starting', playerCount: 10, countdown: startIn > 0 ? startIn : null, randomizingProgress: null, isFilling: false };
+    }
+
+    // Filling: derive count from timestamps
+    if (draft.fillingStartedAt != null && draft.fillingInitialPlayers != null && !draft.preSpinStartedAt && !draft.randomizingStartedAt) {
+      const count = Math.min(10, draft.fillingInitialPlayers + Math.floor((now - draft.fillingStartedAt) / 800));
+      return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };
+    }
+
     // Default (drafting phase or unknown)
-    return { isFilling: draft.status === 'filling', playerCount: draft.players, countdown: null };
+    return { displayPhase: 'drafting', playerCount: draft.players, countdown: null, randomizingProgress: null, isFilling: draft.status === 'filling' };
   };
 
   // Auto-rotate promos carousel
@@ -581,7 +619,7 @@ export default function DraftingPage() {
 
                   {/* Status */}
                   <div className="w-28 flex-shrink-0 flex items-center justify-center">
-                    {live.isFilling ? (
+                    {live.displayPhase === 'filling' ? (
                       <div className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
@@ -594,8 +632,27 @@ export default function DraftingPage() {
                         </div>
                         <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
                       </div>
-                    ) : live.countdown !== null ? (
-                      <span className="text-white/50 text-sm">Starting in {live.countdown}s</span>
+                    ) : live.displayPhase === 'randomizing' ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
+                              background: (live.randomizingProgress ?? 0) >= 1
+                                ? '#4ade80'
+                                : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                            }}
+                          />
+                        </div>
+                        <span className="text-white/40 text-[10px]">Randomizing...</span>
+                      </div>
+                    ) : live.displayPhase === 'pre-spin-countdown' ? (
+                      <span className="text-white/50 text-sm">Reveal in {live.countdown}s</span>
+                    ) : live.displayPhase === 'draft-starting' ? (
+                      <span className="text-white/50 text-sm">
+                        {live.countdown != null ? `Starts in ${live.countdown}s` : 'Starting...'}
+                      </span>
                     ) : isYourTurn ? (
                       <span className="text-banana font-bold">
                         {draft.pickEndTimestamp
@@ -613,9 +670,9 @@ export default function DraftingPage() {
 
                   {/* Button */}
                   <div className="w-20 flex-shrink-0">
-                    {live.isFilling ? (
+                    {['filling', 'randomizing', 'pre-spin-countdown', 'draft-starting'].includes(live.displayPhase) ? (
                       <div className="w-full">
-                        <Tooltip content="Enter draft lobby">
+                        <Tooltip content="Enter draft room">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -629,6 +686,10 @@ export default function DraftingPage() {
                       </div>
                     ) : (
                       <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(buildDraftRoomUrl(draft));
+                        }}
                         className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 flex items-center justify-center"
                         style={{
                           backgroundColor: isYourTurn ? '#fbbf24' : accentColor,
