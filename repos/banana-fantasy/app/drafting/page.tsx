@@ -256,11 +256,14 @@ export default function DraftingPage() {
               });
             }
           } else if (isFull) {
-            // 10/10 but draft hasn't started yet — in countdown
-            draftStore.updateDraft(draft.id, {
-              players: 10,
-              phase: 'pre-spin',
-            });
+            // 10/10 but draft hasn't started yet — update player count.
+            // Don't set phase='pre-spin' here unless preSpinStartedAt is already set
+            // (the draft room handles the actual phase transition with timestamps).
+            const patch: Partial<DraftState> = { players: 10 };
+            if (draft.preSpinStartedAt) {
+              patch.phase = 'pre-spin';
+            }
+            draftStore.updateDraft(draft.id, patch);
           } else if (playerCount > 0 && draft.status === 'filling') {
             // Still filling — update player count
             draftStore.updateDraft(draft.id, {
@@ -370,8 +373,11 @@ export default function DraftingPage() {
 
       for (const d of allDrafts) {
         // FILLING: derive count from timestamps, write to store
-        if (d.phase === 'filling' && d.fillingStartedAt != null && d.fillingInitialPlayers != null) {
-          const count = Math.min(10, d.fillingInitialPlayers + Math.floor((now - d.fillingStartedAt) / 800));
+        // Check status OR phase (syncLiveDrafts may set phase='pre-spin' before timestamps are ready)
+        if ((d.phase === 'filling' || d.status === 'filling') && !d.preSpinStartedAt && d.fillingStartedAt != null && d.fillingInitialPlayers != null) {
+          const simulated = Math.min(10, d.fillingInitialPlayers + Math.floor((now - d.fillingStartedAt) / 800));
+          // Use the higher of simulation vs current players (server may have updated players)
+          const count = Math.max(simulated, d.players || 0);
 
           // Only write if count actually changed (avoids unnecessary writes)
           if (count !== d.players) {
@@ -454,14 +460,25 @@ export default function DraftingPage() {
       return { displayPhase: 'draft-starting', playerCount: 10, countdown: startIn > 0 ? startIn : null, randomizingProgress: null, isFilling: false };
     }
 
-    // Filling: derive count from timestamps
-    if (draft.fillingStartedAt != null && draft.fillingInitialPlayers != null && !draft.preSpinStartedAt && !draft.randomizingStartedAt) {
-      const count = Math.min(10, draft.fillingInitialPlayers + Math.floor((now - draft.fillingStartedAt) / 800));
+    // Filling: use the best available count —
+    // For live drafts, draft.players is updated by syncLiveDrafts from the real server.
+    // The simulation provides smooth visual progression between polls.
+    // Use Math.max so the count never goes BACKWARDS.
+    if (!draft.preSpinStartedAt && !draft.randomizingStartedAt && (draft.status === 'filling' || draft.phase === 'filling')) {
+      let count = draft.players || 1;
+      if (draft.fillingStartedAt != null && draft.fillingInitialPlayers != null) {
+        const simulated = Math.min(10, draft.fillingInitialPlayers + Math.floor((now - draft.fillingStartedAt) / 800));
+        count = Math.max(count, simulated);
+      }
+      count = Math.min(10, count);
       return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };
     }
 
-    // Default (drafting phase or unknown)
-    return { displayPhase: 'drafting', playerCount: draft.players, countdown: null, randomizingProgress: null, isFilling: draft.status === 'filling' };
+    // Default (drafting phase or unknown) — also handle filling drafts without timestamps
+    if (draft.status === 'filling') {
+      return { displayPhase: 'filling', playerCount: draft.players || 1, countdown: null, randomizingProgress: null, isFilling: true };
+    }
+    return { displayPhase: 'drafting', playerCount: draft.players, countdown: null, randomizingProgress: null, isFilling: false };
   };
 
   // Auto-rotate promos carousel
