@@ -17,6 +17,13 @@
 - Always commit and push after completing changes
 - Always test against real staging backend — mint tokens, join league, fill bots. Never use fake draft IDs.
 
+### MANDATORY: Run Tests Before EVERY Deploy
+- **NEVER deploy to Vercel without running Playwright tests first.** No exceptions.
+- Command: `cd ~/sbs-claude-shared-workspace/repos/banana-fantasy && npx playwright test e2e/draft-room.spec.ts`
+- All tests must pass before pushing to sbs-frontend-v2 and triggering deploy hook.
+- If tests fail, fix the issue first. Do NOT deploy broken code.
+- This rule is NON-NEGOTIABLE. Skipping tests = deploying blind = breaking the site.
+
 ### Draft Room Race Conditions (DO NOT REINTRODUCE)
 - **draftId race**: URL has no draftId — set async by `joinDraft`. The "at 10" effect MUST guard `if (isLiveMode && !draftId) return` + include `draftId` in deps.
 - **Poll race**: 2.5s poll must NOT set `draftOrder` during filling — only `playerCount`. The "at 10" effect owns the transition.

@@ -256,13 +256,36 @@ export default function DraftingPage() {
               });
             }
           } else if (isFull) {
-            // 10/10 but draft hasn't started yet — update player count.
-            // Don't set phase='pre-spin' here unless preSpinStartedAt is already set
-            // (the draft room handles the actual phase transition with timestamps).
+            // 10/10 but draft hasn't started yet — derive phase from server timestamps
             const patch: Partial<DraftState> = { players: 10 };
-            if (draft.preSpinStartedAt) {
+
+            if (info.draftStartTime) {
+              // Server has a start time — compute preSpinStartedAt (60s before start)
+              const preSpinStartedAt = draft.preSpinStartedAt || (info.draftStartTime * 1000 - 60000);
+              const elapsed = (Date.now() - preSpinStartedAt) / 1000;
+              patch.preSpinStartedAt = preSpinStartedAt;
+              patch.randomizingStartedAt = undefined; // Done randomizing
+
+              if (elapsed >= 60) {
+                // Countdown expired — draft should be starting
+                patch.phase = 'drafting';
+                patch.status = 'drafting';
+              } else if (elapsed >= 15) {
+                // Past reveal — draft type revealed, counting down to start
+                patch.phase = 'result';
+                if (info.draftType) {
+                  const t = info.draftType.toLowerCase();
+                  patch.draftType = t === 'jackpot' ? 'jackpot' : t === 'hof' || t === 'hall of fame' ? 'hof' : 'pro';
+                  patch.type = patch.draftType;
+                }
+              } else {
+                // First 15s — reveal countdown
+                patch.phase = 'pre-spin';
+              }
+            } else if (draft.preSpinStartedAt) {
               patch.phase = 'pre-spin';
             }
+
             draftStore.updateDraft(draft.id, patch);
           } else if (playerCount > 0 && draft.status === 'filling') {
             // Still filling — update player count
