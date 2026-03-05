@@ -76,10 +76,13 @@ export function usePromos(opts?: { userId?: string }) {
     [userId, swr, updateUser],
   );
 
+  const refreshPromos = useCallback(() => swr.mutate(), [swr]);
+
   return {
     ...swr,
     promos,
     claimPromo,
+    refreshPromos,
     userId,
   };
 }

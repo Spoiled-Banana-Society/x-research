@@ -164,7 +164,7 @@ export default function HomePage() {
 
       {/* Promo Carousel */}
       <section className="mb-4">
-        <PromoCarousel promos={promosQuery.promos || []} />
+        <PromoCarousel promos={promosQuery.promos || []} claimPromo={promosQuery.claimPromo} />
       </section>
 
       <AddToHomeScreenCard />

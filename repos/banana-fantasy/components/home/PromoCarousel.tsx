@@ -10,13 +10,14 @@ import { reservePromoDraftType } from '@/lib/promoDraftType';
 interface PromoCarouselProps {
   promos: Promo[];
   autoPlay?: boolean;
+  claimPromo?: (promoId: string) => Promise<{ spinsAdded: number } | null>;
 }
 
 const VISIBLE_COUNT = 3;
 const CARD_WIDTH = 208; // w-52 = 13rem = 208px
 const GAP = 20; // gap-5 = 1.25rem = 20px
 
-export function PromoCarousel({ promos }: PromoCarouselProps) {
+export function PromoCarousel({ promos, claimPromo }: PromoCarouselProps) {
   const router = useRouter();
   const { user, updateUser, isLoggedIn, setShowLoginModal, newUserPromoClaimed, isTwitterVerified, isBB3Holder } = useAuth();
 
@@ -115,7 +116,7 @@ export function PromoCarousel({ promos }: PromoCarouselProps) {
     setSelectedPromo(null);
   };
 
-  const handleClaim = (promo: Promo, e?: React.MouseEvent) => {
+  const handleClaim = async (promo: Promo, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
     // If not logged in, show login modal
@@ -124,17 +125,25 @@ export function PromoCarousel({ promos }: PromoCarouselProps) {
       return;
     }
 
-    // Mark promo as claimed
-    setClaimedPromos(prev => new Set([...Array.from(prev), promo.id]));
-
     const count = promo.claimCount || 1;
     if (promo.type === 'jackpot' || promo.type === 'hof') {
       reservePromoDraftType(promo.type, count);
     }
 
-    // Only show success popup if not from modal (modal has its own popup)
+    // Use real backend claim if available
+    if (claimPromo) {
+      const result = await claimPromo(promo.id);
+      // claimPromo handles optimistic updates and user refresh internally
+      if (!isModalOpen) {
+        setClaimSuccess({ show: true, count: result?.spinsAdded ?? count });
+      }
+      return;
+    }
+
+    // Fallback: local-only claim (no backend)
+    setClaimedPromos(prev => new Set([...Array.from(prev), promo.id]));
+
     if (!isModalOpen) {
-      // Update the user's wheel spins
       if (user) {
         updateUser({ wheelSpins: (user.wheelSpins || 0) + count });
       }
