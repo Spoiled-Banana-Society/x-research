@@ -21,11 +21,20 @@ export function PromoCarousel({ promos, claimPromo }: PromoCarouselProps) {
   const router = useRouter();
   const { user, updateUser, isLoggedIn, setShowLoginModal, newUserPromoClaimed, isTwitterVerified, isBB3Holder } = useAuth();
 
+  // Check if a promo's CLAIM button is actually visible in the UI
+  const hasVisibleClaim = (p: Promo) => {
+    if (!p.claimable || claimedPromos.has(p.id)) return false;
+    if ((p.type === 'new-user' || p.type === 'tweet-engagement') && !isTwitterVerified) return false;
+    return true;
+  };
+
   // Filter out new-user promo for returning BB3 holders, then sort
   const sortedPromos = [...promos].filter(promo => !(promo.type === 'new-user' && isBB3Holder)).sort((a, b) => {
-    // Claimable promos come first
-    if (a.claimable && !b.claimable) return -1;
-    if (!a.claimable && b.claimable) return 1;
+    // Promos with visible CLAIM button come first
+    const aClaim = hasVisibleClaim(a);
+    const bClaim = hasVisibleClaim(b);
+    if (aClaim && !bClaim) return -1;
+    if (!aClaim && bClaim) return 1;
 
     // Then by progress percent (higher first)
     const aProgress = a.progressMax ? (a.progressCurrent || 0) / a.progressMax : 0;

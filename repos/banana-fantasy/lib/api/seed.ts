@@ -288,8 +288,8 @@ const seedPromos: Promo[] = [
     ctaText: 'Verify',
     ctaLink: '#',
     backgroundColor: '#2a2a35',
-    claimable: true,
-    claimCount: 1,
+    claimable: false,
+    claimCount: 0,
     modalContent: {
       title: 'New User Bonus SPIN',
       explanation:
