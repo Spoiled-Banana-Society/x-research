@@ -98,7 +98,8 @@ function getOrCreateUser(db: DbSchema, userId: string): User {
     createdAt: todayDate(),
   };
   db.users[userId] = user;
-  db.promosByUser[userId] = deepClone(seedDb.promosByUser['1'] ?? []);
+  const clonedPromos = deepClone(seedDb.promosByUser['1'] ?? []);
+  db.promosByUser[userId] = clonedPromos;
   db.wheelSpinsByUser[userId] = [];
   db.exposureByUser[userId] = {
     username: user.username,
@@ -106,7 +107,9 @@ function getOrCreateUser(db: DbSchema, userId: string): User {
     exposures: [],
   };
   db.draftHistoryByUser[userId] = [];
-  db.referralsByUser[userId] = { code: '', createdAt: todayDate() };
+  // Sync referral code from cloned promo data so lookups work
+  const seedRefCode = clonedPromos.find((p) => p.type === 'referral')?.modalContent?.inviteCode || '';
+  db.referralsByUser[userId] = { code: seedRefCode, createdAt: todayDate() };
   return user;
 }
 
