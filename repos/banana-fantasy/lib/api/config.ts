@@ -44,5 +44,10 @@ export const API_CONFIG = {
       buy: 2,
       bonusFreeDrafts: 1,
     },
+
+    tweetEngagement: {
+      tweetId: '1234567890',
+      tweetUrl: 'https://x.com/SpoiledBanana/status/1234567890',
+    },
   },
 } as const;

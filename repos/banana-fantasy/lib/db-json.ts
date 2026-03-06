@@ -210,6 +210,20 @@ export async function claimPromo(userId: string, promoId: string) {
   });
 }
 
+export async function updatePromo(userId: string, promoId: string, patch: Partial<Pick<Promo, 'claimable' | 'claimCount'>>) {
+  return updateDb((db) => {
+    getOrCreateUser(db, userId);
+    const promos = db.promosByUser[userId] ?? [];
+    const promo = promos.find((p) => p.id === promoId);
+    if (!promo) throw new ApiError(404, 'Promo not found');
+
+    if (patch.claimable !== undefined) promo.claimable = patch.claimable;
+    if (patch.claimCount !== undefined) promo.claimCount = patch.claimCount;
+
+    return deepClone(promo);
+  });
+}
+
 export async function getReferralStats(userId: string): Promise<ReferralStats> {
   const db = await loadDb();
   const promos = db.promosByUser[userId] ?? seedDb.promosByUser['1'] ?? [];

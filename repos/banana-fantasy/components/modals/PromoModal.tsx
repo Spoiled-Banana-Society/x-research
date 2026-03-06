@@ -13,9 +13,10 @@ interface PromoModalProps {
   promo: Promo | null;
   onClaim: (promo: Promo) => void;
   isPromoClaimed?: boolean;
+  onVerifyTweet?: (promoId: string) => Promise<{ verified: boolean; alreadyVerified?: boolean; message?: string } | null>;
 }
 
-export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = false }: PromoModalProps) {
+export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = false, onVerifyTweet }: PromoModalProps) {
   const router = useRouter();
   const { user, updateUser, isLoggedIn, setShowLoginModal, isTwitterVerified, isTwitterLinking, twitterError, linkTwitter, newUserPromoClaimed, claimNewUserPromo } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -24,6 +25,8 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   const [claimSuccess, setClaimSuccess] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
   const [_timerTick, setTimerTick] = useState(0);
   const hasNotifiedParent = useRef(false);
+  const [tweetVerifying, setTweetVerifying] = useState(false);
+  const [tweetVerifyResult, setTweetVerifyResult] = useState<{ verified: boolean; alreadyVerified?: boolean; message?: string } | null>(null);
 
   // Timer tick for countdown updates
   useEffect(() => {
@@ -69,6 +72,8 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
       setClaimedRewards(new Set());
       setClaimSuccess({ show: false, count: 0 });
       hasNotifiedParent.current = false;
+      setTweetVerifying(false);
+      setTweetVerifyResult(null);
     }
   }, [isOpen]);
 
@@ -529,17 +534,103 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
       );
     }
 
+    const verified = isTwitterVerified;
+    const alreadyClaimable = promo.claimable && (promo.claimCount ?? 0) > 0;
+
+    const handleVerify = async () => {
+      if (!onVerifyTweet || !promo) return;
+      setTweetVerifying(true);
+      setTweetVerifyResult(null);
+      const result = await onVerifyTweet(promo.id);
+      setTweetVerifying(false);
+      if (result) {
+        setTweetVerifyResult(result);
+      } else {
+        setTweetVerifyResult({ verified: false, message: 'Verification failed. Please try again.' });
+      }
+    };
+
     return (
-      <div className="bg-bg-tertiary rounded-xl p-4 text-center">
-        <div className="text-4xl mb-3">🐦</div>
-        <p className="font-semibold mb-2 text-text-primary">Tweet Engagement Reward</p>
-        <p className="text-text-secondary text-sm">
-          Like, repost, or reply to the official SBS launch tweet to qualify for a spin reward.
-        </p>
-        <Button className="mt-4" onClick={() => window.open(promo.ctaLink, '_blank', 'noopener,noreferrer')}>
-          Open Tweet
-        </Button>
-      </div>
+      <>
+        {/* Step 1: Twitter connection */}
+        <div className="bg-bg-tertiary rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${verified ? 'bg-success/20' : 'bg-bg-elevated'}`}>
+              <svg className={`w-5 h-5 ${verified ? 'text-success' : 'text-text-muted'}`} fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-text-primary">Twitter/X Connected</p>
+              {verified ? (
+                <p className="text-sm text-success">Verified {user?.xHandle ? `as ${user.xHandle}` : ''}</p>
+              ) : (
+                <p className="text-sm text-text-muted">Connect your X account first</p>
+              )}
+            </div>
+            {!verified && (
+              <Button size="sm" onClick={linkTwitter} disabled={isTwitterLinking}>
+                {isTwitterLinking ? 'Connecting...' : 'Connect'}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Step 2: Open tweet */}
+        <div className="bg-bg-tertiary rounded-xl p-4">
+          <p className="font-medium text-text-primary mb-2">Step 1: Engage with the tweet</p>
+          <p className="text-text-secondary text-sm mb-3">Reply or quote-retweet the campaign tweet below.</p>
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => window.open(promo.ctaLink, '_blank', 'noopener,noreferrer')}
+          >
+            Open Tweet on X
+          </Button>
+        </div>
+
+        {/* Step 3: Verify */}
+        <div className="bg-bg-tertiary rounded-xl p-4">
+          <p className="font-medium text-text-primary mb-2">Step 2: Verify your engagement</p>
+          <p className="text-text-secondary text-sm mb-3">
+            After replying or quote-retweeting, click below to verify.
+          </p>
+          {alreadyClaimable ? (
+            <div className="flex items-center gap-2 text-success">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">Verified! Claim your spin below.</span>
+            </div>
+          ) : (
+            <>
+              <Button
+                className="w-full"
+                onClick={handleVerify}
+                disabled={!verified || tweetVerifying}
+              >
+                {tweetVerifying ? 'Verifying...' : 'Verify Engagement'}
+              </Button>
+              {!verified && (
+                <p className="text-text-muted text-xs text-center mt-2">Connect your X account first</p>
+              )}
+            </>
+          )}
+          {tweetVerifyResult && !tweetVerifyResult.verified && (
+            <p className="text-error text-sm mt-2">{tweetVerifyResult.message}</p>
+          )}
+          {tweetVerifyResult?.verified && !alreadyClaimable && (
+            <div className="flex items-center gap-2 text-success mt-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">
+                {tweetVerifyResult.alreadyVerified ? 'Already verified!' : 'Engagement found! Claim your spin below.'}
+              </span>
+            </div>
+          )}
+        </div>
+      </>
     );
   };
 

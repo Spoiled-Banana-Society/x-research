@@ -6,6 +6,7 @@ const db = jsonDb;
 
 export const getPromos = db.getPromos;
 export const claimPromo = db.claimPromo;
+export const updatePromo = db.updatePromo;
 export const getReferralStats = db.getReferralStats;
 export const generateReferralCode = db.generateReferralCode;
 export const spinWheel = db.spinWheel;

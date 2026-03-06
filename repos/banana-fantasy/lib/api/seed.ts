@@ -8,6 +8,7 @@ import type {
   WheelSpin,
 } from '@/types';
 import type { DbSchema } from './dbTypes';
+import { API_CONFIG } from './config';
 
 const seedUser1: User = {
   id: '1',
@@ -266,9 +267,9 @@ const seedPromos: Promo[] = [
     id: '8',
     type: 'tweet-engagement',
     title: 'Tweet Engagement → FREE SPIN',
-    description: 'Like/RT/Reply to SBS launch tweet',
+    description: 'Reply or QRT to earn a spin',
     ctaText: 'Engage Now',
-    ctaLink: 'https://x.com/SpoiledBanana',
+    ctaLink: API_CONFIG.promos.tweetEngagement.tweetUrl,
     backgroundColor: '#2a2a35',
     claimable: false,
     claimCount: 0,

@@ -1044,6 +1044,7 @@ export default function DraftingPage() {
           console.log('Claiming promo:', promoId);
           setSelectedPromo(null);
         }}
+        onVerifyTweet={promosQuery.verifyTweetEngagement}
       />
     </div>
   );

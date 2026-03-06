@@ -223,7 +223,7 @@ export default function HomePage() {
 
       {/* Promo Carousel */}
       <section className="mb-4">
-        <PromoCarousel promos={promosQuery.promos || []} claimPromo={promosQuery.claimPromo} />
+        <PromoCarousel promos={promosQuery.promos || []} claimPromo={promosQuery.claimPromo} onVerifyTweet={promosQuery.verifyTweetEngagement} />
       </section>
 
       <AddToHomeScreenCard />

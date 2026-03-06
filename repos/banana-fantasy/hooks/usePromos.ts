@@ -76,12 +76,45 @@ export function usePromos(opts?: { userId?: string }) {
     [userId, swr, updateUser],
   );
 
+  const verifyTweetEngagement = useCallback(
+    async (promoId: string): Promise<{ verified: boolean; alreadyVerified?: boolean; message?: string; engagementType?: string } | null> => {
+      if (!userId || !user?.xHandle) return null;
+
+      try {
+        const res = await fetchJson<{ verified: boolean; alreadyVerified?: boolean; message?: string; engagementType?: string }>(
+          '/api/promos/verify-tweet',
+          {
+            method: 'POST',
+            body: JSON.stringify({ userId, xHandle: user.xHandle }),
+          },
+        );
+
+        if (res.verified) {
+          // Patch the promo locally to show claimable
+          setLocalPromos((prev) => {
+            const base = prev ?? swr.data ?? [];
+            return base.map((p) =>
+              p.id === promoId ? { ...p, claimable: true, claimCount: 1 } : p,
+            );
+          });
+          void swr.mutate();
+        }
+
+        return res;
+      } catch {
+        return null;
+      }
+    },
+    [userId, user?.xHandle, swr],
+  );
+
   const refreshPromos = useCallback(() => swr.mutate(), [swr]);
 
   return {
     ...swr,
     promos,
     claimPromo,
+    verifyTweetEngagement,
     refreshPromos,
     userId,
   };
