@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -19,13 +19,12 @@ interface PromoModalProps {
 
 export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = false, onVerifyTweet, onGenerateReferralCode }: PromoModalProps) {
   const router = useRouter();
-  const { user, updateUser, isLoggedIn, setShowLoginModal, isTwitterVerified, isTwitterLinking, twitterError, linkTwitter, newUserPromoClaimed, claimNewUserPromo } = useAuth();
+  const { user, isLoggedIn, setShowLoginModal, isTwitterVerified, isTwitterLinking, twitterError, linkTwitter, newUserPromoClaimed, claimNewUserPromo } = useAuth();
   const [copied, setCopied] = useState(false);
   const [showAdditionalRules, setShowAdditionalRules] = useState(false);
   const [claimedRewards, setClaimedRewards] = useState<Set<string>>(new Set());
   const [claimSuccess, setClaimSuccess] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
   const [_timerTick, setTimerTick] = useState(0);
-  const hasNotifiedParent = useRef(false);
   const [tweetVerifying, setTweetVerifying] = useState(false);
   const [tweetVerifyResult, setTweetVerifyResult] = useState<{ verified: boolean; alreadyVerified?: boolean; hasReplied?: boolean; hasQuoted?: boolean; message?: string } | null>(null);
   const [generatingReferral, setGeneratingReferral] = useState(false);
@@ -55,25 +54,12 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
     return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Notify parent when all claims are exhausted through history items
-  useEffect(() => {
-    if (!promo || hasNotifiedParent.current || isPromoClaimed) return;
-
-    const originalClaimCount = promo.claimCount || 0;
-    const claimedCount = claimedRewards.size;
-
-    if (originalClaimCount > 0 && claimedCount >= originalClaimCount) {
-      hasNotifiedParent.current = true;
-      onClaim(promo);
-    }
-  }, [claimedRewards, promo, onClaim, isPromoClaimed]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (!isOpen) {
       setClaimedRewards(new Set());
       setClaimSuccess({ show: false, count: 0 });
-      hasNotifiedParent.current = false;
       setTweetVerifying(false);
       // Don't reset tweetVerifyResult — preserve checkmarks across modal close/reopen
     } else if (promo?.type === 'tweet-engagement' && promo.claimable && (promo.claimCount ?? 0) > 0) {
@@ -106,10 +92,6 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
     // Claim all remaining at once
     if (remainingClaims > 0) {
       const claimCount = remainingClaims;
-      // Update user's wheel spins for all remaining claims
-      if (user) {
-        updateUser({ wheelSpins: (user.wheelSpins || 0) + claimCount });
-      }
       // Mark all as claimed locally
       for (let i = 0; i < claimCount; i++) {
         setClaimedRewards(prev => new Set([...Array.from(prev), `main-claim-${i}`]));
@@ -118,7 +100,6 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
       if (promo.type === 'new-user') {
         claimNewUserPromo();
       }
-      // Tell parent this promo is fully claimed
       onClaim(promo);
       setClaimSuccess({ show: true, count: claimCount });
     }
@@ -181,9 +162,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   const renderPick10Content = () => {
     const handleClaimPick10 = (rewardKey: string) => {
       setClaimedRewards(prev => new Set([...Array.from(prev), rewardKey]));
-      if (user) {
-        updateUser({ wheelSpins: (user.wheelSpins || 0) + 1 });
-      }
+      onClaim(promo);
       setClaimSuccess({ show: true, count: 1 });
     };
 
@@ -262,10 +241,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
 
     const handleClaimReferral = (rewardKey: string) => {
       setClaimedRewards(prev => new Set([...Array.from(prev), rewardKey]));
-      // Update user's wheel spins
-      if (user) {
-        updateUser({ wheelSpins: (user.wheelSpins || 0) + 1 });
-      }
+      onClaim(promo);
       setClaimSuccess({ show: true, count: 1 });
     };
 
