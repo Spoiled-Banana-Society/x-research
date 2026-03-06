@@ -4,7 +4,7 @@ import { getAdminFirestore } from '@/lib/firebaseAdmin';
 export const dynamic = 'force-dynamic';
 
 async function resetUser(userId: string) {
-
+  try {
     const db = getAdminFirestore();
     const userRef = db.collection('v2_users').doc(userId);
 
@@ -42,7 +42,6 @@ async function resetUser(userId: string) {
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get('userId');
   if (!userId) {
-    // List all user doc IDs so we can find the right one
     const db = getAdminFirestore();
     const usersSnap = await db.collection('v2_users').get();
     const ids = usersSnap.docs.map((doc) => doc.id);
