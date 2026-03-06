@@ -3,15 +3,7 @@ import { getAdminFirestore } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * POST /api/debug/reset-user — Delete a user's Firestore data so they get re-seeded fresh.
- * Body: { userId }
- * STAGING ONLY — delete this endpoint before prod.
- */
-export async function POST(req: NextRequest) {
-  try {
-    const { userId } = await req.json();
-    if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+async function resetUser(userId: string) {
 
     const db = getAdminFirestore();
     const userRef = db.collection('v2_users').doc(userId);
@@ -36,9 +28,33 @@ export async function POST(req: NextRequest) {
       await batch.commit();
     }
 
-    return NextResponse.json({ success: true, deleted: userId });
+    return { success: true, deleted: userId };
   } catch (err) {
     console.error('[debug/reset-user]', err);
-    return NextResponse.json({ error: 'Failed to reset' }, { status: 500 });
+    return { error: 'Failed to reset' };
   }
+}
+
+/**
+ * GET /api/debug/reset-user?userId=xxx — Reset via URL bar
+ * Also lists all v2_users doc IDs if no userId provided.
+ */
+export async function GET(req: NextRequest) {
+  const userId = req.nextUrl.searchParams.get('userId');
+  if (!userId) {
+    // List all user doc IDs so we can find the right one
+    const db = getAdminFirestore();
+    const usersSnap = await db.collection('v2_users').get();
+    const ids = usersSnap.docs.map((doc) => doc.id);
+    return NextResponse.json({ users: ids, hint: 'Add ?userId=xxx to reset one' });
+  }
+  const result = await resetUser(userId);
+  return NextResponse.json(result);
+}
+
+export async function POST(req: NextRequest) {
+  const { userId } = await req.json();
+  if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+  const result = await resetUser(userId);
+  return NextResponse.json(result);
 }
