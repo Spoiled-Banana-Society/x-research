@@ -366,6 +366,15 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
       }
     }
 
+    // Update promo progress for buy-bonus promo.
+    const buyBonusPromo = promos.find((p) => p.type === 'buy-bonus');
+    if (buyBonusPromo) {
+      const max = buyBonusPromo.progressMax || 2;
+      const current = buyBonusPromo.progressCurrent || 0;
+      const newTotal = current + purchase.quantity;
+      buyBonusPromo.progressCurrent = newTotal % max;
+    }
+
     return {
       purchase: deepClone(purchase),
       user: deepClone(user),

@@ -343,6 +343,8 @@ const seedPromos: Promo[] = [
     ctaLink: '/buy-drafts',
     backgroundColor: '#2a2a35',
     isNew: true,
+    claimable: false,
+    claimCount: 0,
     progressCurrent: 0,
     progressMax: 2,
     modalContent: {
