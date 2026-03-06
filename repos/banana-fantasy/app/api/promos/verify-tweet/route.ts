@@ -49,8 +49,8 @@ export async function POST(req: Request) {
       return json({ verified: true, alreadyVerified: true, hasReplied: true, hasQuoted: true });
     }
 
-    // Check replies via search (conversation_id is a valid search operator)
-    const repliedQuery = `conversation_id:${tweetId} from:${handle}`;
+    // Check direct replies only (in_reply_to_tweet_id excludes replies to other replies in the thread)
+    const repliedQuery = `in_reply_to_tweet_id:${tweetId} from:${handle}`;
     const hasReplied = await searchTweets(repliedQuery);
 
     // Check quote tweets via search (works on Free tier, unlike quote_tweets endpoint)
