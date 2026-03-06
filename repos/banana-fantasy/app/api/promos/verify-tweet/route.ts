@@ -28,45 +28,6 @@ async function searchTweets(query: string): Promise<boolean> {
   return (data.meta?.result_count ?? 0) > 0;
 }
 
-/** Check if a user quote-tweeted a specific tweet using the quote_tweets endpoint. */
-async function checkQuoteTweets(tweetId: string, handle: string): Promise<boolean> {
-  // Paginate through up to 100 quote tweets to find the user's
-  let nextToken: string | undefined;
-  const lowerHandle = handle.toLowerCase();
-
-  for (let page = 0; page < 10; page++) {
-    const params = new URLSearchParams({
-      max_results: '100',
-      expansions: 'author_id',
-      'user.fields': 'username',
-    });
-    if (nextToken) params.set('pagination_token', nextToken);
-
-    const url = `https://api.x.com/2/tweets/${tweetId}/quote_tweets?${params}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      console.error(`X API quote_tweets error (${res.status}): ${body}`);
-      throw new ApiError(502, `X API error (${res.status}): ${body.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const users: Array<{ id: string; username: string }> = data.includes?.users ?? [];
-
-    // Check if any author matches the handle
-    if (users.some((u) => u.username.toLowerCase() === lowerHandle)) {
-      return true;
-    }
-
-    nextToken = data.meta?.next_token;
-    if (!nextToken || (data.meta?.result_count ?? 0) === 0) break;
-  }
-
-  return false;
-}
 
 export async function POST(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.general);
@@ -92,8 +53,9 @@ export async function POST(req: Request) {
     const repliedQuery = `conversation_id:${tweetId} from:${handle}`;
     const hasReplied = await searchTweets(repliedQuery);
 
-    // Check quote tweets via dedicated endpoint
-    const hasQuoted = await checkQuoteTweets(tweetId, handle);
+    // Check quote tweets via search (works on Free tier, unlike quote_tweets endpoint)
+    const quotedQuery = `quoted_tweet_id:${tweetId} from:${handle}`;
+    const hasQuoted = await searchTweets(quotedQuery);
 
     // Both are required
     if (!hasReplied || !hasQuoted) {
