@@ -73,7 +73,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
       setClaimSuccess({ show: false, count: 0 });
       hasNotifiedParent.current = false;
       setTweetVerifying(false);
-      setTweetVerifyResult(null);
+      // Don't reset tweetVerifyResult — preserve checkmarks across modal close/reopen
     } else if (promo?.type === 'tweet-engagement' && promo.claimable && (promo.claimCount ?? 0) > 0) {
       // Pre-populate checkmarks for already-verified tweet engagement promos
       setTweetVerifyResult({ verified: true, hasReplied: true, hasQuoted: true, alreadyVerified: true });
