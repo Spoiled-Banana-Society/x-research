@@ -231,7 +231,7 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
   const promos = db.promosByUser[userId] ?? seedDb.promosByUser['1'] ?? [];
   const referralPromo = promos.find((p) => p.type === 'referral');
   const code = (db.referralsByUser[userId]?.code || referralPromo?.modalContent.inviteCode || '').trim();
-  const link = referralPromo?.modalContent.referralLink || (code ? `https://banana-fantasy-sbs.vercel.app?ref=${code}` : '');
+  const link = code ? `https://banana-fantasy-sbs.vercel.app?ref=${code}` : '';
   const history = referralPromo?.modalContent.referralHistory ?? [];
 
   let claimableRewards = 0;

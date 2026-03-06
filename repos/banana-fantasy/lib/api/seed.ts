@@ -238,7 +238,7 @@ const seedPromos: Promo[] = [
       additionalRules:
         'Referred users must participate in fantasy football to qualify. Banana Fantasy reserves the right to revoke draft passes or drafted teams from users found to be abusing this promotion.',
       inviteCode: 'BANANA-CK99-2026',
-      referralLink: 'https://bananabestball.com/ref/BANANA-CK99-2026',
+      referralLink: 'https://banana-fantasy-sbs.vercel.app?ref=BANANA-CK99-2026',
       referralRewards: [
         { milestone: 'Friend Verifies & Claims Free Spin', reward: '1 Free Spin' },
         { milestone: 'Friend buys 1 draft', reward: '1 Free Spin' },

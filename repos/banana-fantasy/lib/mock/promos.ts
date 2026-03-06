@@ -45,7 +45,7 @@ export const mockPromos: Promo[] = [
       explanation: 'Share your unique referral link with friends. Your friend must:\n\n1) Verify their X account\n2) Claim and use their Free Spin on the prize wheel\n\nEarn bonus spins when they purchase draft passes.',
       additionalRules: 'Referred users must participate in fantasy football to qualify. Banana Fantasy reserves the right to revoke draft passes or drafted teams from users found to be abusing this promotion.',
       inviteCode: 'BANANA-CK99-2026',
-      referralLink: 'https://bananabestball.com/ref/BANANA-CK99-2026',
+      referralLink: 'https://banana-fantasy-sbs.vercel.app?ref=BANANA-CK99-2026',
       referralRewards: [
         { milestone: 'Friend Verifies & Claims Free Spin', reward: '1 Free Spin' },
         { milestone: 'Friend buys 1 draft', reward: '1 Free Spin' },
