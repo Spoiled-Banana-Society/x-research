@@ -255,23 +255,26 @@ export default function DraftingPage() {
                   : undefined,
               });
             }
-          } else if (isFull) {
+          } else if (isFull && !draft.draftRoomOpen) {
             // 10/10 but draft hasn't started yet — derive phase from server timestamps
+            // Skip if draft room is open (it owns phase transitions)
             const patch: Partial<DraftState> = { players: 10 };
 
             if (info.draftStartTime) {
               // Server has a start time — compute preSpinStartedAt (60s before start)
-              const preSpinStartedAt = draft.preSpinStartedAt || (info.draftStartTime * 1000 - 60000);
+              if (!draft.preSpinStartedAt) {
+                // First time: derive and set
+                patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
+                patch.randomizingStartedAt = undefined;
+              }
+              // Use existing or newly derived preSpinStartedAt for phase calc
+              const preSpinStartedAt = draft.preSpinStartedAt || patch.preSpinStartedAt!;
               const elapsed = (Date.now() - preSpinStartedAt) / 1000;
-              patch.preSpinStartedAt = preSpinStartedAt;
-              patch.randomizingStartedAt = undefined; // Done randomizing
 
               if (elapsed >= 60) {
-                // Countdown expired — draft should be starting
                 patch.phase = 'drafting';
                 patch.status = 'drafting';
               } else if (elapsed >= 15) {
-                // Past reveal — draft type revealed, counting down to start
                 patch.phase = 'result';
                 if (info.draftType) {
                   const t = info.draftType.toLowerCase();
@@ -279,13 +282,9 @@ export default function DraftingPage() {
                   patch.type = patch.draftType;
                 }
               } else {
-                // First 15s — reveal countdown
                 patch.phase = 'pre-spin';
               }
             }
-            // When draftStartTime is not available but draft room already set
-            // preSpinStartedAt, don't overwrite phase — getLiveState derives
-            // the display from the timestamp, not the stored phase.
 
             draftStore.updateDraft(draft.id, patch);
           } else if (playerCount > 0 && draft.status === 'filling') {
@@ -396,6 +395,9 @@ export default function DraftingPage() {
       const allDrafts = draftStore.getActiveDrafts();
 
       for (const d of allDrafts) {
+        // Draft room owns phase transitions when it's open — don't compete
+        if (d.draftRoomOpen) continue;
+
         // FILLING: derive count from timestamps, write to store
         // Check status OR phase (syncLiveDrafts may set phase='pre-spin' before timestamps are ready)
         if ((d.phase === 'filling' || d.status === 'filling') && !d.preSpinStartedAt && d.fillingStartedAt != null && d.fillingInitialPlayers != null) {
@@ -418,11 +420,14 @@ export default function DraftingPage() {
                 continue;
               }
               // After 5s of randomizing, transition to countdown
-              if ((now - d.randomizingStartedAt) >= 5000) {
+              if (!d.preSpinStartedAt && (now - d.randomizingStartedAt) >= 5000) {
+                // Assign draft type if not already set (slot machine does this in draft room)
+                const assignedType = d.draftType || 'pro';
                 draftStore.updateDraft(d.id, {
                   phase: 'pre-spin', players: 10,
                   preSpinStartedAt: now,
                   randomizingStartedAt: undefined,
+                  draftType: assignedType, type: assignedType,
                 });
               }
               continue;

@@ -232,6 +232,17 @@ function DraftRoomContent() {
   const animationOffsetRef = useRef(0); // ms offset for resuming slot animation mid-way
   const lastWsUpdateRef = useRef<number>(Date.now());
 
+  // ==================== DRAFT ROOM OPEN FLAG ====================
+  // Signals to the drafting page that this draft room is open, so it stops
+  // competing with phase transition writes (tick effect + syncLiveDrafts).
+  useEffect(() => {
+    if (!draftId) return;
+    draftStore.updateDraft(draftId, { draftRoomOpen: true });
+    return () => {
+      draftStore.updateDraft(draftId, { draftRoomOpen: false });
+    };
+  }, [draftId]);
+
   // ==================== LOADING PHASE: Check server state before showing any UI ====================
   // When re-entering a live draft, we start in 'loading' phase to avoid replaying animations.
   // This effect fetches server state and jumps to the exact correct phase.

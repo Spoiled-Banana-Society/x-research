@@ -20,7 +20,7 @@ const seedUser1: User = {
   xHandle: '@BananaKing99',
   draftPasses: 0,
   freeDrafts: 0,
-  wheelSpins: 2,
+  wheelSpins: 0,
   jackpotEntries: 0,
   hofEntries: 0,
   isVerified: true,
