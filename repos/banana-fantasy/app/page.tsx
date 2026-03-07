@@ -217,8 +217,9 @@ export default function HomePage() {
       {/* Staging Mint Button */}
       {_isStagingMode() && user?.id && (
         <section className="mb-4 flex justify-center">
-          <StagingMintButton userId={user.id} onMinted={(userData) => {
-            if (userData) updateUser(userData as Partial<import('@/types').User>);
+          <StagingMintButton userId={user.id} onMinted={() => {
+            // Don't updateUser with Firestore data — it lacks draftPasses from Go backend.
+            // refreshBalance fetches both Go backend tokens + Firestore balances correctly.
             promosQuery.refreshPromos();
             void refreshBalance();
           }} />

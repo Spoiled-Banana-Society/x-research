@@ -43,9 +43,17 @@ export function usePromos(opts?: { userId?: string }) {
           body: JSON.stringify({ userId, promoId }),
         });
 
-        // Update auth user (wheel spins, etc)
-        if (res.user) {
-          updateUser(res.user);
+        // Update only Firestore-managed balance fields from the response.
+        // Do NOT spread the full user — it lacks draftPasses (from Go backend)
+        // and would overwrite the correct value with 0.
+        if (res.user && typeof res.user === 'object') {
+          const u = res.user as Record<string, unknown>;
+          const balanceUpdate: Record<string, unknown> = {};
+          if (typeof u.wheelSpins === 'number') balanceUpdate.wheelSpins = u.wheelSpins;
+          if (typeof u.freeDrafts === 'number') balanceUpdate.freeDrafts = u.freeDrafts;
+          if (typeof u.jackpotEntries === 'number') balanceUpdate.jackpotEntries = u.jackpotEntries;
+          if (typeof u.hofEntries === 'number') balanceUpdate.hofEntries = u.hofEntries;
+          if (Object.keys(balanceUpdate).length > 0) updateUser(balanceUpdate);
         }
 
         // Patch the promo in the local list
