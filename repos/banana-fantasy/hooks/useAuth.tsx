@@ -299,22 +299,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           } catch { /* silent */ }
 
-          // Merge everything into one setUser call — no flash
-          const merged: User = {
-            ...backendUser,
-            loginMethod,
-            username: savedProfile?.username || backendUser.username,
-            profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
-            nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
-            ...(firestoreBalance ? {
-              wheelSpins: firestoreBalance.wheelSpins,
-              freeDrafts: firestoreBalance.freeDrafts ?? backendUser.freeDrafts,
-              jackpotEntries: firestoreBalance.jackpotEntries ?? backendUser.jackpotEntries,
-              hofEntries: firestoreBalance.hofEntries ?? backendUser.hofEntries,
-            } : {}),
-          };
-          setUser(merged);
-          saveCachedBalance(merged);
+          // Merge everything into one setUser call — no flash.
+          // Use callback form so we can fall back to cached values (prev)
+          // when the Firestore fetch fails.
+          setUser(prev => {
+            const merged: User = {
+              ...backendUser,
+              loginMethod,
+              username: savedProfile?.username || backendUser.username,
+              profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
+              nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
+              wheelSpins: firestoreBalance?.wheelSpins ?? prev?.wheelSpins ?? 0,
+              freeDrafts: firestoreBalance?.freeDrafts ?? prev?.freeDrafts ?? 0,
+              jackpotEntries: firestoreBalance?.jackpotEntries ?? prev?.jackpotEntries ?? 0,
+              hofEntries: firestoreBalance?.hofEntries ?? prev?.hofEntries ?? 0,
+            };
+            saveCachedBalance(merged);
+            return merged;
+          });
           setUserDataLoaded(true);
           // Mark balance as fetched so the separate effect doesn't re-fetch
           balanceFetchedRef.current = backendUser.id;
@@ -491,13 +493,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data && typeof data.wheelSpins === 'number') {
           setUser(prev => {
             if (!prev || prev.id !== userId) return prev;
-            return {
+            const updated = {
               ...prev,
               wheelSpins: data.wheelSpins,
               freeDrafts: data.freeDrafts ?? prev.freeDrafts,
               jackpotEntries: data.jackpotEntries ?? prev.jackpotEntries,
               hofEntries: data.hofEntries ?? prev.hofEntries,
             };
+            saveCachedBalance(updated);
+            return updated;
           });
         }
       })
