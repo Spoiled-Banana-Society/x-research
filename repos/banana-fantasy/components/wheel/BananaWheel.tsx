@@ -385,13 +385,6 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete }: BananaWh
                 {getPrizeMessage(wonSegment)}
               </p>
 
-              <button
-                onClick={dismissResult}
-                className="px-8 py-2.5 bg-gradient-to-b from-[#fbbf24] to-[#f59e0b] text-[#1a1a1f] font-semibold rounded-full hover:from-[#fcd34d] hover:to-[#fbbf24] transition-all active:scale-[0.98]"
-                style={{ animation: 'fadeIn 0.6s ease-out 0.6s both' }}
-              >
-                Awesome!
-              </button>
             </div>
           </div>
         </div>
