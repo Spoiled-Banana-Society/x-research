@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 
 const BananaWheel = dynamic(() => import('@/components/wheel/BananaWheel').then(m => ({ default: m.BananaWheel })), {
@@ -18,11 +18,12 @@ export default function BananaWheelPage() {
   const wheelQuery = useWheel();
   const promosQuery = usePromos({ userId: user?.id });
   const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
-  const [spinsAvailable, setSpinsAvailable] = useState(user?.wheelSpins || 0);
-
-  useEffect(() => {
-    setSpinsAvailable(user?.wheelSpins || 0);
-  }, [user?.wheelSpins]);
+  // Track spin-count offset locally so we can decrement immediately on spin
+  // without waiting for a server round-trip, while still syncing to the
+  // authoritative value from useAuth once it loads.
+  const [spinsUsed, setSpinsUsed] = useState(0);
+  const serverSpins = user?.wheelSpins ?? 0;
+  const spinsAvailable = Math.max(0, serverSpins - spinsUsed);
 
   const segmentMap = useMemo(() => new Map(wheelSegments.map((segment) => [segment.id, segment])), []);
 
@@ -34,7 +35,7 @@ export default function BananaWheelPage() {
     (outcome: WheelSpinOutcome, segment: WheelSegment | null) => {
       const today = new Date().toISOString().split('T')[0];
       setSpinHistory((prev) => [{ id: outcome.spinId, date: today, result: outcome.result }, ...prev]);
-      setSpinsAvailable((prev) => Math.max(0, prev - 1));
+      setSpinsUsed((prev) => prev + 1);
 
       if (!user || !segment) return;
       if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
@@ -65,15 +66,45 @@ export default function BananaWheelPage() {
   const getPrizeLabel = (segmentId: string): string => segmentMap.get(segmentId)?.label ?? '';
   const getPrizeColor = (segmentId: string): string => segmentMap.get(segmentId)?.color ?? '#94a3b8';
 
-  if (isLoading || (user && !isBalanceLoaded)) {
+  const dataReady = !isLoading && (!user || isBalanceLoaded);
+
+  if (!dataReady) {
+    const skeletonBar = "h-[18px] rounded bg-white/10 animate-pulse";
+    const skeletonCard = (
+      <div
+        className="rounded-2xl p-6 backdrop-blur-md"
+        style={{
+          background: 'rgba(20, 20, 20, 0.7)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+        }}
+      >
+        <div className={`${skeletonBar} w-[100px] mb-4`} />
+        <div className="space-y-3.5">
+          <div className="flex justify-between"><div className={`${skeletonBar} w-[80px]`} /><div className={`${skeletonBar} w-[30px]`} /></div>
+          <div className="flex justify-between"><div className={`${skeletonBar} w-[60px]`} /><div className={`${skeletonBar} w-[30px]`} /></div>
+          <div className="flex justify-between"><div className={`${skeletonBar} w-[70px]`} /><div className={`${skeletonBar} w-[30px]`} /></div>
+        </div>
+      </div>
+    );
     return (
       <div className="w-full px-4 sm:px-8 lg:px-12 py-4">
         <div className="text-center mb-6" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
           <h1 className="text-[28px] font-semibold text-white tracking-tight mb-1">Banana Wheel</h1>
           <p className="text-white text-[14px]">Spin to win Free Drafts and Special Entries</p>
         </div>
-        <div className="flex justify-center">
-          <div className="w-[300px] h-[300px] bg-bg-tertiary rounded-full animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr_320px] gap-4 items-start">
+          <div className="flex flex-col gap-4 order-2 lg:order-1">
+            {skeletonCard}
+            {skeletonCard}
+          </div>
+          <div className="flex justify-center order-1 lg:order-2">
+            <div className="w-[300px] h-[300px] bg-bg-tertiary rounded-full animate-pulse" />
+          </div>
+          <div className="flex flex-col gap-4 order-3">
+            {skeletonCard}
+            {skeletonCard}
+          </div>
         </div>
       </div>
     );

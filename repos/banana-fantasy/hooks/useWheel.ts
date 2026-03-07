@@ -28,7 +28,8 @@ export function useWheel(opts?: { userId?: string }) {
 
     const res = await fetchJson<WheelSpinOutcome>('/api/wheel/spin', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
     });
 
     setHistory((prev) => [res, ...prev]);

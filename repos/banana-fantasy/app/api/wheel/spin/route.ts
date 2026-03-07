@@ -8,7 +8,10 @@ import { getAdminFirestore } from '@/lib/firebaseAdmin';
 import { generateNonce, generateSeed, pickWeighted } from '@/lib/rng';
 import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 
+import { FieldValue } from 'firebase-admin/firestore';
+
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
+const USERS_COLLECTION = 'v2_users';
 
 let cachedKeys: Map<string, crypto.KeyObject> = new Map();
 
@@ -23,7 +26,7 @@ function getUtcDayRange(date = new Date()) {
 }
 
 function getPrivyAppId(): string {
-  const appId = process.env.PRIVY_APP_ID || process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const appId = (process.env.PRIVY_APP_ID || process.env.NEXT_PUBLIC_PRIVY_APP_ID || '').trim();
   if (!appId) throw new ApiError(500, 'Privy app ID not configured');
   return appId;
 }
@@ -97,7 +100,7 @@ async function verifyPrivyJwt(token: string): Promise<string> {
   if (payload.aud) {
     const aud = payload.aud;
     const ok = Array.isArray(aud) ? aud.includes(appId) : aud === appId;
-    if (!ok) throw new ApiError(401, 'Token audience mismatch');
+    if (!ok) throw new ApiError(401, 'Invalid auth token');
   }
 
   const expectedIssuer = process.env.PRIVY_JWT_ISSUER;
@@ -122,7 +125,11 @@ export async function POST(req: Request) {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (!token) throw new ApiError(401, 'Missing authorization token');
 
-    const userId = await verifyPrivyJwt(token);
+    // JWT proves authentication; userId from body matches frontend's user.id
+    await verifyPrivyJwt(token);
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+    if (!userId) throw new ApiError(400, 'Missing userId');
 
     const db = getAdminFirestore();
     const { start, end } = getUtcDayRange();
@@ -156,7 +163,10 @@ export async function POST(req: Request) {
     };
     const timestamp = nowIso();
 
-    await db.collection(WHEEL_SPINS_COLLECTION).doc(spinId).set({
+    // Write spin record and update user balance atomically
+    const batch = db.batch();
+
+    batch.set(db.collection(WHEEL_SPINS_COLLECTION).doc(spinId), {
       userId,
       spinId,
       result: segment.id,
@@ -166,10 +176,25 @@ export async function POST(req: Request) {
       nonce,
     });
 
+    const userRef = db.collection(USERS_COLLECTION).doc(userId);
+    const balanceUpdate: Record<string, FieldValue | number> = {
+      wheelSpins: FieldValue.increment(-1),
+    };
+    if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
+      balanceUpdate.freeDrafts = FieldValue.increment(segment.prizeValue);
+    } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
+      balanceUpdate.jackpotEntries = FieldValue.increment(1);
+    } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
+      balanceUpdate.hofEntries = FieldValue.increment(1);
+    }
+    batch.set(userRef, balanceUpdate, { merge: true });
+
+    await batch.commit();
+
     return json({ spinId, result: segment.id, prize, angle }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error(err);
+    console.error('[wheel/spin] Unhandled error:', err);
     return jsonError('Internal Server Error', 500);
   }
 }

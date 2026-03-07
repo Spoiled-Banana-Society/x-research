@@ -7,8 +7,10 @@ import { getOwnerUser, getOwnerDraftTokens } from '@/lib/api/owner';
 import { ApiError as ClientApiError } from '@/lib/api/client';
 
 const USER_PROFILE_KEY = 'banana-fantasy-user-profile';
+const USER_BALANCE_KEY = 'banana-fantasy-user-balance';
 const USER_STORAGE_KEYS = [
   USER_PROFILE_KEY,
+  USER_BALANCE_KEY,
   'banana-active-drafts',
   'banana-completed-drafts',
   'banana-fantasy-onboarding-complete',
@@ -67,6 +69,30 @@ function saveProfile(profile: SavedProfile): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function getCachedUser(): User | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(USER_BALANCE_KEY);
+    if (!saved) return null;
+    return JSON.parse(saved) as User;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedUser(user: User | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (user) {
+      localStorage.setItem(USER_BALANCE_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(USER_BALANCE_KEY);
+    }
   } catch {
     // Ignore storage errors
   }
@@ -529,7 +555,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         walletAddress: walletAddress ?? (MOCK_AUTH ? MOCK_WALLET : null),
         isLoggedIn: !!user,
-        isLoading: MOCK_AUTH ? false : !privy.ready,
+        isLoading: MOCK_AUTH ? false : (!privy.ready || (privy.authenticated && !user)),
         isBalanceLoaded,
         isNewUser,
         setIsNewUser,
