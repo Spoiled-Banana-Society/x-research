@@ -1332,7 +1332,13 @@ function DraftRoomContent() {
           setPhase('result');
           if (draftId) {
             // NOW reveal the type to draftStore — slot machine animation is done
+            console.log(`[Draft Room] Writing type=${draftType} to draftStore for ${draftId}`);
             draftStore.updateDraft(draftId, { phase: 'result', type: draftType, draftType: draftType });
+            // Verify write
+            const check = draftStore.getDraft(draftId);
+            console.log(`[Draft Room] After write, stored type=${check?.type}, draftType=${check?.draftType}`);
+          } else {
+            console.warn('[Draft Room] Cannot write type — draftId is falsy');
           }
         }, 400);
       }
