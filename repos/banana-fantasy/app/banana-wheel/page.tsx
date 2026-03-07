@@ -14,7 +14,7 @@ import { usePromos } from '@/hooks/usePromos';
 import { wheelSegments, type WheelSegment } from '@/lib/wheelConfig';
 
 export default function BananaWheelPage() {
-  const { user, updateUser, refreshBalance } = useAuth();
+  const { user, updateUser, isLoading } = useAuth();
   const wheelQuery = useWheel();
   const promosQuery = usePromos({ userId: user?.id });
   const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
@@ -36,29 +36,16 @@ export default function BananaWheelPage() {
       setSpinHistory((prev) => [{ id: outcome.spinId, date: today, result: outcome.result }, ...prev]);
       setSpinsAvailable((prev) => Math.max(0, prev - 1));
 
-      // Use backend response if available (already persisted to Firestore)
-      if (outcome.user) {
-        updateUser({
-          wheelSpins: outcome.user.wheelSpins,
-          freeDrafts: outcome.user.freeDrafts,
-          jackpotEntries: outcome.user.jackpotEntries,
-          hofEntries: outcome.user.hofEntries,
-        });
-      } else if (user && segment) {
-        // Fallback: optimistic update
-        if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
-          updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
-        } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
-          updateUser({ jackpotEntries: (user.jackpotEntries || 0) + 1 });
-        } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
-          updateUser({ hofEntries: (user.hofEntries || 0) + 1 });
-        }
+      if (!user || !segment) return;
+      if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
+        updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
+      } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
+        updateUser({ jackpotEntries: (user.jackpotEntries || 0) + 1 });
+      } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
+        updateUser({ hofEntries: (user.hofEntries || 0) + 1 });
       }
-
-      // Refresh from Firestore to ensure everything is in sync
-      void refreshBalance();
     },
-    [updateUser, user, refreshBalance],
+    [updateUser, user],
   );
 
   const prizeSummary = useMemo(() => {
@@ -77,6 +64,20 @@ export default function BananaWheelPage() {
 
   const getPrizeLabel = (segmentId: string): string => segmentMap.get(segmentId)?.label ?? '';
   const getPrizeColor = (segmentId: string): string => segmentMap.get(segmentId)?.color ?? '#94a3b8';
+
+  if (isLoading) {
+    return (
+      <div className="w-full px-4 sm:px-8 lg:px-12 py-4">
+        <div className="text-center mb-6" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+          <h1 className="text-[28px] font-semibold text-white tracking-tight mb-1">Banana Wheel</h1>
+          <p className="text-white text-[14px]">Spin to win Free Drafts and Special Entries</p>
+        </div>
+        <div className="flex justify-center">
+          <div className="w-[300px] h-[300px] bg-bg-tertiary rounded-full animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 py-4">

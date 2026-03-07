@@ -38,7 +38,7 @@ function StagingMintButton({ userId, onMinted }: { userId: string; onMinted: (us
       });
       const data = await res.json();
       if (res.ok) {
-        setResult(`Minted ${qty} tokens`);
+        setResult(`Minted ${qty} — promo updated`);
         onMinted(data.user);
       } else {
         setResult(`Error: ${data.error || 'Unknown'}`);
@@ -218,10 +218,7 @@ export default function HomePage() {
       {_isStagingMode() && user?.id && (
         <section className="mb-4 flex justify-center">
           <StagingMintButton userId={user.id} onMinted={(userData) => {
-            if (userData) {
-              const { draftPasses: _dp, ...safeFields } = userData as Record<string, unknown>;
-              updateUser(safeFields as Partial<import('@/types').User>);
-            }
+            if (userData) updateUser(userData as Partial<import('@/types').User>);
             promosQuery.refreshPromos();
             void refreshBalance();
           }} />

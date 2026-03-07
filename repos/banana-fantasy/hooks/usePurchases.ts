@@ -77,11 +77,7 @@ export function usePurchases(opts?: { userId?: string }) {
           body: JSON.stringify({ purchaseId, txHash }),
         });
 
-        if (res.user) {
-          // Don't let Firestore's accumulated draftPasses overwrite the real Go backend count
-          const { draftPasses: _dp, ...safeFields } = res.user as Record<string, unknown>;
-          updateUser(safeFields as Partial<import('@/types').User>);
-        }
+        if (res.user) updateUser(res.user);
         void refreshBalance();
 
         setLocalHistory((prev) => {

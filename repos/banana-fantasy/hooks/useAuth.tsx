@@ -7,10 +7,8 @@ import { getOwnerUser, getOwnerDraftTokens } from '@/lib/api/owner';
 import { ApiError as ClientApiError } from '@/lib/api/client';
 
 const USER_PROFILE_KEY = 'banana-fantasy-user-profile';
-const USER_BALANCE_CACHE_KEY = 'banana-fantasy-balance-cache';
 const USER_STORAGE_KEYS = [
   USER_PROFILE_KEY,
-  USER_BALANCE_CACHE_KEY,
   'banana-active-drafts',
   'banana-completed-drafts',
   'banana-fantasy-onboarding-complete',
@@ -21,6 +19,7 @@ interface SavedProfile {
   username?: string;
   profilePicture?: string;
   nflTeam?: string;
+  draftPasses?: number;
 }
 
 interface AuthContextType {
@@ -57,7 +56,6 @@ function getSavedProfile(): SavedProfile | null {
     if (!saved) return null;
     const profile = JSON.parse(saved);
     delete profile.profilePicture;
-    delete profile.draftPasses;
     return profile;
   } catch {
     return null;
@@ -71,36 +69,6 @@ function saveProfile(profile: SavedProfile): void {
   } catch {
     // Ignore storage errors
   }
-}
-
-interface BalanceCache {
-  draftPasses: number;
-  freeDrafts: number;
-  wheelSpins: number;
-  jackpotEntries: number;
-  hofEntries: number;
-}
-
-function getCachedBalance(): BalanceCache | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(USER_BALANCE_CACHE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch { return null; }
-}
-
-function saveCachedBalance(user: { draftPasses?: number; freeDrafts?: number; wheelSpins?: number; jackpotEntries?: number; hofEntries?: number }): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(USER_BALANCE_CACHE_KEY, JSON.stringify({
-      draftPasses: user.draftPasses || 0,
-      freeDrafts: user.freeDrafts || 0,
-      wheelSpins: user.wheelSpins || 0,
-      jackpotEntries: user.jackpotEntries || 0,
-      hofEntries: user.hofEntries || 0,
-    }));
-  } catch { /* ignore */ }
 }
 
 // ── Mock auth for local testing ──────────────────────────────────────
@@ -132,7 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const privy = usePrivy();
   const privyAvailable = usePrivyAvailable();
   const [user, setUser] = useState<User | null>(MOCK_USER);
-  const [userDataLoaded, setUserDataLoaded] = useState(MOCK_AUTH);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -220,7 +187,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Track whether we've already started fetching for this wallet
   const fetchingRef = useRef<string | null>(null);
-  const balanceFetchedRef = useRef<string | null>(null);
 
   // Check for existing Twitter link on login (also triggers after linkTwitter OAuth redirect)
   useEffect(() => {
@@ -248,72 +214,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (privy.ready && privy.authenticated && privy.user && walletAddress) {
       // Avoid duplicate fetches for the same wallet
       if (fetchingRef.current === walletAddress) return;
-
-      // Show cached balance immediately while backend loads
-      const cached = getCachedBalance();
-      const normalizedWallet = walletAddress.toLowerCase();
-      if (cached && !user) {
-        setUser({
-          id: normalizedWallet,
-          username: walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4),
-          walletAddress,
-          loginMethod: 'social',
-          draftPasses: cached.draftPasses,
-          freeDrafts: cached.freeDrafts,
-          wheelSpins: cached.wheelSpins,
-          jackpotEntries: cached.jackpotEntries,
-          hofEntries: cached.hofEntries,
-          usdcBalance: 0,
-          isVerified: false,
-          createdAt: new Date().toISOString(),
-        });
-      }
       fetchingRef.current = walletAddress;
 
       const savedProfile = getSavedProfile();
       // Determine login method: 'wallet' only if user has a non-embedded (external) wallet.
       // privy.user.wallet exists for ALL users (embedded wallets are auto-created),
       // so we check walletClientType to distinguish external wallet logins.
+      const walletAccounts = privy.user.linkedAccounts?.filter(
+        (a: { type: string }) => a.type === 'wallet'
+      );
+      console.log('[SBS Auth] Wallet accounts:', JSON.stringify(walletAccounts));
+      console.log('[SBS Auth] All linked accounts types:', privy.user.linkedAccounts?.map((a: { type: string; walletClientType?: string; walletClient?: string }) => `${a.type}/${a.walletClientType || a.walletClient || 'none'}`));
       const hasExternalWallet = privy.user.linkedAccounts?.some(
         (a: { type: string; walletClientType?: string; walletClient?: string }) =>
           a.type === 'wallet' && a.walletClientType !== 'privy' && a.walletClient !== 'privy'
       );
+      console.log('[SBS Auth] hasExternalWallet:', hasExternalWallet);
       const loginMethod: 'wallet' | 'social' = hasExternalWallet ? 'wallet' : 'social';
+      console.log('[SBS Auth] loginMethod:', loginMethod);
 
-      // Fetch Go backend profile + Firestore balance in parallel, then set user once
+      // Try to fetch real SBS profile from backend
       getOwnerUser(walletAddress)
-        .then(async (backendUser) => {
-          // Fetch Firestore balance before setting user to avoid flash
-          let firestoreBalance: Record<string, number> | null = null;
-          try {
-            const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(backendUser.id)}`);
-            const data = await res.json();
-            if (data && typeof data.wheelSpins === 'number') {
-              firestoreBalance = data;
-            }
-          } catch { /* silent */ }
-
-          // Merge everything into one setUser call — no flash.
-          // Use callback form so we can fall back to cached values (prev)
-          // when the Firestore fetch fails.
-          setUser(prev => {
-            const merged: User = {
-              ...backendUser,
-              loginMethod,
-              username: savedProfile?.username || backendUser.username,
-              profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
-              nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
-              wheelSpins: firestoreBalance?.wheelSpins ?? prev?.wheelSpins ?? 0,
-              freeDrafts: firestoreBalance?.freeDrafts ?? prev?.freeDrafts ?? 0,
-              jackpotEntries: firestoreBalance?.jackpotEntries ?? prev?.jackpotEntries ?? 0,
-              hofEntries: firestoreBalance?.hofEntries ?? prev?.hofEntries ?? 0,
-            };
-            saveCachedBalance(merged);
-            return merged;
-          });
-          setUserDataLoaded(true);
-          // Mark balance as fetched so the separate effect doesn't re-fetch
-          balanceFetchedRef.current = backendUser.id;
+        .then((backendUser) => {
+          // Merge backend data with any locally saved profile overrides
+          // Always use backend draftPasses (real token count from API)
+          const merged: User = {
+            ...backendUser,
+            loginMethod,
+            username: savedProfile?.username || backendUser.username,
+            profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
+            nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
+          };
+          setUser(merged);
           setIsNewUser(false);
           setShowOnboarding(false);
         })
@@ -328,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             profilePicture: savedProfile?.profilePicture,
             nflTeam: savedProfile?.nflTeam,
             xHandle: undefined,
-            draftPasses: 0,
+            draftPasses: savedProfile?.draftPasses || 0,
             usdcBalance: 0,
             freeDrafts: 0,
             wheelSpins: 0,
@@ -338,7 +270,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             createdAt: new Date().toISOString(),
           };
           setUser(fallbackUser);
-          setUserDataLoaded(true);
           if (isNotFound) {
             setIsNewUser(true);
             setShowOnboarding(true);
@@ -364,7 +295,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
     } else if (privy.ready && !privy.authenticated) {
       setUser(null);
-      setUserDataLoaded(true); // not logged in = nothing to load
       fetchingRef.current = null;
       setIsNewUser(false);
       setShowOnboarding(false);
@@ -474,7 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch wheelSpins / freeDrafts / entries from Firestore on login.
   // The Go backend (getOwnerUser) doesn't store these, so we need a
   // separate Firestore read to hydrate them on page load.
-  // (balanceFetchedRef declared above — set by Privy sync to skip re-fetch)
+  const balanceFetchedRef = useRef<string | null>(null);
   useEffect(() => {
     const userId = user?.id;
     if (!userId) { balanceFetchedRef.current = null; return; }
@@ -487,15 +417,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data && typeof data.wheelSpins === 'number') {
           setUser(prev => {
             if (!prev || prev.id !== userId) return prev;
-            const updated = {
+            return {
               ...prev,
               wheelSpins: data.wheelSpins,
               freeDrafts: data.freeDrafts ?? prev.freeDrafts,
               jackpotEntries: data.jackpotEntries ?? prev.jackpotEntries,
               hofEntries: data.hofEntries ?? prev.hofEntries,
             };
-            saveCachedBalance(updated);
-            return updated;
           });
         }
       })
@@ -525,7 +453,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profilePicture: updated.profilePicture,
         nflTeam: updated.nflTeam,
       });
-      saveCachedBalance(updated);
       return updated;
     });
   }, []);
@@ -558,7 +485,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated.jackpotEntries = firestoreBalance.jackpotEntries ?? updated.jackpotEntries;
         updated.hofEntries = firestoreBalance.hofEntries ?? updated.hofEntries;
       }
-      saveCachedBalance(updated);
       return updated;
     });
   }, [walletAddress, user?.id]);
@@ -600,7 +526,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         walletAddress: walletAddress ?? (MOCK_AUTH ? MOCK_WALLET : null),
         isLoggedIn: !!user,
-        isLoading: MOCK_AUTH ? false : (!privy.ready || (!userDataLoaded && !getCachedBalance())),
+        isLoading: MOCK_AUTH ? false : !privy.ready,
         isNewUser,
         setIsNewUser,
         showOnboarding,

@@ -20,10 +20,8 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const rawUserId = searchParams.get('userId');
-    if (!rawUserId) return jsonError('Missing userId', 400);
-    // Normalize wallet address — Firestore doc IDs are case-sensitive
-    const userId = rawUserId.toLowerCase();
+    const userId = searchParams.get('userId');
+    if (!userId) return jsonError('Missing userId', 400);
 
     const db = getAdminFirestore();
     const snap = await db.collection(USERS_COLLECTION).doc(userId).get();

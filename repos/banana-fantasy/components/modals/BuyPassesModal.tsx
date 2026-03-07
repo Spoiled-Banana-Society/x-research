@@ -97,9 +97,7 @@ export function BuyPassesModal({
         body: JSON.stringify({ purchaseId: purchase.id, txHash: hash }),
       });
       if (verifyRes.user) {
-        // Only take Firestore-owned fields — draftPasses comes from Go backend (refreshBalance handles it)
-        const { draftPasses: _dp, ...safeFields } = verifyRes.user as Record<string, unknown>;
-        updateUser(safeFields as Partial<import('@/types').User>);
+        updateUser(verifyRes.user as Partial<import('@/types').User>);
       }
     } catch (err) {
       console.warn('[BuyModal] Purchase tracking failed (mint succeeded):', err);
@@ -516,10 +514,7 @@ export function BuyPassesModal({
                     });
                     const data = await res.json();
                     if (res.ok) {
-                      if (data.user) {
-                        const { draftPasses: _dp, ...safeFields } = data.user as Record<string, unknown>;
-                        updateUser(safeFields as Partial<import('@/types').User>);
-                      }
+                      if (data.user) updateUser(data.user as Partial<import('@/types').User>);
                       await refreshBalance();
                       goToPickSpeed(quantity);
                     } else {

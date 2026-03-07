@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { usePrivy } from '@privy-io/react-auth';
 import { fetchJson } from '@/lib/appApiClient';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -12,30 +13,27 @@ export type WheelSpinOutcome = {
     value?: number | string;
   };
   angle: number;
-  user?: {
-    wheelSpins: number;
-    freeDrafts: number;
-    jackpotEntries: number;
-    hofEntries: number;
-  };
 };
 
 export function useWheel(opts?: { userId?: string }) {
   const { user } = useAuth();
+  const privy = usePrivy();
   const userId = opts?.userId ?? user?.id;
   const [history, setHistory] = useState<WheelSpinOutcome[]>([]);
 
   const spin = useCallback(async (): Promise<WheelSpinOutcome | null> => {
-    if (!userId) return null;
+    if (!userId) throw new Error('Not logged in');
+    const token = await privy.getAccessToken();
+    if (!token) throw new Error('Missing Privy access token');
 
     const res = await fetchJson<WheelSpinOutcome>('/api/wheel/spin', {
       method: 'POST',
-      body: JSON.stringify({ userId }),
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     setHistory((prev) => [res, ...prev]);
     return res;
-  }, [userId]);
+  }, [privy, userId]);
 
   return {
     history,

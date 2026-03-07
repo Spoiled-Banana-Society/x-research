@@ -82,6 +82,7 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete }: BananaWh
   const [rotation, setRotation] = useState(0);
   const [wonSegment, setWonSegment] = useState<WheelSegment | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [spinError, setSpinError] = useState<string | null>(null);
   const wheelRef = useRef<HTMLDivElement>(null);
 
   const segmentAngle = WHEEL_SEGMENT_ANGLE;
@@ -96,12 +97,15 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete }: BananaWh
 
     setIsSpinning(true);
     setWonSegment(null);
+    setSpinError(null);
 
     let outcome: WheelSpinOutcome | null = null;
     try {
       outcome = await onSpin();
     } catch (err) {
-      console.error(err);
+      console.error('[BananaWheel] spin error:', err);
+      const msg = err instanceof Error ? err.message : 'Spin failed';
+      setSpinError(msg);
     }
 
     if (!outcome) {
@@ -307,6 +311,10 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete }: BananaWh
             </span>
           ) : 'Spin'}
         </button>
+
+        {spinError && (
+          <p className="mt-3 text-red-400 text-sm">{spinError}</p>
+        )}
       </div>
 
       {/* Prize Won Modal - Apple-style with confetti */}
