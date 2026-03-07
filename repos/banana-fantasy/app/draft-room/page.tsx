@@ -163,7 +163,7 @@ function DraftRoomContent() {
     // In live mode, if stored state shows draft is past filling, start in 'loading'
     // to check server state BEFORE showing any UI/animations. This prevents replaying
     // RANDOMIZING/slot machine on re-entry.
-    if (isLiveMode && stored && ((stored.phase && stored.phase !== 'filling') || stored.preSpinStartedAt)) return 'loading';
+    if (isLiveMode && stored && ((stored.phase && stored.phase !== 'filling') || stored.preSpinStartedAt || stored.randomizingStartedAt)) return 'loading';
     if (!isLiveMode && stored?.phase) return stored.phase;
     return 'filling';
   });
@@ -384,12 +384,22 @@ function DraftRoomContent() {
             }
             setLiveDataReady(true);
           } else {
-            // Still randomizing or just reached 10/10 — let "at 10" effect handle it
+            // Still randomizing or just reached 10/10 — set progress state
+            // BEFORE transitioning to filling so the bar renders correctly
+            // on the very first frame (no flash of "Waiting for players...")
+            if (stored?.randomizingStartedAt) {
+              const elapsed = Date.now() - stored.randomizingStartedAt;
+              const t = Math.min(1, elapsed / 15000);
+              const progress = 0.99 * (1 - Math.pow(1 - t, 3));
+              setWaitingForServer(true);
+              setServerWaitProgress(progress);
+              serverWaitProgressRef.current = progress;
+            }
+            setPlayerCount(10);
             setPhase('filling');
           }
         } else {
           // Still filling — go back to filling phase (normal flow)
-          console.log('[Draft Room] Server shows draft still filling — resuming fill');
           setPlayerCount(Math.max(playerCount, 1));
           setPhase('filling');
         }
@@ -402,6 +412,16 @@ function DraftRoomContent() {
           if (stored.draftOrder) setDraftOrder(stored.draftOrder);
           if (stored.userDraftPosition !== undefined) setUserDraftPosition(stored.userDraftPosition);
           if (stored.draftType) setDraftType(stored.draftType);
+        } else if (stored?.randomizingStartedAt) {
+          // Resuming randomizing after server check failed
+          const elapsed = Date.now() - stored.randomizingStartedAt;
+          const t = Math.min(1, elapsed / 15000);
+          const progress = 0.99 * (1 - Math.pow(1 - t, 3));
+          setWaitingForServer(true);
+          setServerWaitProgress(progress);
+          serverWaitProgressRef.current = progress;
+          setPlayerCount(10);
+          setPhase('filling');
         } else {
           setPhase('filling');
         }
