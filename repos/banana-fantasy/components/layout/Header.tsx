@@ -65,23 +65,32 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
           {/* Right side icons - tighter spacing */}
           <div className="flex items-center gap-1">
             {isLoading || (isLoggedIn && !isBalanceLoaded) ? (
-              // Skeleton placeholders matching real header elements
-              <div className="flex items-center gap-1 animate-pulse">
-                {/* Ticket skeleton */}
-                <div className="px-2 py-1.5">
-                  <div className="w-[36px] h-[22px] sm:w-[44px] sm:h-[28px] rounded bg-white/10" />
+              // Skeleton placeholders — same wrappers/sizes as real elements
+              <>
+                {/* Ticket skeleton — matches Link px-2 py-1.5 + SVG size */}
+                <div className="flex items-center px-2 py-1.5 animate-pulse">
+                  <div className="w-[36px] h-[22px] sm:w-[44px] sm:h-[28px] rounded-md bg-white/10" />
                 </div>
-                {/* Wheel skeleton */}
-                <div className="px-2 py-1.5">
+                {/* JP/HOF skeleton — matches hidden sm:flex w-[72px] py-1 */}
+                <div className="hidden sm:flex flex-col items-center w-[72px] py-1 animate-pulse gap-1">
+                  <div className="h-[18px] w-[52px] rounded bg-white/10" />
+                  <div className="h-[14px] w-[60px] rounded bg-white/10" />
+                </div>
+                {/* Wheel skeleton — matches Link px-2 py-1.5 + SVG size */}
+                <div className="flex items-center px-2 py-1.5 animate-pulse">
                   <div className="w-[28px] h-[28px] sm:w-[36px] sm:h-[36px] rounded-full bg-white/10" />
                 </div>
-                {/* Trophy skeleton */}
-                <div className="px-3 py-2">
+                {/* Prizes skeleton — matches Link px-3 py-2 + text-2xl */}
+                <div className="flex items-center px-3 py-2 animate-pulse">
                   <div className="w-6 h-6 rounded bg-white/10" />
                 </div>
-                {/* Profile skeleton */}
-                <div className="w-8 h-8 rounded-full bg-white/10" />
-              </div>
+                {/* Notification skeleton — matches bell px-3 py-2 */}
+                <div className="flex items-center px-3 py-2 animate-pulse">
+                  <div className="w-5 h-5 rounded bg-white/10" />
+                </div>
+                {/* Profile skeleton — matches w-9 h-9 rounded-full */}
+                <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
+              </>
             ) : (
               <>
                 {/* Batch Progress Indicator */}
