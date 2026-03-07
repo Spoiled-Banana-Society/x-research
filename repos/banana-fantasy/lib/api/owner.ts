@@ -190,6 +190,7 @@ export async function getOwnerUser(walletAddress: string): Promise<User> {
     getOwnerDraftTokens(walletAddress).catch(() => [] as ApiDraftToken[]),
   ]);
   const availableTokens = tokens.filter(t => !t.leagueId);
+  console.log('[SBS DEBUG] getOwnerUser tokens total:', tokens.length, 'available:', availableTokens.length, 'availableCredit:', owner.availableCredit);
   const user = mapOwnerProfileToUser(walletAddress, owner);
   user.draftPasses = availableTokens.length;
   user.freeDrafts = 0;
