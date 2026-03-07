@@ -43,9 +43,10 @@ export function usePromos(opts?: { userId?: string }) {
           body: JSON.stringify({ userId, promoId }),
         });
 
-        // Update auth user (wheel spins, etc)
+        // Update auth user (wheel spins, etc) — exclude draftPasses which comes from Go backend
         if (res.user) {
-          updateUser(res.user);
+          const { draftPasses: _dp, ...safeFields } = res.user as Record<string, unknown>;
+          updateUser(safeFields as Partial<import('@/types').User>);
         }
 
         // Patch the promo in the local list

@@ -218,7 +218,10 @@ export default function HomePage() {
       {_isStagingMode() && user?.id && (
         <section className="mb-4 flex justify-center">
           <StagingMintButton userId={user.id} onMinted={(userData) => {
-            if (userData) updateUser(userData as Partial<import('@/types').User>);
+            if (userData) {
+              const { draftPasses: _dp, ...safeFields } = userData as Record<string, unknown>;
+              updateUser(safeFields as Partial<import('@/types').User>);
+            }
             promosQuery.refreshPromos();
             void refreshBalance();
           }} />
