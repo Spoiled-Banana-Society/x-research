@@ -245,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
             nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
           };
+          console.log('[SBS DEBUG] getOwnerUser draftPasses:', backendUser.draftPasses, 'merged:', merged.draftPasses);
           setUser(merged);
           setIsNewUser(false);
           setShowOnboarding(false);
@@ -445,6 +446,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [privy]);
 
   const updateUser = useCallback((updates: Partial<User>) => {
+    if ('draftPasses' in updates) {
+      console.log('[SBS DEBUG] updateUser called with draftPasses:', updates.draftPasses, new Error().stack?.split('\n').slice(1, 4).join(' | '));
+    }
     setUser((prev) => {
       if (!prev) return null;
       const updated = { ...prev, ...updates };
