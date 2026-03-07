@@ -615,6 +615,7 @@ export default function DraftingPage() {
           {sortedDrafts.map((draft) => {
             const live = getLiveState(draft);
             const isRevealed = draft.type !== null;
+            if (draft.liveWalletAddress) console.log(`[Drafting] ${draft.id}: type=${draft.type}, draftType=${draft.draftType}, phase=${draft.phase}, isRevealed=${isRevealed}`);
             const accentColor = isRevealed ? getDraftTypeColor(draft.type!) : '#888';
             const isYourTurn = draft.isYourTurn;
 
