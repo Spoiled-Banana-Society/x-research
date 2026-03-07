@@ -10,7 +10,7 @@ import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
 
-let cachedKey: crypto.KeyObject | null = null;
+let cachedKeys: Map<string, crypto.KeyObject> = new Map();
 
 function nowIso() {
   return new Date().toISOString();
@@ -22,12 +22,29 @@ function getUtcDayRange(date = new Date()) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function getPrivyVerificationKey(): crypto.KeyObject {
-  if (cachedKey) return cachedKey;
-  const rawKey = process.env.PRIVY_JWT_PUBLIC_KEY;
-  if (!rawKey) throw new ApiError(500, 'Privy JWT public key not configured');
-  cachedKey = crypto.createPublicKey(rawKey);
-  return cachedKey;
+function getPrivyAppId(): string {
+  const appId = process.env.PRIVY_APP_ID || process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  if (!appId) throw new ApiError(500, 'Privy app ID not configured');
+  return appId;
+}
+
+async function getPrivyVerificationKey(kid: string): Promise<crypto.KeyObject> {
+  const cached = cachedKeys.get(kid);
+  if (cached) return cached;
+
+  const appId = getPrivyAppId();
+  const res = await fetch(`https://auth.privy.io/api/v1/apps/${appId}/jwks.json`);
+  if (!res.ok) throw new ApiError(500, 'Failed to fetch Privy JWKS');
+  const jwks = await res.json() as { keys: Array<{ kid: string; kty: string; crv: string; x: string; y: string }> };
+
+  for (const jwk of jwks.keys) {
+    const key = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+    cachedKeys.set(jwk.kid, key);
+  }
+
+  const key = cachedKeys.get(kid);
+  if (!key) throw new ApiError(401, 'Unknown signing key');
+  return key;
 }
 
 function base64UrlDecode(input: string): Buffer {
@@ -51,15 +68,17 @@ function decodeJwt(token: string): {
   return { header, payload, signature, signingInput: `${headerPart}.${payloadPart}` };
 }
 
-function verifyPrivyJwt(token: string): string {
-  const appId = process.env.PRIVY_APP_ID;
-  if (!appId) throw new ApiError(500, 'Privy app ID not configured');
+async function verifyPrivyJwt(token: string): Promise<string> {
+  const appId = getPrivyAppId();
 
   const { header, payload, signature, signingInput } = decodeJwt(token);
   const alg = typeof header.alg === 'string' ? header.alg : '';
   if (!alg || !['ES256', 'RS256'].includes(alg)) throw new ApiError(401, 'Invalid auth token');
 
-  const key = getPrivyVerificationKey();
+  const kid = typeof header.kid === 'string' ? header.kid : '';
+  if (!kid) throw new ApiError(401, 'Missing key ID in token');
+
+  const key = await getPrivyVerificationKey(kid);
   const verifier = crypto.createVerify('SHA256');
   verifier.update(signingInput);
   verifier.end();
@@ -103,7 +122,7 @@ export async function POST(req: Request) {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (!token) throw new ApiError(401, 'Missing authorization token');
 
-    const userId = verifyPrivyJwt(token);
+    const userId = await verifyPrivyJwt(token);
 
     const db = getAdminFirestore();
     const { start, end } = getUtcDayRange();

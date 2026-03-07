@@ -18,10 +18,15 @@ export default function BananaWheelPage() {
   const wheelQuery = useWheel();
   const promosQuery = usePromos({ userId: user?.id });
   const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
-  const [spinsAvailable, setSpinsAvailable] = useState(user?.wheelSpins || 0);
+  // user.wheelSpins is undefined until the /api/owner/balance fetch completes.
+  // Track whether we've received the real value to avoid flashing 0.
+  const balanceLoaded = user?.wheelSpins !== undefined;
+  const [spinsAvailable, setSpinsAvailable] = useState(user?.wheelSpins ?? 0);
 
   useEffect(() => {
-    setSpinsAvailable(user?.wheelSpins || 0);
+    if (user?.wheelSpins !== undefined) {
+      setSpinsAvailable(user.wheelSpins);
+    }
   }, [user?.wheelSpins]);
 
   const segmentMap = useMemo(() => new Map(wheelSegments.map((segment) => [segment.id, segment])), []);
@@ -65,7 +70,7 @@ export default function BananaWheelPage() {
   const getPrizeLabel = (segmentId: string): string => segmentMap.get(segmentId)?.label ?? '';
   const getPrizeColor = (segmentId: string): string => segmentMap.get(segmentId)?.color ?? '#94a3b8';
 
-  if (isLoading) {
+  if (isLoading || (user && !balanceLoaded)) {
     return (
       <div className="w-full px-4 sm:px-8 lg:px-12 py-4">
         <div className="text-center mb-6" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
