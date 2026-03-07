@@ -251,11 +251,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Show cached balance immediately while backend loads
       const cached = getCachedBalance();
-      console.log('[SBS Debug] Cached balance:', JSON.stringify(cached));
+      const normalizedWallet = walletAddress.toLowerCase();
       if (cached && !user) {
-        console.log('[SBS Debug] Setting cached user: draftPasses=', cached.draftPasses, 'freeDrafts=', cached.freeDrafts, 'total=', cached.draftPasses + cached.freeDrafts);
         setUser({
-          id: walletAddress,
+          id: normalizedWallet,
           username: walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4),
           walletAddress,
           loginMethod: 'social',
@@ -275,18 +274,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Determine login method: 'wallet' only if user has a non-embedded (external) wallet.
       // privy.user.wallet exists for ALL users (embedded wallets are auto-created),
       // so we check walletClientType to distinguish external wallet logins.
-      const walletAccounts = privy.user.linkedAccounts?.filter(
-        (a: { type: string }) => a.type === 'wallet'
-      );
-      console.log('[SBS Auth] Wallet accounts:', JSON.stringify(walletAccounts));
-      console.log('[SBS Auth] All linked accounts types:', privy.user.linkedAccounts?.map((a: { type: string; walletClientType?: string; walletClient?: string }) => `${a.type}/${a.walletClientType || a.walletClient || 'none'}`));
       const hasExternalWallet = privy.user.linkedAccounts?.some(
         (a: { type: string; walletClientType?: string; walletClient?: string }) =>
           a.type === 'wallet' && a.walletClientType !== 'privy' && a.walletClient !== 'privy'
       );
-      console.log('[SBS Auth] hasExternalWallet:', hasExternalWallet);
       const loginMethod: 'wallet' | 'social' = hasExternalWallet ? 'wallet' : 'social';
-      console.log('[SBS Auth] loginMethod:', loginMethod);
 
       // Fetch Go backend profile + Firestore balance in parallel, then set user once
       getOwnerUser(walletAddress)
@@ -296,23 +288,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(backendUser.id)}`);
             const data = await res.json();
-            console.log('[SBS Debug] Firestore balance response:', JSON.stringify(data));
             if (data && typeof data.wheelSpins === 'number') {
               firestoreBalance = data;
             }
-          } catch (e) {
-            console.log('[SBS Debug] Firestore balance fetch FAILED:', e);
-          }
+          } catch { /* silent */ }
 
           // Merge everything into one setUser call — no flash.
           // Use callback form so we can fall back to cached values (prev)
           // when the Firestore fetch fails.
           setUser(prev => {
-            const prevFreeDrafts = prev?.freeDrafts;
-            const fsFreeDrafts = firestoreBalance?.freeDrafts;
-            const finalFreeDrafts = fsFreeDrafts ?? prevFreeDrafts ?? 0;
-            console.log('[SBS Debug] freeDrafts: firestore=', fsFreeDrafts, 'prev=', prevFreeDrafts, 'final=', finalFreeDrafts);
-            console.log('[SBS Debug] draftPasses:', backendUser.draftPasses, 'total:', backendUser.draftPasses + finalFreeDrafts);
             const merged: User = {
               ...backendUser,
               loginMethod,
@@ -320,7 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
               nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
               wheelSpins: firestoreBalance?.wheelSpins ?? prev?.wheelSpins ?? 0,
-              freeDrafts: finalFreeDrafts,
+              freeDrafts: firestoreBalance?.freeDrafts ?? prev?.freeDrafts ?? 0,
               jackpotEntries: firestoreBalance?.jackpotEntries ?? prev?.jackpotEntries ?? 0,
               hofEntries: firestoreBalance?.hofEntries ?? prev?.hofEntries ?? 0,
             };
