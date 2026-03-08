@@ -40,6 +40,7 @@ interface AuthContextType {
   refreshBalance: () => Promise<void>;
   showLoginModal: boolean;
   setShowLoginModal: (show: boolean) => void;
+  isEmbeddedWallet: boolean;
   // Twitter/X verification
   isTwitterVerified: boolean;
   isTwitterLinking: boolean;
@@ -567,6 +568,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshBalance,
         showLoginModal,
         setShowLoginModal,
+        isEmbeddedWallet: user?.loginMethod === 'social',
         isTwitterVerified,
         isTwitterLinking,
         twitterError,

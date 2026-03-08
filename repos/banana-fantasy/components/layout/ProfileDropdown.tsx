@@ -1,36 +1,21 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
+import { useExportWallet } from '@privy-io/react-auth';
 import { getNflTeamLogo } from '@/lib/nflTeams';
 
 interface ProfileDropdownProps {
   onEditProfile: () => void;
 }
 
-// Mock stats (same pattern as /app/profile/page.tsx)
-function useProfileStats() {
-  return useMemo(() => {
-    const totalDrafts = 5;
-    const wins = 2;
-    const totalWinnings = 165;
-    const avgRank = 3.4;
-    return {
-      totalDrafts,
-      winRate: totalDrafts > 0 ? Math.round((wins / totalDrafts) * 100) : 0,
-      totalWinnings,
-      avgRank: avgRank > 0 ? avgRank.toFixed(1) : '-',
-    };
-  }, []);
-}
-
 export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, isEmbeddedWallet } = useAuth();
+  const { exportWallet } = useExportWallet();
   const [isOpen, setIsOpen] = useState(false);
   const [walletCopied, setWalletCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const stats = useProfileStats();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -136,28 +121,11 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
                 <div className="w-5 h-5 rounded-full bg-[#2775CA] flex items-center justify-center">
                   <span className="text-white text-[10px] font-bold">$</span>
                 </div>
-                <span className="text-text-muted text-xs uppercase tracking-wider">USDC on Base</span>
+                <span className="text-text-muted text-xs uppercase tracking-wider">Balance</span>
               </div>
               <span className="text-text-primary font-bold text-sm tabular-nums">
-                {user.usdcBalance !== undefined ? user.usdcBalance.toFixed(2) : '0.00'}
+                ${user.usdcBalance !== undefined ? user.usdcBalance.toFixed(2) : '0.00'}
               </span>
-            </div>
-          </div>
-
-          {/* Stats Row */}
-          <div className="px-3 py-2.5 border-b border-bg-tertiary">
-            <div className="grid grid-cols-4 gap-1.5">
-              {[
-                { label: 'Drafts', value: stats.totalDrafts },
-                { label: 'Win %', value: `${stats.winRate}%` },
-                { label: 'Won', value: `$${stats.totalWinnings}` },
-                { label: 'Avg', value: `#${stats.avgRank}` },
-              ].map((s) => (
-                <div key={s.label} className="text-center py-1">
-                  <p className="text-text-primary font-bold text-sm tabular-nums leading-tight">{s.value}</p>
-                  <p className="text-text-muted text-[9px] uppercase tracking-wider">{s.label}</p>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -203,6 +171,23 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
               </svg>
               {walletCopied ? 'Copied!' : 'Copy Wallet Address'}
             </button>
+
+            {isEmbeddedWallet && (
+              <button
+                onClick={() => {
+                  exportWallet();
+                  setIsOpen(false);
+                }}
+                className="w-full px-4 py-2 text-left text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors flex items-center gap-3 text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Export Wallet
+              </button>
+            )}
           </div>
 
           {/* Logout */}
