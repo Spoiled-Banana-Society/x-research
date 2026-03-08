@@ -129,22 +129,6 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
             </div>
           </div>
 
-          {/* Inventory Row */}
-          <div className="px-3 py-2.5 border-b border-bg-tertiary">
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { label: 'Draft Passes', value: user.draftPasses + user.freeDrafts },
-                { label: 'Wheel Spins', value: user.wheelSpins },
-                { label: 'Special', value: user.jackpotEntries + user.hofEntries },
-              ].map((s) => (
-                <div key={s.label} className="text-center py-1">
-                  <p className="text-banana font-bold text-sm tabular-nums leading-tight">{s.value}</p>
-                  <p className="text-text-muted text-[9px] uppercase tracking-wider">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Menu Items */}
           <div className="py-1">
             <button
