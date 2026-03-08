@@ -133,55 +133,6 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                   </Link>
                 </Tooltip>
 
-                {/* JP & HOF Stats */}
-                {isLoggedIn && user && (
-                  <Tooltip
-                    content={
-                      <div className="text-center space-y-2 py-1">
-                        <p className="font-semibold text-text-primary">Draft {(user.draftPasses || 0) + (user.freeDrafts || 0)} of 400</p>
-                        <p className="text-red-400 text-xs">Jackpot must hit in next {Math.max(0, 100 - (((user.draftPasses || 0) + (user.freeDrafts || 0)) % 100))} drafts!</p>
-                        <p className="text-banana text-xs">{user.hofEntries || 0} HOF guaranteed in next {Math.max(0, 100 - (((user.draftPasses || 0) + (user.freeDrafts || 0)) % 100))} drafts!</p>
-                        <div className="border-t border-bg-elevated pt-2 space-y-1">
-                          <p className="text-xs"><span className="text-red-400 font-semibold">Jackpot</span> <span className="text-text-secondary">— Win your league &amp; skip to finals</span></p>
-                          <p className="text-xs"><span className="text-banana font-semibold">HOF</span> <span className="text-text-secondary">— Compete for bonus prizes</span></p>
-                          <p className="text-text-muted text-xs mt-1">1 Jackpot &amp; 5 HOF in every 100 drafts</p>
-                        </div>
-                      </div>
-                    }
-                  >
-                    {(() => {
-                      const totalDrafts = (user.draftPasses || 0) + (user.freeDrafts || 0);
-                      const batchEnd = Math.ceil(totalDrafts / 100) * 100 || 100;
-                      const jackpotHit = (user.jackpotEntries || 0) > 0;
-                      const jackpotRemaining = jackpotHit ? 0 : 1;
-                      const hofEarned = user.hofEntries || 0;
-                      const allHofHit = hofEarned >= 5;
-                      const hofRemaining = allHofHit ? 0 : 5 - hofEarned;
-                      return (
-                        <div className="hidden sm:flex flex-col items-center w-[72px] py-1 cursor-help">
-                          <span className="text-[16px] font-semibold tabular-nums text-white/75 leading-tight">
-                            {totalDrafts}<span className="text-white/40 font-normal">/{batchEnd}</span>
-                          </span>
-                          <div className="flex items-center justify-center gap-[6px] leading-tight">
-                            <span className="inline-flex items-center gap-[2px]">
-                              <span className={`text-[12px] font-bold tabular-nums ${jackpotHit ? 'text-green-400' : 'text-red-400'}`}>
-                                {jackpotHit ? '✓' : jackpotRemaining}
-                              </span>
-                              <span className="text-[9px] font-semibold text-white/50">JP</span>
-                            </span>
-                            <span className="inline-flex items-center gap-[2px]">
-                              <span className={`text-[12px] font-bold tabular-nums ${allHofHit ? 'text-green-400' : 'text-banana'}`}>
-                                {allHofHit ? '✓' : hofRemaining}
-                              </span>
-                              <span className="text-[9px] font-semibold text-white/50">HOF</span>
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </Tooltip>
-                )}
-
                 {/* Banana Wheel */}
                 <Tooltip
                   content={
