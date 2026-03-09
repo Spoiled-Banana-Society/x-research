@@ -46,6 +46,7 @@ export default function MarketplacePage() {
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [hofFilter, setHofFilter] = useState(false);
   const [jackpotFilter, setJackpotFilter] = useState(false);
+  const [rosterFilter, setRosterFilter] = useState('');
   const [sortBy, setSortBy] = useState('price-low');
   const [selectedTeam, setSelectedTeam] = useState<MarketplaceTeam | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
@@ -84,10 +85,15 @@ export default function MarketplacePage() {
     refetch: refetchMyNfts,
   } = useMyNfts(isLoggedIn ? walletAddress : null);
 
-  // Apply client-side filters (HOF/Jackpot) and sort
+  // Apply client-side filters (HOF/Jackpot/roster) and sort
   const filteredTeams = listings.filter(team => {
     if (hofFilter && !team.isHof) return false;
     if (jackpotFilter && !team.isJackpot) return false;
+    if (rosterFilter) {
+      const q = rosterFilter.toUpperCase();
+      const hasMatch = team.roster.some(slot => slot.toUpperCase().includes(q));
+      if (!hasMatch) return false;
+    }
     return true;
   }).sort((a, b) => {
     switch (sortBy) {
@@ -356,6 +362,30 @@ export default function MarketplacePage() {
                 <span className="font-bold">JP</span>
                 Jackpot Only
               </button>
+
+              {/* Roster/Position Search */}
+              <div className="relative">
+                <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                </svg>
+                <input
+                  type="text"
+                  value={rosterFilter}
+                  onChange={(e) => setRosterFilter(e.target.value)}
+                  placeholder="Search roster (e.g. KC QB, MIA WR)"
+                  className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-56"
+                />
+                {rosterFilter && (
+                  <button
+                    onClick={() => setRosterFilter('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Sort Dropdown */}

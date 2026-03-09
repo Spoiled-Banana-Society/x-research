@@ -143,6 +143,44 @@ function colorForDraftType(dt: DraftType): string {
   }
 }
 
+/** Position trait keys in the order they appear on the NFT. */
+const ROSTER_TRAIT_KEYS = [
+  'QB1', 'QB2', 'RB1', 'RB2', 'RB3',
+  'WR1', 'WR2', 'WR3',
+  'TE1', 'TE2', 'TE3', 'TE4',
+  'DST1', 'DST2', 'DST3',
+];
+
+/** Extract roster, rank, and scores from OpenSea NFT traits. */
+function parseNftTraits(nft: OpenSeaNft | null | undefined) {
+  const roster: string[] = [];
+  let rank = 0;
+  let points = 0;
+  let weeklyAvg = 0;
+  let name: string | null = null;
+
+  if (!nft?.traits) return { roster, rank, points, weeklyAvg, name };
+
+  for (const trait of nft.traits) {
+    const key = trait.trait_type;
+    const val = String(trait.value);
+
+    if (ROSTER_TRAIT_KEYS.includes(key)) {
+      roster.push(val);
+    } else if (key === 'RANK' && val !== 'N/A') {
+      rank = parseInt(val, 10) || 0;
+    } else if (key === 'SEASON-SC0RE' || key === 'SEASON-SCORE') {
+      points = parseFloat(val) || 0;
+    } else if (key === 'WEEK-SCORE') {
+      weeklyAvg = parseFloat(val) || 0;
+    } else if (key === 'LEAGUE-NAME') {
+      name = val;
+    }
+  }
+
+  return { roster, rank, points, weeklyAvg, name };
+}
+
 /** Extract token ID from an OpenSea listing's offer array. */
 function tokenIdFromListing(listing: OpenSeaListing): string {
   const nftOffer = listing.protocol_data.parameters.offer.find(o => o.itemType === 2 || o.itemType === 3);
@@ -159,27 +197,28 @@ function listingPriceUsd(listing: OpenSeaListing): number {
 
 /**
  * Map an OpenSea listing → MarketplaceTeam.
- * Stats (rank, points, etc.) are set to defaults; enriched later if possible.
+ * Extracts roster, rank, points from NFT traits when available.
  */
 export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNft | null): MarketplaceTeam {
   const tokenId = nft?.identifier ?? tokenIdFromListing(listing);
   const price = listingPriceUsd(listing);
   const maker = listing.protocol_data.parameters.offerer;
+  const traits = parseNftTraits(nft);
 
   return {
     id: tokenId,
     tokenId,
-    name: nft?.name || `BBB #${tokenId}`,
+    name: traits.name || nft?.name || `BBB #${tokenId}`,
     draftType: 'pro',
     isHof: false,
     isJackpot: false,
-    rank: 0,
-    points: 0,
-    weeklyAvg: 0,
+    rank: traits.rank,
+    points: traits.points,
+    weeklyAvg: traits.weeklyAvg,
     playoffOdds: 0,
     price,
     owner: shortenAddress(maker),
-    roster: [],
+    roster: traits.roster,
     color: colorForDraftType('pro'),
     imageUrl: nft?.display_image_url ?? nft?.image_url ?? null,
     orderHash: listing.order_hash,
@@ -188,23 +227,25 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
 
 /**
  * Map an owned OpenSea NFT → MarketplaceTeam (for sell tab).
- * Stats are defaults; enriched by SBS backend data in the hook.
+ * Extracts roster from traits; further enriched by SBS backend data in the hook.
  */
 export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): MarketplaceTeam {
+  const traits = parseNftTraits(nft);
+
   return {
     id: nft.identifier,
     tokenId: nft.identifier,
-    name: nft.name || `BBB #${nft.identifier}`,
+    name: traits.name || nft.name || `BBB #${nft.identifier}`,
     draftType: 'pro',
     isHof: false,
     isJackpot: false,
-    rank: 0,
-    points: 0,
-    weeklyAvg: 0,
+    rank: traits.rank,
+    points: traits.points,
+    weeklyAvg: traits.weeklyAvg,
     playoffOdds: 0,
     price: null,
     owner: shortenAddress(ownerAddress),
-    roster: [],
+    roster: traits.roster,
     color: colorForDraftType('pro'),
     imageUrl: nft.display_image_url ?? nft.image_url ?? null,
     orderHash: null,
