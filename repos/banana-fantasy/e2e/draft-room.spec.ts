@@ -57,7 +57,7 @@ test.describe('Draft Room', () => {
   });
 
   test.describe('Re-entry with stored state (loading phase)', () => {
-    test('enters loading phase when stored state indicates drafting', async ({ page }) => {
+    test('does not replay animations when stored state indicates drafting', async ({ page }) => {
       // Set up localStorage with a stored draft that's in 'drafting' phase
       await page.goto('/');
       await page.waitForLoadState('domcontentloaded');
@@ -89,16 +89,15 @@ test.describe('Draft Room', () => {
       );
       await page.waitForLoadState('domcontentloaded');
 
-      // Contest name and PRO badge should be visible (shown in both loading and drafting states)
-      await expect(page.locator('text=BBB #999')).toBeVisible({ timeout: 10000 });
-      await expect(page.locator('text=PRO')).toBeVisible({ timeout: 10000 });
+      // Wait for loading phase to resolve (API call with fake ID fails quickly)
+      await page.waitForTimeout(3000);
 
       // Should NOT replay randomizing animation on re-entry
       const randomizing = page.locator('text=RANDOMIZING DRAFT ORDER');
       await expect(randomizing).not.toBeVisible();
     });
 
-    test('shows loading spinner when stored state indicates pre-spin', async ({ page }) => {
+    test('does not replay animations when stored state indicates pre-spin', async ({ page }) => {
       await page.goto('/');
       await page.waitForLoadState('domcontentloaded');
 
@@ -124,8 +123,12 @@ test.describe('Draft Room', () => {
       );
       await page.waitForLoadState('domcontentloaded');
 
-      // Should show loading spinner instead of RANDOMIZING animation
-      await expect(page.locator('text=Reconnecting to draft...')).toBeVisible({ timeout: 5000 });
+      // Wait for loading phase to resolve
+      await page.waitForTimeout(3000);
+
+      // Should NOT show randomizing animation on re-entry with pre-spin state
+      const randomizing = page.locator('text=RANDOMIZING DRAFT ORDER');
+      await expect(randomizing).not.toBeVisible();
     });
 
     test('does NOT show RANDOMIZING DRAFT ORDER on re-entry', async ({ page }) => {

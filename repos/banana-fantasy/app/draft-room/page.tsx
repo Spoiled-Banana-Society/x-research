@@ -42,6 +42,8 @@ function DraftRoomContent() {
 
   // draftId is stateful — starts empty when navigating before joinDraft completes
   const [draftId, setDraftId] = useState(urlDraftId);
+  const draftIdRef = useRef(draftId);
+  draftIdRef.current = draftId;
   const isLiveMode = modeParam === 'live' && !!walletParam;
 
   const { user } = useAuth();
@@ -1127,12 +1129,9 @@ function DraftRoomContent() {
     const selectedResult: DraftType = draftType || 'pro';
     const reelResults: DraftType[] = [selectedResult, selectedResult, selectedResult];
     setDraftType(selectedResult);
-    // Write type to store immediately so the drafting page shows it even if user backs out
     if (draftId) {
       draftStore.updateDraft(draftId, {
         phase: 'spinning',
-        type: selectedResult,
-        draftType: selectedResult,
         yourPosition: userDraftPosition >= 0 ? userDraftPosition + 1 : undefined,
       });
     }
@@ -1325,9 +1324,10 @@ function DraftRoomContent() {
           playWinSound(draftType === 'jackpot' || draftType === 'hof');
           setSlotAnimationDone(true);
           setPhase('result');
-          if (draftId) {
+          const currentDraftId = draftIdRef.current;
+          if (currentDraftId) {
             // NOW reveal the type to draftStore — slot machine animation is done
-            draftStore.updateDraft(draftId, { phase: 'result', type: draftType, draftType: draftType });
+            draftStore.updateDraft(currentDraftId, { phase: 'result', type: draftType, draftType: draftType });
           }
         }, 400);
       }
