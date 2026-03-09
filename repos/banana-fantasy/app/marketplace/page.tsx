@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollectionStats, useListings, useMyNfts } from '@/hooks/useMarketplace';
 import type { MarketplaceTeam } from '@/lib/opensea';
@@ -42,6 +43,7 @@ function StatSkeleton() {
 }
 
 export default function MarketplacePage() {
+  const router = useRouter();
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [hofFilter, setHofFilter] = useState(false);
@@ -423,7 +425,8 @@ export default function MarketplacePage() {
               {filteredTeams.map((team) => (
                 <div
                   key={`${team.id}-${team.orderHash}`}
-                  className={`bg-bg-secondary border rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg ${
+                  onClick={() => router.push(`/marketplace/${team.tokenId}`)}
+                  className={`bg-bg-secondary border rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer ${
                     team.isJackpot
                       ? 'border-error/30 hover:shadow-error/20'
                       : team.isHof
@@ -432,18 +435,18 @@ export default function MarketplacePage() {
                   }`}
                 >
                   {/* Team Header */}
-                  <div className="relative h-32 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
+                  <div className="relative h-48 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
                     {team.imageUrl ? (
                       <Image
                         src={team.imageUrl}
                         alt={team.name}
-                        width={64}
-                        height={64}
+                        width={120}
+                        height={160}
                         className="rounded-2xl shadow-lg"
                       />
                     ) : (
-                      <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
-                        <span className="text-2xl">🍌</span>
+                      <div className={`w-20 h-28 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
+                        <span className="text-3xl">🍌</span>
                       </div>
                     )}
 
@@ -507,19 +510,14 @@ export default function MarketplacePage() {
                       </div>
                     )}
 
-                    {/* Key Roster Spots */}
+                    {/* Roster */}
                     {team.roster.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-4">
-                        {team.roster.slice(0, 3).map((pos, i) => (
-                          <span key={i} className="px-2 py-1 bg-bg-primary text-text-secondary text-[10px] font-mono rounded">
+                      <div className="flex flex-wrap gap-1 mb-4">
+                        {team.roster.map((pos, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-bg-primary text-text-secondary text-[10px] font-mono rounded">
                             {pos}
                           </span>
                         ))}
-                        {team.roster.length > 3 && (
-                          <span className="px-2 py-1 bg-bg-primary text-text-muted text-[10px] rounded">
-                            +{team.roster.length - 3} more
-                          </span>
-                        )}
                       </div>
                     )}
 
@@ -532,7 +530,11 @@ export default function MarketplacePage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => openBuyModal(team)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isLoggedIn) { setShowLoginModal(true); return; }
+                          router.push(`/marketplace/${team.tokenId}?buy=true`);
+                        }}
                         className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
                       >
                         Buy Now
