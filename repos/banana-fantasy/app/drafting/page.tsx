@@ -396,11 +396,23 @@ export default function DraftingPage() {
 
           // Auto-advance: filling → randomizing → pre-spin when count reaches 10
           if (count >= 10 && !d.preSpinStartedAt) {
-            // LIVE DRAFTS: only start the randomizing bar — the draft room
-            // handles the transition to pre-spin when server confirms draft order
+            // LIVE DRAFTS: start the randomizing bar, then force transition after 15s
             if (d.liveWalletAddress) {
               if (!d.randomizingStartedAt) {
                 draftStore.updateDraft(d.id, { players: 10, randomizingStartedAt: now });
+              } else {
+                // Bar fills over 15s — once full, transition to pre-spin countdown
+                const randomizingElapsed = now - d.randomizingStartedAt;
+                if (randomizingElapsed >= 15000) {
+                  draftStore.updateDraft(d.id, {
+                    phase: 'pre-spin',
+                    players: 10,
+                    preSpinStartedAt: now,
+                    randomizingStartedAt: undefined,
+                    type: d.type || d.draftType || 'pro',
+                    draftType: d.draftType || d.type || 'pro',
+                  });
+                }
               }
               continue;
             }
