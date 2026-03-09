@@ -61,7 +61,10 @@ export async function GET(req: Request) {
       nft => nft.contract?.toLowerCase() === BBB4_CONTRACT.toLowerCase(),
     );
 
-    const nfts = bbb4Nfts.map(nft => mapOpenSeaNftToTeam(nft, owner));
+    const nfts = bbb4Nfts.map(nft => {
+      const { ownerAddress, ...rest } = mapOpenSeaNftToTeam(nft, owner);
+      return rest;
+    });
 
     return json({ nfts });
   } catch (err) {
