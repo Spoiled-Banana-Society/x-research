@@ -116,6 +116,7 @@ export interface CollectionStats {
   totalVolume: number;
   numOwners: number;
   totalSales: number;
+  totalListed: number;
   averagePrice: number;
   weeklyVolumeChange: number | null;
 }

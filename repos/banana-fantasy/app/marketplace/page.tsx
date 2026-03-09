@@ -282,7 +282,7 @@ export default function MarketplacePage() {
                     <span className="text-text-muted text-xs uppercase tracking-wider">Teams Listed</span>
                   </div>
                   <div className="text-2xl font-bold text-text-primary font-mono">
-                    {listings.length.toLocaleString()}
+                    {collectionStats.totalListed.toLocaleString()}
                   </div>
                   <div className="text-text-secondary text-xs mt-1">
                     {collectionStats.numOwners.toLocaleString()} owners
