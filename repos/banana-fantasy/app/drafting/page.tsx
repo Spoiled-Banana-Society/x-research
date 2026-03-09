@@ -228,6 +228,9 @@ export default function DraftingPage() {
           const info = await draftApi.getDraftInfo(draft.id);
           if (cancelled) return;
 
+          // Re-read fresh state — tick effect may have updated type/phase during async API call
+          const fresh = draftStore.getDraft(draft.id) || draft;
+
           const playerCount = info.draftOrder?.length || 0;
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
           const isFull = playerCount >= 10;
@@ -247,8 +250,8 @@ export default function DraftingPage() {
                 status: 'drafting',
                 phase: 'drafting',
                 players: 10,
-                type: draft.type || draft.draftType || null,  // Only show if draft room revealed it
-                draftType: draft.draftType || draft.type || null,
+                type: fresh.type || fresh.draftType || null,
+                draftType: fresh.draftType || fresh.type || null,
                 currentPick: turnsUntilUserPick,
                 isYourTurn: isUserTurn,
                 pickEndTimestamp,
@@ -261,14 +264,14 @@ export default function DraftingPage() {
             // 10/10 but draft hasn't started yet
             const patch: Partial<DraftState> = { players: 10 };
 
-            if (info.draftStartTime && !draft.preSpinStartedAt) {
+            if (info.draftStartTime && !fresh.preSpinStartedAt) {
               patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
               patch.randomizingStartedAt = undefined;
               patch.phase = 'pre-spin';
             }
 
             // Type is decided when draft fills — set it if not already set
-            if (!draft.type && !draft.draftType) {
+            if (!fresh.type && !fresh.draftType) {
               patch.type = 'pro';       // TODO: get from server in production
               patch.draftType = 'pro';
             }
