@@ -441,18 +441,18 @@ export default function MarketplacePage() {
                   }`}
                 >
                   {/* Team Header */}
-                  <div className="relative h-48 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
+                  <div className="relative h-72 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
                     {team.imageUrl ? (
                       <Image
                         src={team.imageUrl}
                         alt={team.name}
-                        width={120}
-                        height={160}
+                        width={200}
+                        height={260}
                         className="rounded-2xl shadow-lg"
                       />
                     ) : (
-                      <div className={`w-20 h-28 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
-                        <span className="text-3xl">🍌</span>
+                      <div className={`w-28 h-36 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
+                        <span className="text-4xl">🍌</span>
                       </div>
                     )}
 
@@ -508,17 +508,6 @@ export default function MarketplacePage() {
                             {team.playoffOdds}%
                           </p>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Roster */}
-                    {team.roster.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-4">
-                        {team.roster.map((pos, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-bg-primary text-text-secondary text-[10px] font-mono rounded">
-                            {pos}
-                          </span>
-                        ))}
                       </div>
                     )}
 
