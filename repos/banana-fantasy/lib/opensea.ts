@@ -151,15 +151,16 @@ const ROSTER_TRAIT_KEYS = [
   'DST1', 'DST2', 'DST3',
 ];
 
-/** Extract roster, rank, and scores from OpenSea NFT traits. */
+/** Extract roster, level, and scores from OpenSea NFT traits. */
 function parseNftTraits(nft: OpenSeaNft | null | undefined) {
   const roster: string[] = [];
+  let level: DraftType = 'pro';
   let rank = 0;
   let points = 0;
   let weeklyAvg = 0;
   let name: string | null = null;
 
-  if (!nft?.traits) return { roster, rank, points, weeklyAvg, name };
+  if (!nft?.traits) return { roster, level, rank, points, weeklyAvg, name };
 
   for (const trait of nft.traits) {
     const key = trait.trait_type;
@@ -167,6 +168,10 @@ function parseNftTraits(nft: OpenSeaNft | null | undefined) {
 
     if (ROSTER_TRAIT_KEYS.includes(key)) {
       roster.push(val);
+    } else if (key === 'LEVEL') {
+      if (val === 'Jackpot') level = 'jackpot';
+      else if (val === 'Hall of Fame') level = 'hof';
+      else level = 'pro';
     } else if (key === 'RANK' && val !== 'N/A') {
       rank = parseInt(val, 10) || 0;
     } else if (key === 'SEASON-SC0RE' || key === 'SEASON-SCORE') {
@@ -178,7 +183,7 @@ function parseNftTraits(nft: OpenSeaNft | null | undefined) {
     }
   }
 
-  return { roster, rank, points, weeklyAvg, name };
+  return { roster, level, rank, points, weeklyAvg, name };
 }
 
 /** Extract token ID from an OpenSea listing's offer array. */
@@ -209,9 +214,9 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
     id: tokenId,
     tokenId,
     name: traits.name || nft?.name || `BBB #${tokenId}`,
-    draftType: 'pro',
-    isHof: false,
-    isJackpot: false,
+    draftType: traits.level,
+    isHof: traits.level === 'hof',
+    isJackpot: traits.level === 'jackpot',
     rank: traits.rank,
     points: traits.points,
     weeklyAvg: traits.weeklyAvg,
@@ -219,7 +224,7 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
     price,
     owner: shortenAddress(maker),
     roster: traits.roster,
-    color: colorForDraftType('pro'),
+    color: colorForDraftType(traits.level),
     imageUrl: nft?.display_image_url ?? nft?.image_url ?? null,
     orderHash: listing.order_hash,
   };
@@ -236,9 +241,9 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
     id: nft.identifier,
     tokenId: nft.identifier,
     name: traits.name || nft.name || `BBB #${nft.identifier}`,
-    draftType: 'pro',
-    isHof: false,
-    isJackpot: false,
+    draftType: traits.level,
+    isHof: traits.level === 'hof',
+    isJackpot: traits.level === 'jackpot',
     rank: traits.rank,
     points: traits.points,
     weeklyAvg: traits.weeklyAvg,
@@ -246,7 +251,7 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
     price: null,
     owner: shortenAddress(ownerAddress),
     roster: traits.roster,
-    color: colorForDraftType('pro'),
+    color: colorForDraftType(traits.level),
     imageUrl: nft.display_image_url ?? nft.image_url ?? null,
     orderHash: null,
   };

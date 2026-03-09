@@ -457,30 +457,25 @@ export default function MarketplacePage() {
                     )}
 
                     {/* Draft Type Badge */}
-                    <div className="absolute top-3 left-3 flex gap-2">
-                      {team.isJackpot && (
+                    <div className="absolute top-3 left-3">
+                      {team.isJackpot ? (
                         <span className="px-3 py-1 bg-error text-white text-[10px] font-bold uppercase rounded-full">
                           JACKPOT
                         </span>
-                      )}
-                      {team.isHof && (
+                      ) : team.isHof ? (
                         <span className="px-3 py-1 bg-gradient-to-r from-hof to-pink-600 text-white text-[10px] font-bold uppercase rounded-full flex items-center gap-1">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                           </svg>
                           HOF
                         </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-pro text-white text-[10px] font-bold uppercase rounded-full">
+                          PRO
+                        </span>
                       )}
                     </div>
 
-                    {/* Rank Badge */}
-                    {team.rank > 0 && (
-                      <div className="absolute top-3 right-3">
-                        <div className="flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm rounded-lg">
-                          <span className="text-banana text-xs font-bold font-mono">#{team.rank}</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* Content */}
