@@ -138,8 +138,11 @@ export async function GET(req: Request) {
       }
     }
 
+    // Strip full wallet address from client response
+    const sanitized = listings.map(({ ownerAddress, ...rest }) => rest);
+
     return json({
-      listings,
+      listings: sanitized,
       next: listingsData.next ?? null,
     });
   } catch (err) {

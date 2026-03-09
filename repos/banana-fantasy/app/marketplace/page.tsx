@@ -415,7 +415,7 @@ export default function MarketplacePage() {
 
           {/* Teams Grid */}
           {listingsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
               {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
             </div>
           ) : filteredTeams.length === 0 ? (
@@ -429,7 +429,7 @@ export default function MarketplacePage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
               {filteredTeams.map((team) => (
                 <div
                   key={`${team.id}-${team.orderHash}`}
