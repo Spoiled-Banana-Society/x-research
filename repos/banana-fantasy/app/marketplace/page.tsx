@@ -93,9 +93,11 @@ export default function MarketplacePage() {
     if (jackpotFilter && !team.isJackpot) return false;
     if (rosterFilter) {
       const q = rosterFilter.trim().replace(/^#/, '');
-      // Match token ID if query is numeric
+      // Match token ID or name number if query is numeric, otherwise search roster
       if (/^\d+$/.test(q)) {
-        if (team.tokenId !== q) return false;
+        const matchesTokenId = team.tokenId === q;
+        const matchesName = team.name.includes(q);
+        if (!matchesTokenId && !matchesName) return false;
       } else {
         const upper = q.toUpperCase();
         const hasMatch = team.roster.some(slot => slot.toUpperCase().includes(upper));
