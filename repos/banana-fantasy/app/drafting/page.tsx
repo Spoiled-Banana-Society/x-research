@@ -250,8 +250,9 @@ export default function DraftingPage() {
                 status: 'drafting',
                 phase: 'drafting',
                 players: 10,
-                type: fresh.type || fresh.draftType || null,
-                draftType: fresh.draftType || fresh.type || null,
+                type: fresh.type || fresh.draftType || 'pro',
+                draftType: fresh.draftType || fresh.type || 'pro',
+                randomizingStartedAt: undefined,  // Draft started — clear filling-phase timestamps
                 currentPick: turnsUntilUserPick,
                 isYourTurn: isUserTurn,
                 pickEndTimestamp,
@@ -469,6 +470,11 @@ export default function DraftingPage() {
   };
   const getLiveState = (draft: Draft): LiveState => {
     const now = Date.now();
+
+    // Already drafting — skip filling/randomizing display
+    if (draft.status === 'drafting' && draft.phase === 'drafting') {
+      return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
+    }
 
     // Randomizing: 10/10 reached, randomizingStartedAt set, preSpinStartedAt NOT set
     if (draft.randomizingStartedAt && !draft.preSpinStartedAt) {
