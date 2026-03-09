@@ -1090,12 +1090,16 @@ function DraftRoomContent() {
 
     if (isLiveMode) setLiveDataReady(true);
     if (draftId) {
+      // Type is decided NOW — store it so the drafting page knows it
+      // regardless of whether the user stays for the slot animation
       draftStore.updateDraft(draftId, {
         phase: 'pre-spin',
         preSpinStartedAt: countdownStart,
         randomizingStartedAt: undefined,  // Clear — no longer randomizing
         draftOrder: order,
         userDraftPosition: userPos,
+        type: draftType,
+        draftType: draftType,
       });
     }
     console.log('[Draft Room] Transitioned to pre-spin phase');

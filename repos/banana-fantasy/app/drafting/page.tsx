@@ -421,17 +421,9 @@ export default function DraftingPage() {
           continue;
         }
 
-        // PRE-SPIN / SPINNING / RESULT → assign type at 15s mark, transition to drafting at 60s
+        // PRE-SPIN / SPINNING / RESULT → DRAFTING when 60s expires
         if (['pre-spin', 'spinning', 'result'].includes(d.phase || '') && d.preSpinStartedAt) {
-          const elapsed = (now - d.preSpinStartedAt) / 1000;
-
-          // At 15s, the slot machine would reveal the type. If the user isn't in the
-          // draft room, assign the type here so the drafting page shows it.
-          if (elapsed >= 15 && !d.type && !d.draftType) {
-            draftStore.updateDraft(d.id, { type: 'pro', draftType: 'pro' });
-          }
-
-          if (elapsed >= 60) {
+          if ((now - d.preSpinStartedAt) / 1000 >= 60) {
             draftStore.updateDraft(d.id, {
               phase: 'drafting', status: 'drafting',
               type: d.type || d.draftType || 'pro',
