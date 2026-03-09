@@ -130,10 +130,9 @@ export function priceFromUsdcWei(raw: string): number {
   return Number(raw) / 1e6;
 }
 
-/** Generate a friendly anonymous name from a wallet address. */
-function anonymousName(address: string): string {
-  if (!address || address.length < 6) return 'Player';
-  return `Player ${address.slice(2, 6).toUpperCase()}`;
+/** Fallback name for users without a profile. */
+function anonymousName(): string {
+  return 'Anonymous';
 }
 
 /** Get color gradient based on draft type. */
@@ -224,7 +223,7 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
     weeklyAvg: traits.weeklyAvg,
     playoffOdds: 0,
     price,
-    owner: anonymousName(maker),
+    owner: anonymousName(),
     ownerAddress: maker,
     ownerPfp: null,
     roster: traits.roster,
@@ -253,7 +252,7 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
     weeklyAvg: traits.weeklyAvg,
     playoffOdds: 0,
     price: null,
-    owner: anonymousName(ownerAddress),
+    owner: anonymousName(),
     ownerAddress,
     ownerPfp: null,
     roster: traits.roster,
