@@ -442,6 +442,19 @@ export default function DraftingPage() {
           continue;
         }
 
+        // CATCH-ALL: Force transition for ANY draft stuck in randomizing > 15s
+        // (regardless of phase/status/fillingStartedAt — covers all edge cases)
+        if (d.randomizingStartedAt && !d.preSpinStartedAt && (now - d.randomizingStartedAt) >= 15000) {
+          draftStore.updateDraft(d.id, {
+            phase: 'pre-spin',
+            preSpinStartedAt: now,
+            randomizingStartedAt: undefined,
+            type: d.type || d.draftType || 'pro',
+            draftType: d.draftType || d.type || 'pro',
+          });
+          continue;
+        }
+
         // PRE-SPIN / SPINNING / RESULT → DRAFTING when 60s expires
         if (['pre-spin', 'spinning', 'result'].includes(d.phase || '') && d.preSpinStartedAt) {
           if ((now - d.preSpinStartedAt) / 1000 >= 60) {
@@ -479,6 +492,17 @@ export default function DraftingPage() {
     // Randomizing: 10/10 reached, randomizingStartedAt set, preSpinStartedAt NOT set
     if (draft.randomizingStartedAt && !draft.preSpinStartedAt) {
       const elapsed = now - draft.randomizingStartedAt;
+      // After 15s, force transition to countdown (don't stay stuck on randomizing)
+      if (elapsed >= 15000) {
+        const effectivePreSpin = draft.randomizingStartedAt + 15000;
+        const countdownElapsed = (now - effectivePreSpin) / 1000;
+        if (countdownElapsed < 15) {
+          return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: Math.max(0, Math.ceil(15 - countdownElapsed)), randomizingProgress: null, isFilling: false };
+        } else if (countdownElapsed < 60) {
+          return { displayPhase: 'draft-starting', playerCount: 10, countdown: Math.max(0, Math.ceil(60 - countdownElapsed)), randomizingProgress: null, isFilling: false };
+        }
+        return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
+      }
       const t = Math.min(1, elapsed / 15000);
       const progress = 0.99 * (1 - Math.pow(1 - t, 3)); // cubic ease-out, cap 99%
       return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
