@@ -130,10 +130,10 @@ export function priceFromUsdcWei(raw: string): number {
   return Number(raw) / 1e6;
 }
 
-/** Shorten an Ethereum address for display. */
-function shortenAddress(address: string): string {
-  if (!address || address.length < 10) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+/** Generate a friendly anonymous name from a wallet address. */
+function anonymousName(address: string): string {
+  if (!address || address.length < 6) return 'Player';
+  return `Player ${address.slice(2, 6).toUpperCase()}`;
 }
 
 /** Get color gradient based on draft type. */
@@ -224,7 +224,7 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
     weeklyAvg: traits.weeklyAvg,
     playoffOdds: 0,
     price,
-    owner: shortenAddress(maker),
+    owner: anonymousName(maker),
     ownerAddress: maker,
     ownerPfp: null,
     roster: traits.roster,
@@ -253,7 +253,7 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
     weeklyAvg: traits.weeklyAvg,
     playoffOdds: 0,
     price: null,
-    owner: shortenAddress(ownerAddress),
+    owner: anonymousName(ownerAddress),
     ownerAddress,
     ownerPfp: null,
     roster: traits.roster,

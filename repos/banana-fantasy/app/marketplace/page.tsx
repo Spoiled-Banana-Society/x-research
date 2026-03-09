@@ -486,8 +486,14 @@ export default function MarketplacePage() {
                       <div>
                         <h3 className="text-lg font-semibold text-text-primary font-mono">{team.name}</h3>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          {team.ownerPfp && (
+                          {team.ownerPfp ? (
                             <Image src={team.ownerPfp} alt="" width={16} height={16} className="rounded-full" />
+                          ) : (
+                            <div className="w-4 h-4 rounded-full bg-bg-tertiary flex items-center justify-center">
+                              <svg className="w-2.5 h-2.5 text-text-muted" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                              </svg>
+                            </div>
                           )}
                           <p className="text-text-muted text-xs">{team.owner}</p>
                         </div>
