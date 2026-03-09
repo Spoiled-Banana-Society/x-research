@@ -493,7 +493,7 @@ export default function MarketplacePage() {
                               <span className="text-[10px]">🍌</span>
                             </div>
                           )}
-                          <p className="text-text-muted text-xs">{team.owner || 'Anonymous'}</p>
+                          <p className="text-text-muted text-xs">{team.owner}</p>
                         </div>
                       </div>
                     </div>

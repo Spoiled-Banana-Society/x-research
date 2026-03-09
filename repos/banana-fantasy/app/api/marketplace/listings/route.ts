@@ -113,25 +113,25 @@ export async function GET(req: Request) {
     });
 
     // Enrich with SBS owner profiles (name + pfp)
-    const uniqueOwners = [...new Set(listings.map(l => l.ownerAddress))];
+    const uniqueOwners = [...new Set(listings.map(l => l.ownerAddress.toLowerCase()))];
     const ownerProfiles = new Map<string, { name: string; pfp: string | null }>();
     await Promise.all(
       uniqueOwners.map(async (addr) => {
         try {
           const profile = await getOwnerProfile(addr);
-          if (profile.pfp?.displayName || profile.pfp?.imageUrl) {
+          if (profile?.pfp?.displayName || profile?.pfp?.imageUrl) {
             ownerProfiles.set(addr, {
               name: profile.pfp?.displayName || '',
               pfp: profile.pfp?.imageUrl || null,
             });
           }
-        } catch {
-          // Silent — fall back to shortened address
+        } catch (err) {
+          console.error('[marketplace/listings] Profile fetch failed for', addr, err);
         }
       }),
     );
     for (const listing of listings) {
-      const profile = ownerProfiles.get(listing.ownerAddress);
+      const profile = ownerProfiles.get(listing.ownerAddress.toLowerCase());
       if (profile) {
         if (profile.name) listing.owner = profile.name;
         if (profile.pfp) listing.ownerPfp = profile.pfp;
