@@ -103,16 +103,13 @@ export async function GET(req: Request) {
       return mapOpenSeaListingToTeam(order, nft);
     });
 
-    // Deduplicate by token name — keep cheapest listing per team
-    const seen = new Map<string, typeof allListings[0]>();
-    for (const listing of allListings) {
-      const key = listing.name;
-      const existing = seen.get(key);
-      if (!existing || (listing.price ?? Infinity) < (existing.price ?? Infinity)) {
-        seen.set(key, listing);
-      }
-    }
-    const listings = [...seen.values()];
+    // Deduplicate — keep only the first (most recent) listing per team
+    const seen = new Set<string>();
+    const listings = allListings.filter(listing => {
+      if (seen.has(listing.name)) return false;
+      seen.add(listing.name);
+      return true;
+    });
 
     return json({
       listings,
