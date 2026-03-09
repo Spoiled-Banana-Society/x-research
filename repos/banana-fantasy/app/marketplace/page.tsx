@@ -415,7 +415,7 @@ export default function MarketplacePage() {
 
           {/* Teams Grid */}
           {listingsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
               {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
             </div>
           ) : filteredTeams.length === 0 ? (
@@ -429,7 +429,7 @@ export default function MarketplacePage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
               {filteredTeams.map((team) => (
                 <div
                   key={`${team.id}-${team.orderHash}`}
@@ -443,18 +443,18 @@ export default function MarketplacePage() {
                   }`}
                 >
                   {/* Team Header */}
-                  <div className="relative h-72 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
+                  <div className="relative h-80 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
                     {team.imageUrl ? (
                       <Image
                         src={team.imageUrl}
                         alt={team.name}
-                        width={200}
-                        height={260}
+                        width={230}
+                        height={300}
                         className="rounded-2xl shadow-lg"
                       />
                     ) : (
-                      <div className={`w-28 h-36 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
-                        <span className="text-4xl">🍌</span>
+                      <div className={`w-32 h-40 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
+                        <span className="text-5xl">🍌</span>
                       </div>
                     )}
 
