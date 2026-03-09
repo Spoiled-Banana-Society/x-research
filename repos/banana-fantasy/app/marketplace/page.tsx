@@ -380,8 +380,8 @@ export default function MarketplacePage() {
                   type="text"
                   value={rosterFilter}
                   onChange={(e) => setRosterFilter(e.target.value)}
-                  placeholder="Token #321 or roster KC QB"
-                  className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-60"
+                  placeholder="Search by token ID or roster"
+                  className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-56"
                 />
                 {rosterFilter && (
                   <button
