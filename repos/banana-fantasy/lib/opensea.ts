@@ -272,6 +272,8 @@ export function mapCollectionStats(raw: OpenSeaCollectionStats): CollectionStats
     totalVolume: raw.total.volume,
     numOwners: raw.total.num_owners,
     totalSales: raw.total.sales,
+    totalListed: 0,
     averagePrice: raw.total.average_price,
+    weeklyVolumeChange: raw.intervals?.[0]?.volume_change ?? null,
   };
 }
