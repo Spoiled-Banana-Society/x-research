@@ -18,6 +18,15 @@ const nextConfig = {
         hostname: 'a.espncdn.com',
         pathname: '/i/teamlogos/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'i2c.seadn.io',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/sbs-draft-token-images/**',
+      },
     ],
   },
   webpack: (config) => {

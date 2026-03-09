@@ -122,5 +122,4 @@ CLAUDE.md at root + 5 repos in `repos/`. .env files and GCP service accounts exc
 ## Future Tasks
 1. Jackpot promo
 2. Full 150-pick draft + final card on staging
-3. Test with real Privy wallet (not mock auth)
-4. Web3Auth setup
+3. Test with real Privy wallet (not mock auth) — DONE (Privy fully working on staging)

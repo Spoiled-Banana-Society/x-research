@@ -831,7 +831,7 @@ See `/API_INTEGRATION.md` for complete API documentation including:
 3. **Draft API** - Get draft state, rosters, player rankings
 4. **WebSocket** - Real-time draft updates (picks, timers, completion)
 5. **Firebase Realtime DB** - Live player counts in drafts
-6. **Web3Auth** - Wallet authentication (MetaMask primary)
+6. **Privy** - Wallet authentication (embedded + external wallets) — DONE
 7. **OpenSea API** - NFT profile pictures
 8. **Smart Contract** - Minting draft passes (0x2BfF6f4284774836d867CEd2e9B96c27aAee55B7)
 
@@ -840,7 +840,6 @@ See `/API_INTEGRATION.md` for complete API documentation including:
 NEXT_PUBLIC_ENVIRONMENT=prod
 NEXT_PUBLIC_DRAFTS_API_URL=https://sbs-drafts-api-w5wydprnbq-uc.a.run.app
 NEXT_PUBLIC_DRAFT_SERVER_URL=wss://sbs-drafts-server-w5wydprnbq-uc.a.run.app
-NEXT_PUBLIC_WEB3AUTH_CLIENT_ID=
 NEXT_PUBLIC_INFURA_KEY=
 NEXT_PUBLIC_OPENSEA_API_KEY=
 NEXT_PUBLIC_THIRDWEB_CLIENT_ID=
@@ -864,5 +863,4 @@ NEXT_PUBLIC_MEASUREMENT_ID=
 
 1. Jackpot promo
 2. API Integration - Replace mock data with real backend APIs
-3. Web3Auth setup - Implement wallet authentication
-4. WebSocket integration - Real-time draft updates
+3. WebSocket integration - Real-time draft updates
