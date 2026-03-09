@@ -532,8 +532,7 @@ export default function MarketplacePage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!isLoggedIn) { setShowLoginModal(true); return; }
-                          router.push(`/marketplace/${team.tokenId}?buy=true`);
+                          openBuyModal(team);
                         }}
                         className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
                       >
