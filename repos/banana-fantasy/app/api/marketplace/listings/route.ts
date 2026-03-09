@@ -1,6 +1,7 @@
 import { rateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { json, jsonError, getSearchParam } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
+import { getOwnerProfile } from '@/lib/api/owner';
 import {
   OPENSEA_API_BASE,
   OPENSEA_CHAIN,
@@ -110,6 +111,32 @@ export async function GET(req: Request) {
       seen.add(listing.name);
       return true;
     });
+
+    // Enrich with SBS owner profiles (name + pfp)
+    const uniqueOwners = [...new Set(listings.map(l => l.ownerAddress))];
+    const ownerProfiles = new Map<string, { name: string; pfp: string | null }>();
+    await Promise.all(
+      uniqueOwners.map(async (addr) => {
+        try {
+          const profile = await getOwnerProfile(addr);
+          if (profile.pfp?.displayName || profile.pfp?.imageUrl) {
+            ownerProfiles.set(addr, {
+              name: profile.pfp?.displayName || '',
+              pfp: profile.pfp?.imageUrl || null,
+            });
+          }
+        } catch {
+          // Silent — fall back to shortened address
+        }
+      }),
+    );
+    for (const listing of listings) {
+      const profile = ownerProfiles.get(listing.ownerAddress);
+      if (profile) {
+        if (profile.name) listing.owner = profile.name;
+        if (profile.pfp) listing.ownerPfp = profile.pfp;
+      }
+    }
 
     return json({
       listings,

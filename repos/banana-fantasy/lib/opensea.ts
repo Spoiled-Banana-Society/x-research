@@ -104,6 +104,8 @@ export interface MarketplaceTeam {
   playoffOdds: number;
   price: number | null;
   owner: string;
+  ownerAddress: string;
+  ownerPfp: string | null;
   roster: string[];
   color: string;
   imageUrl: string | null;
@@ -223,6 +225,8 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
     playoffOdds: 0,
     price,
     owner: shortenAddress(maker),
+    ownerAddress: maker,
+    ownerPfp: null,
     roster: traits.roster,
     color: colorForDraftType(traits.level),
     imageUrl: nft?.display_image_url ?? nft?.image_url ?? null,
@@ -250,6 +254,8 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
     playoffOdds: 0,
     price: null,
     owner: shortenAddress(ownerAddress),
+    ownerAddress,
+    ownerPfp: null,
     roster: traits.roster,
     color: colorForDraftType(traits.level),
     imageUrl: nft.display_image_url ?? nft.image_url ?? null,

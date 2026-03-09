@@ -485,7 +485,12 @@ export default function MarketplacePage() {
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="text-lg font-semibold text-text-primary font-mono">{team.name}</h3>
-                        <p className="text-text-muted text-xs">Owner: {team.owner}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {team.ownerPfp && (
+                            <Image src={team.ownerPfp} alt="" width={16} height={16} className="rounded-full" />
+                          )}
+                          <p className="text-text-muted text-xs">{team.owner}</p>
+                        </div>
                       </div>
                     </div>
 
