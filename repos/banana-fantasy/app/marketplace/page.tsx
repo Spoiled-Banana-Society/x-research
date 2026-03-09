@@ -99,8 +99,8 @@ export default function MarketplacePage() {
         const matchesName = team.name.includes(q);
         if (!matchesTokenId && !matchesName) return false;
       } else {
-        const upper = q.toUpperCase();
-        const hasMatch = team.roster.some(slot => slot.toUpperCase().includes(upper));
+        const upper = q.toUpperCase().replace(/\s+/g, '');
+        const hasMatch = team.roster.some(slot => slot.toUpperCase().replace(/\s+/g, '').includes(upper));
         if (!hasMatch) return false;
       }
     }
