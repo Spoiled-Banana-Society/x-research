@@ -603,9 +603,10 @@ export default function DraftingPage() {
         <div className="space-y-1.5">
           {sortedDrafts.map((draft) => {
             const live = getLiveState(draft);
-            const isRevealed = draft.type !== null;
+            const resolvedType = draft.type || draft.draftType || null;
+            const isRevealed = resolvedType !== null;
 
-            const accentColor = isRevealed ? getDraftTypeColor(draft.type!) : '#888';
+            const accentColor = isRevealed ? getDraftTypeColor(resolvedType!) : '#888';
             const isYourTurn = draft.isYourTurn;
 
             return (
@@ -639,9 +640,9 @@ export default function DraftingPage() {
                     {isRevealed ? (
                       <>
                         <span className="text-sm font-semibold" style={{ color: accentColor }}>
-                          {draft.type === 'jackpot' ? 'JACKPOT' : draft.type === 'hof' ? 'HALL OF FAME' : 'PRO'}
+                          {resolvedType === 'jackpot' ? 'JACKPOT' : resolvedType === 'hof' ? 'HALL OF FAME' : 'PRO'}
                         </span>
-                        <VerifiedBadge type="draft-type" draftType={draft.type!} size="sm" />
+                        <VerifiedBadge type="draft-type" draftType={resolvedType!} size="sm" />
                       </>
                     ) : (
                       <span className="text-white/30 text-sm italic">Unrevealed</span>

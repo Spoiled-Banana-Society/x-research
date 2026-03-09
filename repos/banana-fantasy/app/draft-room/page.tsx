@@ -1127,11 +1127,12 @@ function DraftRoomContent() {
     const selectedResult: DraftType = draftType || 'pro';
     const reelResults: DraftType[] = [selectedResult, selectedResult, selectedResult];
     setDraftType(selectedResult);
-    // Don't write type to store yet — reveal hasn't happened.
-    // Type is written to store when slot animation completes (result phase).
+    // Write type to store immediately so the drafting page shows it even if user backs out
     if (draftId) {
       draftStore.updateDraft(draftId, {
         phase: 'spinning',
+        type: selectedResult,
+        draftType: selectedResult,
         yourPosition: userDraftPosition >= 0 ? userDraftPosition + 1 : undefined,
       });
     }
