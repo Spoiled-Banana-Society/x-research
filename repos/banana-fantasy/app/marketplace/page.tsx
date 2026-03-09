@@ -92,9 +92,15 @@ export default function MarketplacePage() {
     if (hofFilter && !team.isHof) return false;
     if (jackpotFilter && !team.isJackpot) return false;
     if (rosterFilter) {
-      const q = rosterFilter.toUpperCase();
-      const hasMatch = team.roster.some(slot => slot.toUpperCase().includes(q));
-      if (!hasMatch) return false;
+      const q = rosterFilter.trim().replace(/^#/, '');
+      // Match token ID if query is numeric
+      if (/^\d+$/.test(q)) {
+        if (team.tokenId !== q) return false;
+      } else {
+        const upper = q.toUpperCase();
+        const hasMatch = team.roster.some(slot => slot.toUpperCase().includes(upper));
+        if (!hasMatch) return false;
+      }
     }
     return true;
   }).sort((a, b) => {
@@ -374,7 +380,7 @@ export default function MarketplacePage() {
                   type="text"
                   value={rosterFilter}
                   onChange={(e) => setRosterFilter(e.target.value)}
-                  placeholder="Search roster (e.g. KC QB, MIA WR)"
+                  placeholder="Search by token (#321) or roster (KC QB)"
                   className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-56"
                 />
                 {rosterFilter && (
