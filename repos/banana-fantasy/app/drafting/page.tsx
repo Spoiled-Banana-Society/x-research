@@ -258,14 +258,19 @@ export default function DraftingPage() {
               });
             }
           } else if (isFull) {
-            // 10/10 but draft hasn't started yet — set timestamps only.
-            // Type reveal is handled by the tick effect at the 15s mark.
+            // 10/10 but draft hasn't started yet
             const patch: Partial<DraftState> = { players: 10 };
 
             if (info.draftStartTime && !draft.preSpinStartedAt) {
               patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
               patch.randomizingStartedAt = undefined;
-              patch.phase = 'pre-spin';  // Keep phase in sync so draft room re-entry uses loading check
+              patch.phase = 'pre-spin';
+            }
+
+            // Type is decided when draft fills — set it if not already set
+            if (!draft.type && !draft.draftType) {
+              patch.type = 'pro';       // TODO: get from server in production
+              patch.draftType = 'pro';
             }
 
             draftStore.updateDraft(draft.id, patch);
