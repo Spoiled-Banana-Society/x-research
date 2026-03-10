@@ -1,56 +1,43 @@
 /**
- * Buy/fulfill a BBB4 listing via opensea-js SDK.
+ * Buy/fulfill a BBB4 listing via our server-side fulfillment API route.
  *
- * Client-side only — uses the Privy embedded wallet (or external wallet)
- * as the ethers signer.
+ * Instead of using opensea-js SDK directly (which sends tx through ethers,
+ * making the user pay gas), we get the encoded Seaport calldata from our
+ * API route and return it for Privy's gas-sponsored sendTransaction.
  */
-import { OpenSeaSDK, Chain } from 'opensea-js';
-import { ethers } from 'ethers';
-import { BBB4_CONTRACT, USDC_BASE } from '@/lib/opensea';
+import { USDC_BASE } from '@/lib/opensea';
 
-/**
- * Create an OpenSeaSDK instance with a signer from the user's wallet.
- * The SDK needs an ethers v6 provider/signer.
- */
-function createSdk(provider: ethers.BrowserProvider): OpenSeaSDK {
-  return new OpenSeaSDK(provider, {
-    chain: Chain.Base,
-    // API key is optional on client side for read operations;
-    // fulfillment goes through on-chain Seaport directly
-  });
-}
-
-export interface FulfillResult {
-  transactionHash: string;
+export interface FulfillmentTx {
+  to: string;
+  value: string;
+  data: string;
 }
 
 /**
- * Fulfill (buy) an existing OpenSea listing.
+ * Get the encoded Seaport transaction for fulfilling (buying) a listing.
+ * Returns { to, value, data } ready for Privy's sendTransaction.
  *
  * @param orderHash - The OpenSea order hash to fulfill
  * @param buyerAddress - The buyer's wallet address
- * @param provider - ethers BrowserProvider from Privy's wallet
+ * @param protocolAddress - The Seaport protocol address from the listing
  */
-export async function fulfillListing(
+export async function getFulfillmentTx(
   orderHash: string,
   buyerAddress: string,
-  provider: ethers.BrowserProvider,
-): Promise<FulfillResult> {
-  const sdk = createSdk(provider);
-
-  // Fetch the order from OpenSea
-  const order = await sdk.api.getOrder({
-    orderHash,
-    side: 'ask',
+  protocolAddress: string,
+): Promise<FulfillmentTx> {
+  const res = await fetch('/api/marketplace/fulfill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderHash, buyerAddress, protocolAddress }),
   });
 
-  // Fulfill (buy) the order — handles USDC approval + Seaport call
-  const tx = await sdk.fulfillOrder({
-    order,
-    accountAddress: buyerAddress,
-  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `Fulfillment failed: ${res.status}`);
+  }
 
-  return { transactionHash: tx };
+  return res.json();
 }
 
 /**

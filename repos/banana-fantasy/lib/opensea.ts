@@ -110,6 +110,7 @@ export interface MarketplaceTeam {
   color: string;
   imageUrl: string | null;
   orderHash: string | null;
+  protocolAddress: string | null;
 }
 
 export interface CollectionStats {
@@ -231,6 +232,7 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
     color: colorForDraftType(traits.level),
     imageUrl: nft?.display_image_url ?? nft?.image_url ?? null,
     orderHash: listing.order_hash,
+    protocolAddress: listing.protocol_address,
   };
 }
 
@@ -260,6 +262,7 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
     color: colorForDraftType(traits.level),
     imageUrl: nft.display_image_url ?? nft.image_url ?? null,
     orderHash: null,
+    protocolAddress: null,
   };
 }
 

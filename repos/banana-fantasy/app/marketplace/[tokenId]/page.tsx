@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useWallets } from '@privy-io/react-auth';
+import { useSendTransaction, useWallets } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import type { DraftType } from '@/lib/opensea';
 
@@ -22,6 +22,7 @@ interface NftDetail {
   traits: NftTrait[];
   listing: {
     order_hash: string;
+    protocol_address: string;
     price: { current: { value: string; decimals: number } };
     protocol_data: { parameters: { offerer: string } };
   } | null;
@@ -59,6 +60,7 @@ export default function NftDetailPage() {
   const autoBuy = searchParams.get('buy') === 'true';
   const { isLoggedIn, walletAddress, setShowLoginModal } = useAuth();
   const { wallets, ready: walletsReady } = useWallets();
+  const { sendTransaction } = useSendTransaction();
 
   const selectedWallet = useMemo(() => {
     if (wallets.length === 0) return null;
@@ -99,27 +101,32 @@ export default function NftDetailPage() {
   }, [autoBuy, nft, isLoggedIn, buyStep]);
 
   const handleBuy = useCallback(async () => {
-    if (!nft?.listing?.order_hash || !walletAddress) return;
+    if (!nft?.listing?.order_hash || !nft?.listing?.protocol_address || !walletAddress) return;
     setBuyStep('processing');
     setTxError(null);
     try {
-      const { fulfillListing } = await import('@/lib/marketplace/buy');
-      const { ethers } = await import('ethers');
-      if (!selectedWallet) throw new Error('No wallet connected');
-      const ethereum = await selectedWallet.getEthereumProvider();
-      const currentChainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
-      if (parseInt(currentChainHex, 16) !== 8453) {
-        await selectedWallet.switchChain(8453);
-      }
-      const provider = new ethers.BrowserProvider(ethereum);
-      await fulfillListing(nft.listing.order_hash, walletAddress, provider);
+      const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
+
+      // Get encoded Seaport calldata from our server-side API route
+      const tx = await getFulfillmentTx(
+        nft.listing.order_hash,
+        walletAddress,
+        nft.listing.protocol_address,
+      );
+
+      // Send via Privy with gas sponsorship — company pays gas
+      await sendTransaction(
+        { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
+        { sponsor: true },
+      );
+
       setBuyStep('complete');
     } catch (err) {
       console.error('[NFT Detail] Buy failed:', err);
       setTxError(err instanceof Error ? err.message : 'Transaction failed');
       setBuyStep('idle');
     }
-  }, [nft, walletAddress, selectedWallet]);
+  }, [nft, walletAddress, sendTransaction]);
 
   if (isLoading) {
     return (

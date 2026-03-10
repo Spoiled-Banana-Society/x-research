@@ -4,7 +4,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useWallets } from '@privy-io/react-auth';
+import { useSendTransaction, useWallets } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollectionStats, useListings, useMyNfts } from '@/hooks/useMarketplace';
 import type { MarketplaceTeam } from '@/lib/opensea';
@@ -47,6 +47,7 @@ export default function MarketplacePage() {
   const router = useRouter();
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
   const { wallets, ready: walletsReady } = useWallets();
+  const { sendTransaction } = useSendTransaction();
 
   const selectedWallet = useMemo(() => {
     if (wallets.length === 0) return null;
@@ -152,29 +153,28 @@ export default function MarketplacePage() {
   };
 
   const handleBuy = useCallback(async () => {
-    if (!selectedTeam?.orderHash || !walletAddress) return;
+    if (!selectedTeam?.orderHash || !selectedTeam?.protocolAddress || !walletAddress) return;
     setBuyStep('processing');
     setTxError(null);
 
     try {
-      // Dynamic import to avoid loading opensea-js + ethers on page load
-      const { fulfillListing } = await import('@/lib/marketplace/buy');
-      const { ethers } = await import('ethers');
+      const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
 
-      if (!selectedWallet) throw new Error('No wallet connected');
-      const ethereum = await selectedWallet.getEthereumProvider();
-      const currentChainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
-      if (parseInt(currentChainHex, 16) !== 8453) {
-        await selectedWallet.switchChain(8453);
-      }
-      const provider = new ethers.BrowserProvider(ethereum);
-      const result = await fulfillListing(
+      // Get encoded Seaport calldata from our server-side API route
+      const tx = await getFulfillmentTx(
         selectedTeam.orderHash,
         walletAddress,
-        provider,
+        selectedTeam.protocolAddress,
       );
 
-      console.log('[Marketplace] Buy tx:', result.transactionHash);
+      // Send via Privy with gas sponsorship — company pays gas
+      const receipt = await sendTransaction(
+        { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
+        { sponsor: true },
+      );
+
+      const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
+      console.log('[Marketplace] Buy tx:', txHash);
       setBuyStep('complete');
 
       setTimeout(() => {
@@ -189,7 +189,7 @@ export default function MarketplacePage() {
       setTxError(err instanceof Error ? err.message : 'Transaction failed');
       setBuyStep('confirm');
     }
-  }, [selectedTeam, walletAddress, selectedWallet, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, sendTransaction, refetchListings, refetchMyNfts]);
 
   const handleList = useCallback(async () => {
     if (!selectedTeam || !walletAddress || !listPrice) return;
@@ -975,7 +975,7 @@ export default function MarketplacePage() {
                 <div className="p-6 pt-0">
                   <button
                     onClick={handleBuy}
-                    disabled={!walletsReady || !selectedWallet}
+                    disabled={buyStep === 'processing'}
                     className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {paymentMethod === 'card' ? (
