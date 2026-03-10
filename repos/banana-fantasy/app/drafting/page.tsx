@@ -489,7 +489,21 @@ export default function DraftingPage() {
   const getLiveState = (draft: Draft): LiveState => {
     const now = Date.now();
 
-    // Already drafting — skip filling/randomizing display
+    // Countdown takes priority — show it even if server already started picks
+    // (the full 60s countdown must play out before showing "X picks away")
+    if (draft.preSpinStartedAt) {
+      const elapsed = (now - draft.preSpinStartedAt) / 1000;
+      if (elapsed < 15) {
+        const revealIn = Math.max(0, Math.ceil(15 - elapsed));
+        return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: revealIn, randomizingProgress: null, isFilling: false };
+      } else if (elapsed < 60) {
+        const startIn = Math.max(0, Math.ceil(60 - elapsed));
+        return { displayPhase: 'draft-starting', playerCount: 10, countdown: startIn > 0 ? startIn : null, randomizingProgress: null, isFilling: false };
+      }
+      // Past 60s: fall through to drafting
+    }
+
+    // Already drafting (and countdown finished or no countdown) — show picks away
     if (draft.status === 'drafting' && draft.phase === 'drafting') {
       return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
     }
@@ -513,22 +527,7 @@ export default function DraftingPage() {
       return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
     }
 
-    // Countdown phases: derive display from preSpinStartedAt elapsed time
-    // (don't rely on stored phase — syncLiveDrafts may overwrite it)
-    if (draft.preSpinStartedAt) {
-      const elapsed = (now - draft.preSpinStartedAt) / 1000;
-      if (elapsed < 15) {
-        // First 15s: reveal countdown
-        const revealIn = Math.max(0, Math.ceil(15 - elapsed));
-        return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: revealIn, randomizingProgress: null, isFilling: false };
-      } else if (elapsed < 60) {
-        // 15-60s: draft starting countdown
-        const startIn = Math.max(0, Math.ceil(60 - elapsed));
-        return { displayPhase: 'draft-starting', playerCount: 10, countdown: startIn > 0 ? startIn : null, randomizingProgress: null, isFilling: false };
-      }
-      // Past 60s: draft should be starting/in-progress
-      return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
-    }
+    // (preSpinStartedAt countdown is handled above, before the drafting guard)
 
     // Filling: use the best available count —
     // For live drafts, draft.players is updated by syncLiveDrafts from the real server.
