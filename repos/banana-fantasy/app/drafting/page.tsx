@@ -250,8 +250,8 @@ export default function DraftingPage() {
                 status: 'drafting',
                 phase: 'drafting',
                 players: 10,
-                type: fresh.type || fresh.draftType || 'pro',
-                draftType: fresh.draftType || fresh.type || 'pro',
+                type: fresh.type || fresh.draftType || null,
+                draftType: fresh.draftType || fresh.type || null,
                 randomizingStartedAt: undefined,  // Draft started — clear filling-phase timestamps
                 currentPick: turnsUntilUserPick,
                 isYourTurn: isUserTurn,
@@ -269,12 +269,6 @@ export default function DraftingPage() {
               patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
               patch.randomizingStartedAt = undefined;
               patch.phase = 'pre-spin';
-            }
-
-            // Type is decided when draft fills — set it if not already set
-            if (!fresh.type && !fresh.draftType) {
-              patch.type = 'pro';       // TODO: get from server in production
-              patch.draftType = 'pro';
             }
 
             draftStore.updateDraft(draft.id, patch);
@@ -413,8 +407,6 @@ export default function DraftingPage() {
                     players: 10,
                     preSpinStartedAt: now,
                     randomizingStartedAt: undefined,
-                    type: d.type || d.draftType || 'pro',
-                    draftType: d.draftType || d.type || 'pro',
                   });
                 }
               }
@@ -449,10 +441,23 @@ export default function DraftingPage() {
             phase: 'pre-spin',
             preSpinStartedAt: now,
             randomizingStartedAt: undefined,
-            type: d.type || d.draftType || 'pro',
-            draftType: d.draftType || d.type || 'pro',
           });
           continue;
+        }
+
+        // REVEAL: 15s after pre-spin starts = slot machine reveal moment
+        // Set type here so it shows on drafting page even if user isn't in draft room
+        if (d.preSpinStartedAt && !d.type && !d.draftType) {
+          const preSpinElapsed = (now - d.preSpinStartedAt) / 1000;
+          if (preSpinElapsed >= 15) {
+            // Determine type (same logic as draft room slot machine)
+            const roll = Math.random() * 100;
+            const revealedType = roll < 33 ? 'jackpot' : roll < 66 ? 'hof' : 'pro'; // 33% each for testing
+            draftStore.updateDraft(d.id, {
+              type: revealedType,
+              draftType: revealedType,
+            });
+          }
         }
 
         // PRE-SPIN / SPINNING / RESULT → DRAFTING when 60s expires
