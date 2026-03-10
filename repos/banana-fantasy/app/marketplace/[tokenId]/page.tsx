@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useWallets } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import type { DraftType } from '@/lib/opensea';
 
@@ -57,6 +58,15 @@ export default function NftDetailPage() {
   const tokenId = params.tokenId as string;
   const autoBuy = searchParams.get('buy') === 'true';
   const { isLoggedIn, walletAddress, setShowLoginModal } = useAuth();
+  const { wallets, ready: walletsReady } = useWallets();
+
+  const selectedWallet = useMemo(() => {
+    if (wallets.length === 0) return null;
+    if (walletAddress) {
+      return wallets.find(w => w.address.toLowerCase() === walletAddress.toLowerCase()) || wallets[0];
+    }
+    return wallets[0];
+  }, [walletAddress, wallets]);
 
   const [nft, setNft] = useState<NftDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -95,9 +105,12 @@ export default function NftDetailPage() {
     try {
       const { fulfillListing } = await import('@/lib/marketplace/buy');
       const { ethers } = await import('ethers');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) throw new Error('No wallet provider found');
+      if (!selectedWallet) throw new Error('No wallet connected');
+      const ethereum = await selectedWallet.getEthereumProvider();
+      const currentChainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
+      if (parseInt(currentChainHex, 16) !== 8453) {
+        await selectedWallet.switchChain(8453);
+      }
       const provider = new ethers.BrowserProvider(ethereum);
       await fulfillListing(nft.listing.order_hash, walletAddress, provider);
       setBuyStep('complete');
@@ -106,7 +119,7 @@ export default function NftDetailPage() {
       setTxError(err instanceof Error ? err.message : 'Transaction failed');
       setBuyStep('idle');
     }
-  }, [nft, walletAddress]);
+  }, [nft, walletAddress, selectedWallet]);
 
   if (isLoading) {
     return (
@@ -326,7 +339,7 @@ export default function NftDetailPage() {
                       if (!isLoggedIn) { setShowLoginModal(true); return; }
                       handleBuy();
                     }}
-                    disabled={buyStep === 'processing'}
+                    disabled={buyStep === 'processing' || !walletsReady || !selectedWallet}
                     className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {buyStep === 'processing' ? (

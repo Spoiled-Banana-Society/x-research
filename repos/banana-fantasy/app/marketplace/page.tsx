@@ -501,10 +501,10 @@ export default function MarketplacePage() {
                         <h3 className="text-lg font-semibold text-text-primary font-mono">{team.name}</h3>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {team.ownerPfp ? (
-                            <img src={team.ownerPfp} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                            <Image src={team.ownerPfp} alt="" width={20} height={20} className="rounded-full" />
                           ) : (
                             <div className="w-5 h-5 rounded-full bg-bg-tertiary flex items-center justify-center flex-shrink-0">
-                              <span className="text-sm leading-none">🍌</span>
+                              <span className="text-[10px]">🍌</span>
                             </div>
                           )}
                           <p className="text-text-muted text-xs">{team.owner}</p>

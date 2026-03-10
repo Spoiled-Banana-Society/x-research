@@ -1,7 +1,7 @@
 import { rateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { json, jsonError, getSearchParam } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
-import { type ApiOwnerProfile } from '@/lib/api/owner';
+import { getOwnerProfile } from '@/lib/api/owner';
 import {
   OPENSEA_API_BASE,
   OPENSEA_CHAIN,
@@ -15,26 +15,6 @@ import {
 export const dynamic = 'force-dynamic';
 
 const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY || '';
-
-// Server-side: isStagingMode() returns false (no window), so use env var directly
-const SBS_API_BASE =
-  process.env.NEXT_PUBLIC_STAGING_DRAFTS_API_URL ||
-  process.env.NEXT_PUBLIC_DRAFTS_API_URL ||
-  'https://sbs-drafts-api-staging-652484219017.us-central1.run.app';
-
-/** Fetch owner profile directly from SBS backend (server-side safe). */
-async function fetchOwnerProfile(wallet: string): Promise<ApiOwnerProfile | null> {
-  try {
-    const res = await fetch(`${SBS_API_BASE}/owner/${wallet.toLowerCase()}`, {
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * GET /api/marketplace/listings?sort=price&direction=asc&limit=50&cursor=...
@@ -137,12 +117,16 @@ export async function GET(req: Request) {
     const ownerProfiles = new Map<string, { name: string; pfp: string | null }>();
     await Promise.all(
       uniqueOwners.map(async (addr) => {
-        const profile = await fetchOwnerProfile(addr);
-        if (profile?.pfp?.displayName || profile?.pfp?.imageUrl) {
-          ownerProfiles.set(addr, {
-            name: profile.pfp?.displayName || '',
-            pfp: profile.pfp?.imageUrl || null,
-          });
+        try {
+          const profile = await getOwnerProfile(addr);
+          if (profile?.pfp?.displayName || profile?.pfp?.imageUrl) {
+            ownerProfiles.set(addr, {
+              name: profile.pfp?.displayName || '',
+              pfp: profile.pfp?.imageUrl || null,
+            });
+          }
+        } catch (err) {
+          console.error('[marketplace/listings] Profile fetch failed for', addr, err);
         }
       }),
     );
