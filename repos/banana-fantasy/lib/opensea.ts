@@ -6,7 +6,7 @@
 export const BBB4_CONTRACT = '0x14065412b3A431a660e6E576A14b104F1b3E463b';
 export const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 export const OPENSEA_API_BASE = 'https://api.opensea.io';
-export const COLLECTION_SLUG = 'banana-best-ball-4';
+export const COLLECTION_SLUG = 'sbs-draft-pass-bbb4';
 export const OPENSEA_CHAIN = 'base';
 
 // ── OpenSea API Response Types ──────────────────────────────────────
