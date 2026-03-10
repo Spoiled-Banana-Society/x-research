@@ -58,7 +58,6 @@ cd /tmp/sbs-frontend-v2 && git add -A && git commit -m "<description>" && git pu
 - **ALWAYS `git pull origin main` in banana-fantasy before committing.** Your local files may be stale if the other person pushed recently.
 - **Only stage files you actually changed:** Use `git add <specific-files>`, NEVER `git add -A` or `git add .`. Blanket staging includes stale versions of files the other person changed and silently reverts their work.
 - **Before pushing, run `git diff --stat HEAD~1` to verify** you're only changing the files you intended. If you see files you didn't touch, something is wrong — investigate before pushing.
-- **Marketplace files are actively being developed by Boris's agent.** Do NOT modify unless specifically working on marketplace: `lib/marketplace/`, `app/api/marketplace/`, `app/marketplace/page.tsx`, `hooks/useMarketplace.ts`, `lib/opensea.ts`
 
 ## Company Overview
 - **Company:** Spoiled Banana Society (SBS)
