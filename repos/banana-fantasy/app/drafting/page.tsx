@@ -246,29 +246,74 @@ export default function DraftingPage() {
             if (isCompleted) {
               draftStore.removeDraft(draft.id);
             } else {
-              draftStore.updateDraft(draft.id, {
-                status: 'drafting',
-                phase: 'drafting',
-                players: 10,
-                type: fresh.type || fresh.draftType || null,
-                draftType: fresh.draftType || fresh.type || null,
-                randomizingStartedAt: undefined,  // Draft started — clear filling-phase timestamps
-                currentPick: turnsUntilUserPick,
-                isYourTurn: isUserTurn,
-                pickEndTimestamp,
-                timeRemaining: isUserTurn && pickEndTimestamp
-                  ? Math.max(0, Math.ceil(pickEndTimestamp - Date.now() / 1000))
-                  : undefined,
-              });
+              const nowMs = Date.now();
+
+              // Check if the animation timeline is still playing.
+              // Full timeline from randomizingStartedAt: 15s bar + 60s countdown = 75s.
+              // From preSpinStartedAt: 60s countdown.
+              // While animation plays, save pick data but DON'T change display state.
+              const animStillRunning = (() => {
+                if (fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
+                  return (nowMs - fresh.randomizingStartedAt) < 75000;
+                }
+                if (fresh.preSpinStartedAt) {
+                  return ((nowMs - fresh.preSpinStartedAt) / 1000) < 60;
+                }
+                return false;
+              })();
+
+              if (animStillRunning) {
+                // Animation is playing — save server pick data only
+                draftStore.updateDraft(draft.id, {
+                  currentPick: turnsUntilUserPick,
+                  isYourTurn: isUserTurn,
+                  pickEndTimestamp,
+                  timeRemaining: isUserTurn && pickEndTimestamp
+                    ? Math.max(0, Math.ceil(pickEndTimestamp - nowMs / 1000))
+                    : undefined,
+                });
+              } else if (!fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
+                // No animation ever started — start it now so user sees the full sequence
+                draftStore.updateDraft(draft.id, {
+                  players: 10,
+                  randomizingStartedAt: nowMs,
+                  currentPick: turnsUntilUserPick,
+                  isYourTurn: isUserTurn,
+                  pickEndTimestamp,
+                  timeRemaining: isUserTurn && pickEndTimestamp
+                    ? Math.max(0, Math.ceil(pickEndTimestamp - nowMs / 1000))
+                    : undefined,
+                });
+              } else {
+                // Animation is done — safe to transition to drafting
+                draftStore.updateDraft(draft.id, {
+                  status: 'drafting',
+                  phase: 'drafting',
+                  players: 10,
+                  type: fresh.type || fresh.draftType || null,
+                  draftType: fresh.draftType || fresh.type || null,
+                  randomizingStartedAt: undefined,
+                  currentPick: turnsUntilUserPick,
+                  isYourTurn: isUserTurn,
+                  pickEndTimestamp,
+                  timeRemaining: isUserTurn && pickEndTimestamp
+                    ? Math.max(0, Math.ceil(pickEndTimestamp - nowMs / 1000))
+                    : undefined,
+                });
+              }
             }
           } else if (isFull) {
             // 10/10 but draft hasn't started yet
             const patch: Partial<DraftState> = { players: 10 };
 
             if (info.draftStartTime && !fresh.preSpinStartedAt) {
-              patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
-              patch.randomizingStartedAt = undefined;
-              patch.phase = 'pre-spin';
+              // Don't jump to countdown while randomizing bar is still animating
+              const barStillRunning = fresh.randomizingStartedAt && (Date.now() - fresh.randomizingStartedAt) < 15000;
+              if (!barStillRunning) {
+                patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
+                patch.randomizingStartedAt = undefined;
+                patch.phase = 'pre-spin';
+              }
             }
 
             draftStore.updateDraft(draft.id, patch);
