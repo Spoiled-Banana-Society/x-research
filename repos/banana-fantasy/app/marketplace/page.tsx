@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useWallets } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollectionStats, useListings, useMyNfts } from '@/hooks/useMarketplace';
 import type { MarketplaceTeam } from '@/lib/opensea';
@@ -45,6 +46,16 @@ function StatSkeleton() {
 export default function MarketplacePage() {
   const router = useRouter();
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
+  const { wallets, ready: walletsReady } = useWallets();
+
+  const selectedWallet = useMemo(() => {
+    if (wallets.length === 0) return null;
+    if (walletAddress) {
+      return wallets.find(w => w.address.toLowerCase() === walletAddress.toLowerCase()) || wallets[0];
+    }
+    return wallets[0];
+  }, [walletAddress, wallets]);
+
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [hofFilter, setHofFilter] = useState(false);
   const [jackpotFilter, setJackpotFilter] = useState(false);
@@ -150,11 +161,12 @@ export default function MarketplacePage() {
       const { fulfillListing } = await import('@/lib/marketplace/buy');
       const { ethers } = await import('ethers');
 
-      // Get the Privy wallet provider
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) throw new Error('No wallet provider found');
-
+      if (!selectedWallet) throw new Error('No wallet connected');
+      const ethereum = await selectedWallet.getEthereumProvider();
+      const currentChainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
+      if (parseInt(currentChainHex, 16) !== 8453) {
+        await selectedWallet.switchChain(8453);
+      }
       const provider = new ethers.BrowserProvider(ethereum);
       const result = await fulfillListing(
         selectedTeam.orderHash,
@@ -177,7 +189,7 @@ export default function MarketplacePage() {
       setTxError(err instanceof Error ? err.message : 'Transaction failed');
       setBuyStep('confirm');
     }
-  }, [selectedTeam, walletAddress, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, selectedWallet, refetchListings, refetchMyNfts]);
 
   const handleList = useCallback(async () => {
     if (!selectedTeam || !walletAddress || !listPrice) return;
@@ -187,10 +199,12 @@ export default function MarketplacePage() {
       const { createListing } = await import('@/lib/marketplace/sell');
       const { ethers } = await import('ethers');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) throw new Error('No wallet provider found');
-
+      if (!selectedWallet) throw new Error('No wallet connected');
+      const ethereum = await selectedWallet.getEthereumProvider();
+      const currentChainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
+      if (parseInt(currentChainHex, 16) !== 8453) {
+        await selectedWallet.switchChain(8453);
+      }
       const provider = new ethers.BrowserProvider(ethereum);
       const result = await createListing(
         selectedTeam.tokenId,
@@ -209,7 +223,7 @@ export default function MarketplacePage() {
       console.error('[Marketplace] List failed:', err);
       setTxError(err instanceof Error ? err.message : 'Listing failed');
     }
-  }, [selectedTeam, walletAddress, listPrice, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, listPrice, selectedWallet, refetchListings, refetchMyNfts]);
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 py-8">
@@ -487,10 +501,10 @@ export default function MarketplacePage() {
                         <h3 className="text-lg font-semibold text-text-primary font-mono">{team.name}</h3>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {team.ownerPfp ? (
-                            <Image src={team.ownerPfp} alt="" width={20} height={20} className="rounded-full" />
+                            <img src={team.ownerPfp} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
                           ) : (
                             <div className="w-5 h-5 rounded-full bg-bg-tertiary flex items-center justify-center flex-shrink-0">
-                              <span className="text-[10px]">🍌</span>
+                              <span className="text-sm leading-none">🍌</span>
                             </div>
                           )}
                           <p className="text-text-muted text-xs">{team.owner}</p>
@@ -961,7 +975,8 @@ export default function MarketplacePage() {
                 <div className="p-6 pt-0">
                   <button
                     onClick={handleBuy}
-                    className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                    disabled={!walletsReady || !selectedWallet}
+                    className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {paymentMethod === 'card' ? (
                       <>
