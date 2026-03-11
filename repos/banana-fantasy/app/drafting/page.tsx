@@ -590,6 +590,11 @@ export default function DraftingPage() {
         count = Math.max(count, simulated);
       }
       count = Math.min(10, count);
+      // When count reaches 10 but tick effect hasn't set randomizingStartedAt yet,
+      // show randomizing immediately to avoid "10/10" flash
+      if (count >= 10) {
+        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: 0, isFilling: false };
+      }
       return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };
     }
 
@@ -756,33 +761,26 @@ export default function DraftingPage() {
 
                   {/* Status */}
                   <div className="w-28 flex-shrink-0 flex items-center justify-center">
-                    {live.displayPhase === 'filling' ? (
+                    {(live.displayPhase === 'filling' || live.displayPhase === 'randomizing') ? (
                       <div className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full transition-all duration-700"
+                            className="h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${(live.playerCount / 10) * 100}%`,
-                              backgroundColor: accentColor
+                              width: live.displayPhase === 'randomizing' ? '100%' : `${(live.playerCount / 10) * 100}%`,
+                              background: live.displayPhase === 'randomizing'
+                                ? 'linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b)'
+                                : accentColor,
+                              backgroundSize: live.displayPhase === 'randomizing' ? '200% 100%' : undefined,
+                              animation: live.displayPhase === 'randomizing' ? 'shimmer 1.5s ease-in-out infinite' : undefined,
                             }}
                           />
                         </div>
-                        <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
-                      </div>
-                    ) : live.displayPhase === 'randomizing' ? (
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-700"
-                            style={{
-                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
-                              background: (live.randomizingProgress ?? 0) >= 1
-                                ? '#4ade80'
-                                : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                            }}
-                          />
-                        </div>
-                        <span className="text-white/40 text-[10px]">Randomizing...</span>
+                        {live.displayPhase === 'randomizing' ? (
+                          <span className="text-white/40 text-[10px]">Randomizing...</span>
+                        ) : (
+                          <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
+                        )}
                       </div>
                     ) : live.displayPhase === 'pre-spin-countdown' ? (
                       <span className="text-white/50 text-sm">Reveal in {live.countdown}s</span>
