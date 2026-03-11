@@ -72,8 +72,9 @@ function formatRelativeTime(timestamp: number): string {
   return `${days} day${days > 1 ? 's' : ''} ago`;
 }
 
-// Module-level peak progress tracker — survives component remounts
-const _peakProgress = new Map<string, number>();
+// Module-level bar lock — once randomizing starts, it CANNOT be interrupted
+// Stores its own start timestamp so even if draft state glitches, bar keeps going
+const _barLock = new Map<string, { peak: number; startedAt: number }>();
 
 export default function DraftingPage() {
   const router = useRouter();
@@ -544,6 +545,27 @@ export default function DraftingPage() {
   const getLiveState = (draft: Draft): LiveState => {
     const now = Date.now();
 
+    // BAR LOCK: Once randomizing bar starts, it CANNOT be interrupted by ANY state glitch.
+    // Maintains its own timeline so the bar keeps advancing regardless of draft state.
+    const lock = _barLock.get(draft.id);
+    if (lock && !draft.preSpinStartedAt) {
+      const elapsed = now - lock.startedAt;
+      const t = Math.min(1, elapsed / 15000);
+      const computed = 0.99 * Math.pow(t, 0.6);
+      const newPeak = Math.max(lock.peak, computed);
+      _barLock.set(draft.id, { peak: newPeak, startedAt: lock.startedAt });
+      if (newPeak >= 0.99) {
+        // Bar completed — release lock, let normal flow handle transition
+        _barLock.delete(draft.id);
+      } else {
+        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: newPeak, isFilling: false };
+      }
+    }
+    // Also release lock if preSpinStartedAt was set (legitimate transition)
+    if (lock && draft.preSpinStartedAt) {
+      _barLock.delete(draft.id);
+    }
+
     // Countdown takes priority — show it even if server already started picks
     // (the full 60s countdown must play out before showing "X picks away")
     if (draft.preSpinStartedAt) {
@@ -569,7 +591,7 @@ export default function DraftingPage() {
       const elapsed = now - draft.randomizingStartedAt;
       // After 15s, force transition to countdown (don't stay stuck on randomizing)
       if (elapsed >= 15000) {
-        _peakProgress.delete(draft.id); // Done randomizing, clear peak
+        _barLock.delete(draft.id); // Done randomizing, release lock
         const effectivePreSpin = draft.randomizingStartedAt + 15000;
         const countdownElapsed = (now - effectivePreSpin) / 1000;
         if (countdownElapsed < 15) {
@@ -581,9 +603,10 @@ export default function DraftingPage() {
       }
       const t = Math.min(1, elapsed / 15000);
       const computed = 0.99 * Math.pow(t, 0.6);
-      // Module-level peak — bar NEVER goes backwards even across remounts
-      const peak = Math.max(_peakProgress.get(draft.id) || 0, computed);
-      _peakProgress.set(draft.id, peak);
+      // Initialize or update bar lock with peak progress + start timestamp
+      const existing = _barLock.get(draft.id);
+      const peak = Math.max(existing?.peak || 0, computed);
+      _barLock.set(draft.id, { peak, startedAt: existing?.startedAt || draft.randomizingStartedAt });
       return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: peak, isFilling: false };
     }
 
@@ -603,8 +626,13 @@ export default function DraftingPage() {
       // When count reaches 10 but tick effect hasn't set randomizingStartedAt yet,
       // show randomizing immediately to avoid "10/10" flash
       if (count >= 10) {
-        const peak = _peakProgress.get(draft.id) || 0;
-        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: peak, isFilling: false };
+        // Initialize lock if not already set — use now as startedAt since
+        // we don't have randomizingStartedAt yet (tick hasn't fired)
+        if (!_barLock.has(draft.id)) {
+          _barLock.set(draft.id, { peak: 0, startedAt: now });
+        }
+        const lock2 = _barLock.get(draft.id)!;
+        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: lock2.peak, isFilling: false };
       }
       return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };
     }
