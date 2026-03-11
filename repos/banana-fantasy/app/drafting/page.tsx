@@ -736,7 +736,7 @@ export default function DraftingPage() {
 
                   {/* Type */}
                   <div className="w-28 flex-shrink-0 flex items-center justify-center gap-1.5">
-                    {(live.displayPhase === 'pre-spin-countdown' || live.displayPhase === 'draft-starting') ? (
+                    {(live.displayPhase === 'pre-spin-countdown' || live.displayPhase === 'draft-starting') && !isRevealed ? (
                       <span className="text-banana text-sm font-semibold animate-pulse">Revealing...</span>
                     ) : isRevealed ? (
                       <>
