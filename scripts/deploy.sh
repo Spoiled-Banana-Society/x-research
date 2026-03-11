@@ -47,7 +47,7 @@ while IFS= read -r file; do
   fi
 done <<< "$CHANGED"
 
-# 4. Commit and push
+# 4. Commit, push, and trigger deploy hook (NOT git-push auto-deploy)
 cd "$DEPLOY_REPO"
 git add -A
 if git diff --cached --quiet; then
@@ -60,5 +60,11 @@ git diff --cached --stat
 echo ""
 git commit -m "$MSG"
 git push origin main
+
+# Trigger deploy via hook — the git push auto-deploy gets blocked by Vercel
+# deployment protection, so the hook is what actually deploys.
 echo ""
-echo "Deployed successfully!"
+echo "Triggering Vercel deploy hook..."
+curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH" | cat
+echo ""
+echo "Deploy triggered!"

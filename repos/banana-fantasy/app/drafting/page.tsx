@@ -549,7 +549,8 @@ export default function DraftingPage() {
     }
 
     // Already drafting (and countdown finished or no countdown) — show picks away
-    if (draft.status === 'drafting' && draft.phase === 'drafting') {
+    // Skip this guard if randomizingStartedAt is set — animation must play first
+    if (draft.status === 'drafting' && draft.phase === 'drafting' && !draft.randomizingStartedAt) {
       return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
     }
 
