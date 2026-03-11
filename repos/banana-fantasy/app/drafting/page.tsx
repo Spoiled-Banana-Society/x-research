@@ -735,7 +735,9 @@ export default function DraftingPage() {
 
                   {/* Type */}
                   <div className="w-28 flex-shrink-0 flex items-center justify-center gap-1.5">
-                    {isRevealed ? (
+                    {(live.displayPhase === 'pre-spin-countdown' || live.displayPhase === 'draft-starting') ? (
+                      <span className="text-banana text-sm font-semibold animate-pulse">Revealing...</span>
+                    ) : isRevealed ? (
                       <>
                         <span className="text-sm font-semibold" style={{ color: accentColor }}>
                           {resolvedType === 'jackpot' ? 'JACKPOT' : resolvedType === 'hof' ? 'HALL OF FAME' : 'PRO'}
