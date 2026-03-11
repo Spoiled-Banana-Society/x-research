@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePromos } from '@/hooks/usePromos';
@@ -72,6 +72,9 @@ function formatRelativeTime(timestamp: number): string {
   return `${days} day${days > 1 ? 's' : ''} ago`;
 }
 
+// Module-level peak progress tracker — survives component remounts
+const _peakProgress = new Map<string, number>();
+
 export default function DraftingPage() {
   const router = useRouter();
   const { isLoggedIn, user, setShowLoginModal, updateUser } = useAuth();
@@ -85,8 +88,6 @@ export default function DraftingPage() {
   const [liveLoading, setLiveLoading] = useState(true);
   const isLive = isStagingMode() && !!user?.walletAddress;
   const [_timers, setTimers] = useState<Record<string, number>>({});
-  // Track peak randomizing progress per draft so the bar NEVER goes backwards
-  const peakProgressRef = useRef<Record<string, number>>({});
   const [exitingDraft, setExitingDraft] = useState<Draft | null>(null);
   const [showNoPasses, setShowNoPasses] = useState(false);
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
@@ -568,6 +569,7 @@ export default function DraftingPage() {
       const elapsed = now - draft.randomizingStartedAt;
       // After 15s, force transition to countdown (don't stay stuck on randomizing)
       if (elapsed >= 15000) {
+        _peakProgress.delete(draft.id); // Done randomizing, clear peak
         const effectivePreSpin = draft.randomizingStartedAt + 15000;
         const countdownElapsed = (now - effectivePreSpin) / 1000;
         if (countdownElapsed < 15) {
@@ -578,10 +580,11 @@ export default function DraftingPage() {
         return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
       }
       const t = Math.min(1, elapsed / 15000);
-      // Ease-out curve that doesn't look "full" until close to 15s
-      // t^0.6 reaches ~90% at 12s, ~95% at 13.5s, 99% at 15s
-      const progress = 0.99 * Math.pow(t, 0.6);
-      return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
+      const computed = 0.99 * Math.pow(t, 0.6);
+      // Module-level peak — bar NEVER goes backwards even across remounts
+      const peak = Math.max(_peakProgress.get(draft.id) || 0, computed);
+      _peakProgress.set(draft.id, peak);
+      return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: peak, isFilling: false };
     }
 
     // (preSpinStartedAt countdown is handled above, before the drafting guard)
@@ -600,7 +603,8 @@ export default function DraftingPage() {
       // When count reaches 10 but tick effect hasn't set randomizingStartedAt yet,
       // show randomizing immediately to avoid "10/10" flash
       if (count >= 10) {
-        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: 0, isFilling: false };
+        const peak = _peakProgress.get(draft.id) || 0;
+        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: peak, isFilling: false };
       }
       return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };
     }
@@ -781,27 +785,22 @@ export default function DraftingPage() {
                         </div>
                         <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
                       </div>
-                    ) : live.displayPhase === 'randomizing' ? (() => {
-                      // Use peak ref so bar NEVER goes backwards
-                      const raw = live.randomizingProgress ?? 0;
-                      const peak = Math.max(peakProgressRef.current[draft.id] || 0, raw);
-                      peakProgressRef.current[draft.id] = peak;
-                      return (
+                    ) : live.displayPhase === 'randomizing' ? (
                       <div key="randomizing" className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full"
                             style={{
-                              width: `${Math.round(peak * 100)}%`,
-                              background: peak >= 0.99
+                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
+                              background: (live.randomizingProgress ?? 0) >= 0.99
                                 ? '#4ade80'
                                 : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
                             }}
                           />
                         </div>
                         <span className="text-white/40 text-[10px]">Randomizing...</span>
-                      </div>);
-                    })() : live.displayPhase === 'pre-spin-countdown' ? (
+                      </div>
+                    ) : live.displayPhase === 'pre-spin-countdown' ? (
                       <span className="text-white/50 text-sm">Reveal in {live.countdown}s</span>
                     ) : live.displayPhase === 'draft-starting' ? (
                       <span className="text-white/50 text-sm">
