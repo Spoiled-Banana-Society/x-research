@@ -761,26 +761,33 @@ export default function DraftingPage() {
 
                   {/* Status */}
                   <div className="w-28 flex-shrink-0 flex items-center justify-center">
-                    {(live.displayPhase === 'filling' || live.displayPhase === 'randomizing') ? (
+                    {live.displayPhase === 'filling' ? (
                       <div className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full transition-all duration-500"
+                            className="h-full rounded-full transition-all duration-700"
                             style={{
-                              width: live.displayPhase === 'randomizing' ? '100%' : `${(live.playerCount / 10) * 100}%`,
-                              background: live.displayPhase === 'randomizing'
-                                ? 'linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b)'
-                                : accentColor,
-                              backgroundSize: live.displayPhase === 'randomizing' ? '200% 100%' : undefined,
-                              animation: live.displayPhase === 'randomizing' ? 'shimmer 1.5s ease-in-out infinite' : undefined,
+                              width: `${(live.playerCount / 10) * 100}%`,
+                              backgroundColor: accentColor
                             }}
                           />
                         </div>
-                        {live.displayPhase === 'randomizing' ? (
-                          <span className="text-white/40 text-[10px]">Randomizing...</span>
-                        ) : (
-                          <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
-                        )}
+                        <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
+                      </div>
+                    ) : live.displayPhase === 'randomizing' ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
+                              background: (live.randomizingProgress ?? 0) >= 0.99
+                                ? '#4ade80'
+                                : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                            }}
+                          />
+                        </div>
+                        <span className="text-white/40 text-[10px]">Randomizing...</span>
                       </div>
                     ) : live.displayPhase === 'pre-spin-countdown' ? (
                       <span className="text-white/50 text-sm">Reveal in {live.countdown}s</span>
