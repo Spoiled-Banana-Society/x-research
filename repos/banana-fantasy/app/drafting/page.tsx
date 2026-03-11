@@ -235,6 +235,8 @@ export default function DraftingPage() {
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
           const isFull = playerCount >= 10;
 
+          console.log(`[SyncDebug] ${draft.id.slice(-6)}: pc=${playerCount} started=${hasDraftStarted} full=${isFull} pick#=${info.pickNumber} startTime=${info.draftStartTime} | store: rand=${fresh.randomizingStartedAt} preSpin=${fresh.preSpinStartedAt} phase=${fresh.phase}`);
+
           if (hasDraftStarted) {
             // Draft is actively in progress — compute picks away
             const { turnsUntilUserPick, isUserTurn, pickEndTimestamp } =
@@ -262,6 +264,7 @@ export default function DraftingPage() {
                 return false;
               })();
 
+              console.log(`[SyncDebug] ${draft.id.slice(-6)}: animRunning=${animStillRunning}`);
               if (animStillRunning) {
                 // Animation is playing — save server pick data only
                 draftStore.updateDraft(draft.id, {
@@ -274,6 +277,7 @@ export default function DraftingPage() {
                 });
               } else if (!fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
                 // No animation ever started — start it now so user sees the full sequence
+                console.log(`[SyncDebug] ${draft.id.slice(-6)}: START ANIM (no prev rand/preSpin)`);
                 draftStore.updateDraft(draft.id, {
                   players: 10,
                   randomizingStartedAt: nowMs,
@@ -286,6 +290,7 @@ export default function DraftingPage() {
                 });
               } else {
                 // Animation is done — safe to transition to drafting
+                console.log(`[SyncDebug] ${draft.id.slice(-6)}: ANIM DONE → drafting`);
                 draftStore.updateDraft(draft.id, {
                   status: 'drafting',
                   phase: 'drafting',
@@ -309,6 +314,7 @@ export default function DraftingPage() {
             if (info.draftStartTime && !fresh.preSpinStartedAt) {
               // Don't jump to countdown while randomizing bar is still animating
               const barStillRunning = fresh.randomizingStartedAt && (Date.now() - fresh.randomizingStartedAt) < 15000;
+              console.log(`[SyncDebug] ${draft.id.slice(-6)}: isFull, barRunning=${barStillRunning}, randAt=${fresh.randomizingStartedAt}, draftStart=${info.draftStartTime}`);
               if (!barStillRunning) {
                 patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
                 patch.randomizingStartedAt = undefined;
@@ -439,6 +445,7 @@ export default function DraftingPage() {
             // LIVE DRAFTS: start the randomizing bar, then force transition after 15s
             if (d.liveWalletAddress) {
               if (!d.randomizingStartedAt) {
+                console.log(`[TickDebug] ${d.id.slice(-6)}: SET randomizingStartedAt=${now}`);
                 draftStore.updateDraft(d.id, { players: 10, randomizingStartedAt: now });
               } else {
                 // Bar fills over 15s — once full, transition to pre-spin countdown
