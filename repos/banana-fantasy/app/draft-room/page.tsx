@@ -70,7 +70,7 @@ function DraftRoomContent() {
   // Initialize from stored state so re-entry renders correctly on first frame (no flash)
   const _isResumingRandomize = !!(storedForInit?.randomizingStartedAt && !storedForInit?.preSpinStartedAt);
   const _resumeProgress = _isResumingRandomize
-    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / 15000); return 0.99 * (1 - Math.pow(1 - t, 3)); })()
+    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / 15000); return 0.99 * Math.pow(t, 0.6); })()
     : 0;
   const [waitingForServer, setWaitingForServer] = useState(_isResumingRandomize);
   const [serverWaitProgress, setServerWaitProgress] = useState(_resumeProgress);
@@ -165,7 +165,13 @@ function DraftRoomContent() {
     // In live mode, if stored state shows draft is past filling, start in 'loading'
     // to check server state BEFORE showing any UI/animations. This prevents replaying
     // RANDOMIZING/slot machine on re-entry.
-    if (isLiveMode && stored && ((stored.phase && stored.phase !== 'filling') || stored.preSpinStartedAt)) return 'loading';
+    if (isLiveMode && stored && (
+      (stored.phase && stored.phase !== 'filling') ||
+      stored.preSpinStartedAt ||
+      // If randomizing bar has been running 15s+, skip to loading (check server state)
+      // instead of starting a new 60s poll that would get stuck
+      (stored.randomizingStartedAt && (Date.now() - stored.randomizingStartedAt) > 15000)
+    )) return 'loading';
     if (!isLiveMode && stored?.phase) return stored.phase;
     return 'filling';
   });
@@ -1391,7 +1397,7 @@ function DraftRoomContent() {
     ? (() => {
         const elapsed = Date.now() - storedNow!.randomizingStartedAt!;
         const t = Math.min(1, elapsed / 15000);
-        return 0.99 * (1 - Math.pow(1 - t, 3));
+        return 0.99 * Math.pow(t, 0.6);
       })()
     : 0;
 
