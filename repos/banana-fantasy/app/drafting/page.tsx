@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePromos } from '@/hooks/usePromos';
@@ -85,6 +85,8 @@ export default function DraftingPage() {
   const [liveLoading, setLiveLoading] = useState(true);
   const isLive = isStagingMode() && !!user?.walletAddress;
   const [_timers, setTimers] = useState<Record<string, number>>({});
+  // Track peak randomizing progress per draft so the bar NEVER goes backwards
+  const peakProgressRef = useRef<Record<string, number>>({});
   const [exitingDraft, setExitingDraft] = useState<Draft | null>(null);
   const [showNoPasses, setShowNoPasses] = useState(false);
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
@@ -779,22 +781,27 @@ export default function DraftingPage() {
                         </div>
                         <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
                       </div>
-                    ) : live.displayPhase === 'randomizing' ? (
+                    ) : live.displayPhase === 'randomizing' ? (() => {
+                      // Use peak ref so bar NEVER goes backwards
+                      const raw = live.randomizingProgress ?? 0;
+                      const peak = Math.max(peakProgressRef.current[draft.id] || 0, raw);
+                      peakProgressRef.current[draft.id] = peak;
+                      return (
                       <div key="randomizing" className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full"
                             style={{
-                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
-                              background: (live.randomizingProgress ?? 0) >= 0.99
+                              width: `${Math.round(peak * 100)}%`,
+                              background: peak >= 0.99
                                 ? '#4ade80'
                                 : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
                             }}
                           />
                         </div>
                         <span className="text-white/40 text-[10px]">Randomizing...</span>
-                      </div>
-                    ) : live.displayPhase === 'pre-spin-countdown' ? (
+                      </div>);
+                    })() : live.displayPhase === 'pre-spin-countdown' ? (
                       <span className="text-white/50 text-sm">Reveal in {live.countdown}s</span>
                     ) : live.displayPhase === 'draft-starting' ? (
                       <span className="text-white/50 text-sm">
