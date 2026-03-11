@@ -235,8 +235,6 @@ export default function DraftingPage() {
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
           const isFull = playerCount >= 10;
 
-          console.log(`[SyncDebug] ${draft.id.slice(-6)}: pc=${playerCount} started=${hasDraftStarted} full=${isFull} pick#=${info.pickNumber} startTime=${info.draftStartTime} | store: rand=${fresh.randomizingStartedAt} preSpin=${fresh.preSpinStartedAt} phase=${fresh.phase}`);
-
           if (hasDraftStarted) {
             // Draft is actively in progress — compute picks away
             const { turnsUntilUserPick, isUserTurn, pickEndTimestamp } =
@@ -264,7 +262,6 @@ export default function DraftingPage() {
                 return false;
               })();
 
-              console.log(`[SyncDebug] ${draft.id.slice(-6)}: animRunning=${animStillRunning}`);
               if (animStillRunning) {
                 // Animation is playing — save server pick data only
                 draftStore.updateDraft(draft.id, {
@@ -277,7 +274,6 @@ export default function DraftingPage() {
                 });
               } else if (!fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
                 // No animation ever started — start it now so user sees the full sequence
-                console.log(`[SyncDebug] ${draft.id.slice(-6)}: START ANIM (no prev rand/preSpin)`);
                 draftStore.updateDraft(draft.id, {
                   players: 10,
                   randomizingStartedAt: nowMs,
@@ -290,7 +286,6 @@ export default function DraftingPage() {
                 });
               } else {
                 // Animation is done — safe to transition to drafting
-                console.log(`[SyncDebug] ${draft.id.slice(-6)}: ANIM DONE → drafting`);
                 draftStore.updateDraft(draft.id, {
                   status: 'drafting',
                   phase: 'drafting',
@@ -312,13 +307,17 @@ export default function DraftingPage() {
             const patch: Partial<DraftState> = { players: 10 };
 
             if (info.draftStartTime && !fresh.preSpinStartedAt) {
-              // Don't jump to countdown while randomizing bar is still animating
-              const barStillRunning = fresh.randomizingStartedAt && (Date.now() - fresh.randomizingStartedAt) < 15000;
-              console.log(`[SyncDebug] ${draft.id.slice(-6)}: isFull, barRunning=${barStillRunning}, randAt=${fresh.randomizingStartedAt}, draftStart=${info.draftStartTime}`);
-              if (!barStillRunning) {
-                patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
-                patch.randomizingStartedAt = undefined;
-                patch.phase = 'pre-spin';
+              if (fresh.randomizingStartedAt) {
+                // Bar is running — only skip to countdown if 15s elapsed
+                const barStillRunning = (Date.now() - fresh.randomizingStartedAt) < 15000;
+                if (!barStillRunning) {
+                  patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
+                  patch.randomizingStartedAt = undefined;
+                  patch.phase = 'pre-spin';
+                }
+              } else {
+                // Bar hasn't started yet — start it now instead of skipping to countdown
+                patch.randomizingStartedAt = Date.now();
               }
             }
 
@@ -445,7 +444,6 @@ export default function DraftingPage() {
             // LIVE DRAFTS: start the randomizing bar, then force transition after 15s
             if (d.liveWalletAddress) {
               if (!d.randomizingStartedAt) {
-                console.log(`[TickDebug] ${d.id.slice(-6)}: SET randomizingStartedAt=${now}`);
                 draftStore.updateDraft(d.id, { players: 10, randomizingStartedAt: now });
               } else {
                 // Bar fills over 15s — once full, transition to pre-spin countdown
@@ -769,7 +767,7 @@ export default function DraftingPage() {
                   {/* Status */}
                   <div className="w-28 flex-shrink-0 flex items-center justify-center">
                     {live.displayPhase === 'filling' ? (
-                      <div className="flex flex-col items-center gap-1">
+                      <div key="filling" className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700"
@@ -782,10 +780,10 @@ export default function DraftingPage() {
                         <span className="text-xs tabular-nums"><span className="text-white font-semibold">{live.playerCount}</span><span className="text-white/40">/10</span></span>
                       </div>
                     ) : live.displayPhase === 'randomizing' ? (
-                      <div className="flex flex-col items-center gap-1">
+                      <div key="randomizing" className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full transition-all duration-300"
+                            className="h-full rounded-full"
                             style={{
                               width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
                               background: (live.randomizingProgress ?? 0) >= 0.99
