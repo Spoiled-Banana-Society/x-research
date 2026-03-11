@@ -410,10 +410,10 @@ export default function DraftingPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Force re-render every 800ms so render-time helpers show live values
+  // Force re-render for smooth progress bar animation and live countdowns
   const [, setRenderTick] = useState(0);
   useEffect(() => {
-    const interval = setInterval(() => setRenderTick(t => t + 1), 800);
+    const interval = setInterval(() => setRenderTick(t => t + 1), 100);
     return () => clearInterval(interval);
   }, []);
 
@@ -432,12 +432,9 @@ export default function DraftingPage() {
           // Use the higher of simulation vs current players (server may have updated players)
           const count = Math.max(simulated, d.players || 0);
 
-          // Only write if count actually changed (avoids unnecessary writes)
-          if (count !== d.players) {
-            draftStore.updateDraft(d.id, { players: count });
-          }
-
           // Auto-advance: filling → randomizing → pre-spin when count reaches 10
+          // (Check FIRST so we do a single atomic update with players:10 + randomizingStartedAt,
+          //  avoiding a flash where "10/10 filling" shows before the randomizing bar)
           if (count >= 10 && !d.preSpinStartedAt) {
             // LIVE DRAFTS: start the randomizing bar, then force transition after 15s
             if (d.liveWalletAddress) {
@@ -475,6 +472,11 @@ export default function DraftingPage() {
                 draftType: 'pro', type: 'pro',
               });
             }
+          }
+
+          // Only write player count if < 10 (the >= 10 case is handled above atomically)
+          if (count < 10 && count !== d.players) {
+            draftStore.updateDraft(d.id, { players: count });
           }
           continue;
         }
@@ -569,7 +571,9 @@ export default function DraftingPage() {
         return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
       }
       const t = Math.min(1, elapsed / 15000);
-      const progress = 0.99 * (1 - Math.pow(1 - t, 3)); // cubic ease-out, cap 99%
+      // Ease-out curve that doesn't look "full" until close to 15s
+      // t^0.6 reaches ~90% at 12s, ~95% at 13.5s, 99% at 15s
+      const progress = 0.99 * Math.pow(t, 0.6);
       return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
     }
 
