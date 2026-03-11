@@ -4,9 +4,11 @@ import React, { useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useSendTransaction, useWallets } from '@privy-io/react-auth';
+import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
-import { useCollectionStats, useListings, useMyNfts } from '@/hooks/useMarketplace';
+import { useCollectionStats, useListings, useMyNfts, useNftOffers, useCollectionNfts, useActivityHistory, useMyNftOffers, logActivity, notifySeller } from '@/hooks/useMarketplace';
+import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
+import type { Address } from 'viem';
 import type { MarketplaceTeam } from '@/lib/opensea';
 
 function CardSkeleton() {
@@ -43,11 +45,22 @@ function StatSkeleton() {
   );
 }
 
+function SellTabOfferBadge({ tokenId }: { tokenId: string }) {
+  const { bestOffer } = useNftOffers(tokenId);
+  if (!bestOffer) return null;
+  return (
+    <span className="text-xs text-banana font-mono font-medium">
+      Best offer: ${bestOffer.amount.toFixed(2)}
+    </span>
+  );
+}
+
 export default function MarketplacePage() {
   const router = useRouter();
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
   const { wallets, ready: walletsReady } = useWallets();
   const { sendTransaction } = useSendTransaction();
+  const { fundWallet } = useFundWallet();
 
   const selectedWallet = useMemo(() => {
     if (wallets.length === 0) return null;
@@ -57,7 +70,8 @@ export default function MarketplacePage() {
     return wallets[0];
   }, [walletAddress, wallets]);
 
-  const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
+  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'activity'>('buy');
+  const [viewFilter, setViewFilter] = useState<'listed' | 'all' | 'top' | 'jackpot' | 'hof'>('listed');
   const [hofFilter, setHofFilter] = useState(false);
   const [jackpotFilter, setJackpotFilter] = useState(false);
   const [rosterFilter, setRosterFilter] = useState('');
@@ -71,6 +85,8 @@ export default function MarketplacePage() {
   const [buyStep, setBuyStep] = useState<'confirm' | 'processing' | 'complete'>('confirm');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'usdc'>('card');
   const [txError, setTxError] = useState<string | null>(null);
+  const [cancelConfirmTeam, setCancelConfirmTeam] = useState<MarketplaceTeam | null>(null);
+  const [cardFlowStep, setCardFlowStep] = useState<'idle' | 'funding' | 'waiting' | 'buying'>('idle');
 
   // Real data hooks
   const { data: collectionStats, isLoading: statsLoading } = useCollectionStats();
@@ -94,18 +110,71 @@ export default function MarketplacePage() {
   } = useListings(currentSort.sort, currentSort.direction);
 
   const {
+    data: allNfts,
+    isLoading: allNftsLoading,
+    hasMore: allNftsHasMore,
+    loadMore: loadMoreAllNfts,
+    refetch: refetchAllNfts,
+  } = useCollectionNfts();
+
+  const {
     data: myNfts,
     isLoading: myNftsLoading,
     refetch: refetchMyNfts,
   } = useMyNfts(isLoggedIn ? walletAddress : null);
 
-  // Apply client-side filters (HOF/Jackpot/roster) and sort
-  const filteredTeams = listings.filter(team => {
-    if (hofFilter && !team.isHof) return false;
-    if (jackpotFilter && !team.isJackpot) return false;
+  const {
+    activities,
+    isLoading: activityLoading,
+    hasMore: activityHasMore,
+    loadMore: loadMoreActivity,
+    refetch: refetchActivity,
+  } = useActivityHistory(isLoggedIn ? walletAddress : null);
+
+  const {
+    allOffers: myNftOffers,
+    isLoading: myNftOffersLoading,
+  } = useMyNftOffers(isLoggedIn ? walletAddress : null, myNfts);
+
+  // Enrich listings with current user's profile (backend may not have it yet)
+  const enrichedListings = useMemo(() => {
+    if (!walletAddress || !user) return listings;
+    return listings.map(team => {
+      if (team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase()) {
+        return {
+          ...team,
+          owner: user.username || team.owner,
+          ownerPfp: user.profilePicture || team.ownerPfp,
+        };
+      }
+      return team;
+    });
+  }, [listings, walletAddress, user]);
+
+  // Pick data source based on view filter
+  const baseTeams = useMemo(() => {
+    if (viewFilter === 'all') return allNfts;
+    if (viewFilter === 'jackpot') return viewFilter === 'jackpot' ? enrichedListings.concat(allNfts.filter(n => !n.orderHash)) : enrichedListings;
+    if (viewFilter === 'hof') return enrichedListings.concat(allNfts.filter(n => !n.orderHash));
+    if (viewFilter === 'top') return enrichedListings.concat(allNfts.filter(n => !n.orderHash));
+    return enrichedListings; // 'listed'
+  }, [viewFilter, enrichedListings, allNfts]);
+
+  // Apply client-side filters (roster search, viewFilter type, sort)
+  const filteredTeams = baseTeams.filter(team => {
+    // View filter type restrictions
+    if (viewFilter === 'jackpot' && !team.isJackpot) return false;
+    if (viewFilter === 'hof' && !team.isHof) return false;
+    if (viewFilter === 'top' && team.points <= 0) return false;
+
+    // Legacy pill filters (only apply when on 'listed' or 'all' views)
+    if (viewFilter === 'listed' || viewFilter === 'all') {
+      if (hofFilter && !team.isHof) return false;
+      if (jackpotFilter && !team.isJackpot) return false;
+    }
+
     if (rosterFilter) {
       const q = rosterFilter.trim().replace(/^#/, '');
-      // Match token ID or name number if query is numeric, otherwise search roster
       if (/^\d+$/.test(q)) {
         const matchesTokenId = team.tokenId === q;
         const matchesName = team.name.includes(q);
@@ -118,18 +187,30 @@ export default function MarketplacePage() {
     }
     return true;
   }).sort((a, b) => {
+    // Top teams view defaults to points desc
+    if (viewFilter === 'top') return b.points - a.points;
     switch (sortBy) {
-      case 'price-low': return (a.price || 0) - (b.price || 0);
+      case 'price-low': return (a.price || 9999) - (b.price || 9999);
       case 'price-high': return (b.price || 0) - (a.price || 0);
-      case 'rank': return a.rank - b.rank;
+      case 'rank': return (a.rank || 9999) - (b.rank || 9999);
       case 'points': return b.points - a.points;
       case 'playoffs': return b.playoffOdds - a.playoffOdds;
       default: return 0;
     }
   });
 
+  // Deduplicate by tokenId (in case listed teams appear in both sources)
+  const deduplicatedTeams = useMemo(() => {
+    const seen = new Set<string>();
+    return filteredTeams.filter(team => {
+      if (seen.has(team.tokenId)) return false;
+      seen.add(team.tokenId);
+      return true;
+    });
+  }, [filteredTeams]);
+
   // Top performing listings for leaderboard section
-  const leaderboardTeams = [...listings]
+  const leaderboardTeams = [...enrichedListings]
     .filter(t => t.price !== null)
     .sort((a, b) => (b.price || 0) - (a.price || 0))
     .slice(0, 5);
@@ -152,44 +233,138 @@ export default function MarketplacePage() {
     setShowSellModal(true);
   };
 
+  const executeBuy = useCallback(async () => {
+    if (!selectedTeam?.orderHash || !selectedTeam?.protocolAddress || !walletAddress) return;
+
+    const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
+    const tx = await getFulfillmentTx(
+      selectedTeam.orderHash,
+      walletAddress,
+      selectedTeam.protocolAddress,
+    );
+
+    const receipt = await sendTransaction(
+      { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
+      { sponsor: true, uiOptions: { description: 'Purchase NFT — gas fees covered by SBS' } },
+    );
+
+    const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
+    console.log('[Marketplace] Buy tx:', txHash);
+
+    if (selectedTeam.ownerAddress) {
+      notifySeller({
+        sellerWallet: selectedTeam.ownerAddress,
+        tokenId: selectedTeam.tokenId,
+        teamName: selectedTeam.name,
+        price: selectedTeam.price || 0,
+        buyerWallet: walletAddress,
+      });
+    }
+
+    logActivity({
+      type: 'buy',
+      walletAddress,
+      tokenId: selectedTeam.tokenId,
+      teamName: selectedTeam.name,
+      price: selectedTeam.price,
+      counterparty: selectedTeam.ownerAddress || null,
+      orderHash: selectedTeam.orderHash || null,
+      txHash: txHash ? String(txHash) : null,
+    });
+
+    return txHash;
+  }, [selectedTeam, walletAddress, sendTransaction]);
+
   const handleBuy = useCallback(async () => {
     if (!selectedTeam?.orderHash || !selectedTeam?.protocolAddress || !walletAddress) return;
-    setBuyStep('processing');
-    setTxError(null);
+    const price = selectedTeam.price || 0;
 
-    try {
-      const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
+    if (paymentMethod === 'usdc') {
+      // Check USDC balance before proceeding
+      setBuyStep('processing');
+      setTxError(null);
+      try {
+        const { checkUsdcBalance } = await import('@/lib/marketplace/buy');
+        const { sufficient, balance } = await checkUsdcBalance(walletAddress, price);
+        if (!sufficient) {
+          setTxError(`Insufficient balance. You have $${balance.toFixed(2)} but need $${price.toFixed(2)}.`);
+          setBuyStep('confirm');
+          return;
+        }
 
-      // Get encoded Seaport calldata from our server-side API route
-      const tx = await getFulfillmentTx(
-        selectedTeam.orderHash,
-        walletAddress,
-        selectedTeam.protocolAddress,
-      );
+        await executeBuy();
+        setBuyStep('complete');
 
-      // Send via Privy with gas sponsorship — company pays gas
-      const receipt = await sendTransaction(
-        { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
-        { sponsor: true },
-      );
+        setTimeout(() => {
+          setShowBuyModal(false);
+          setSuccessType('buy');
+          setShowSuccessModal(true);
+          refetchListings();
+          refetchMyNfts();
+        }, 1500);
+      } catch (err) {
+        console.error('[Marketplace] Buy failed:', err);
+        setTxError(err instanceof Error ? err.message : 'Transaction failed');
+        setBuyStep('confirm');
+      }
+    } else {
+      // Card flow via MoonPay
+      setTxError(null);
+      setCardFlowStep('funding');
+      setBuyStep('processing');
 
-      const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
-      console.log('[Marketplace] Buy tx:', txHash);
-      setBuyStep('complete');
+      try {
+        const fundingAmount = String(price);
+        const result = await fundWallet({
+          address: walletAddress,
+          options: {
+            chain: BASE_SEPOLIA,
+            amount: fundingAmount,
+            asset: 'USDC',
+            card: { preferredProvider: 'moonpay' },
+          },
+        });
 
-      setTimeout(() => {
-        setShowBuyModal(false);
-        setSuccessType('buy');
-        setShowSuccessModal(true);
-        refetchListings();
-        refetchMyNfts();
-      }, 1500);
-    } catch (err) {
-      console.error('[Marketplace] Buy failed:', err);
-      setTxError(err instanceof Error ? err.message : 'Transaction failed');
-      setBuyStep('confirm');
+        if (result.status === 'cancelled') {
+          setCardFlowStep('idle');
+          setBuyStep('confirm');
+          return;
+        }
+
+        // Poll for USDC arrival
+        setCardFlowStep('waiting');
+        const requiredUsdc = BigInt(Math.ceil(price * 1e6));
+        const startTime = Date.now();
+        const maxWait = 300_000;
+
+        while (Date.now() - startTime < maxWait) {
+          const balance = await getUsdcBalance(walletAddress as Address);
+          if (balance >= requiredUsdc) break;
+          await new Promise(r => setTimeout(r, 3000));
+        }
+
+        // Execute Seaport buy
+        setCardFlowStep('buying');
+        await executeBuy();
+
+        setBuyStep('complete');
+        setCardFlowStep('idle');
+
+        setTimeout(() => {
+          setShowBuyModal(false);
+          setSuccessType('buy');
+          setShowSuccessModal(true);
+          refetchListings();
+          refetchMyNfts();
+        }, 1500);
+      } catch (err) {
+        console.error('[Marketplace] Card buy failed:', err);
+        setTxError(err instanceof Error ? err.message : 'Payment failed');
+        setBuyStep('confirm');
+        setCardFlowStep('idle');
+      }
     }
-  }, [selectedTeam, walletAddress, sendTransaction, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, paymentMethod, executeBuy, fundWallet, refetchListings, refetchMyNfts]);
 
   const handleList = useCallback(async () => {
     if (!selectedTeam || !walletAddress || !listPrice) return;
@@ -198,6 +373,7 @@ export default function MarketplacePage() {
     try {
       const { createListing } = await import('@/lib/marketplace/sell');
       const { ethers } = await import('ethers');
+      const { BBB4_CONTRACT } = await import('@/lib/opensea');
 
       if (!selectedWallet) throw new Error('No wallet connected');
       const ethereum = await selectedWallet.getEthereumProvider();
@@ -205,6 +381,37 @@ export default function MarketplacePage() {
       if (parseInt(currentChainHex, 16) !== 8453) {
         await selectedWallet.switchChain(8453);
       }
+
+      // Sponsor the one-time NFT approval via Privy if not already approved
+      const OPENSEA_CONDUIT = '0x1e0049783f008a0085193e00003d00cd54003c71';
+      const iface = new ethers.Interface([
+        'function isApprovedForAll(address owner, address operator) view returns (bool)',
+        'function setApprovalForAll(address operator, bool approved)',
+      ]);
+
+      // Check if already approved
+      const checkData = iface.encodeFunctionData('isApprovedForAll', [walletAddress, OPENSEA_CONDUIT]);
+      const checkRes = await fetch('https://mainnet.base.org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'eth_call',
+          params: [{ to: BBB4_CONTRACT, data: checkData }, 'latest'],
+        }),
+      });
+      const checkResult = await checkRes.json();
+      const isApproved = checkResult?.result && parseInt(checkResult.result, 16) === 1;
+
+      if (!isApproved) {
+        // Send sponsored approval tx
+        const approvalData = iface.encodeFunctionData('setApprovalForAll', [OPENSEA_CONDUIT, true]);
+        const receipt = await sendTransaction(
+          { to: BBB4_CONTRACT as `0x${string}`, data: approvalData as `0x${string}`, chainId: 8453 },
+          { sponsor: true, uiOptions: { description: 'Approve marketplace to list your NFTs — no cost to you, fees covered by SBS' } },
+        );
+        console.log('[Marketplace] Approval tx:', receipt.transactionHash);
+      }
+
       const provider = new ethers.BrowserProvider(ethereum);
       const result = await createListing(
         selectedTeam.tokenId,
@@ -214,6 +421,16 @@ export default function MarketplacePage() {
       );
 
       console.log('[Marketplace] Listed with orderHash:', result.orderHash);
+
+      logActivity({
+        type: 'list',
+        walletAddress,
+        tokenId: selectedTeam.tokenId,
+        teamName: selectedTeam.name,
+        price: parseFloat(listPrice),
+        orderHash: result.orderHash || null,
+      });
+
       setShowSellModal(false);
       setSuccessType('list');
       setShowSuccessModal(true);
@@ -223,7 +440,59 @@ export default function MarketplacePage() {
       console.error('[Marketplace] List failed:', err);
       setTxError(err instanceof Error ? err.message : 'Listing failed');
     }
-  }, [selectedTeam, walletAddress, listPrice, selectedWallet, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, listPrice, selectedWallet, sendTransaction, refetchListings, refetchMyNfts]);
+
+  const [cancellingTokenId, setCancellingTokenId] = useState<string | null>(null);
+
+  const executeCancel = useCallback(async (team: MarketplaceTeam) => {
+    if (!team.orderHash || !walletAddress) return;
+    setCancellingTokenId(team.tokenId);
+    setTxError(null);
+
+    try {
+      const res = await fetch('/api/marketplace/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderHash: team.orderHash }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Failed to prepare cancel transaction' }));
+        throw new Error(errData.error || `Cancel failed: ${res.status}`);
+      }
+
+      const tx = await res.json();
+
+      await sendTransaction(
+        { to: tx.to as `0x${string}`, data: tx.data as `0x${string}`, chainId: 8453 },
+        { sponsor: true, uiOptions: { description: 'Cancel your listing — fees covered by SBS' } },
+      );
+
+      console.log('[Marketplace] Cancelled listing for token:', team.tokenId);
+
+      logActivity({
+        type: 'cancel',
+        walletAddress,
+        tokenId: team.tokenId,
+        teamName: team.name,
+        price: team.price,
+        orderHash: team.orderHash || null,
+      });
+
+      refetchListings();
+      refetchMyNfts();
+    } catch (err) {
+      console.error('[Marketplace] Cancel failed:', err);
+      setTxError(err instanceof Error ? err.message : 'Failed to cancel listing');
+    } finally {
+      setCancellingTokenId(null);
+      setCancelConfirmTeam(null);
+    }
+  }, [walletAddress, sendTransaction, refetchListings, refetchMyNfts]);
+
+  const handleCancel = useCallback((team: MarketplaceTeam) => {
+    setCancelConfirmTeam(team);
+  }, []);
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 py-8">
@@ -261,11 +530,27 @@ export default function MarketplacePage() {
             >
               Sell My Teams
             </button>
+            <button
+              onClick={() => {
+                if (!isLoggedIn) {
+                  setShowLoginModal(true);
+                  return;
+                }
+                setActiveTab('activity');
+              }}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'activity'
+                  ? 'bg-banana text-black'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Activity
+            </button>
           </div>
         </div>
       </div>
 
-      {activeTab === 'buy' ? (
+      {activeTab === 'buy' && (
         <>
           {/* Stats Bar */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -358,34 +643,34 @@ export default function MarketplacePage() {
             )}
           </div>
 
-          {/* Filters */}
+          {/* View Filter Toggles + Search */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
             <div className="flex flex-wrap items-center gap-3">
-              {/* Badge Filters */}
-              <button
-                onClick={() => setHofFilter(!hofFilter)}
-                className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all flex items-center gap-2 ${
-                  hofFilter
-                    ? 'bg-hof/20 border-hof text-hof'
-                    : 'border-hof/50 text-hof hover:bg-hof/10'
-                }`}
-              >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-                HOF Only
-              </button>
-              <button
-                onClick={() => setJackpotFilter(!jackpotFilter)}
-                className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all flex items-center gap-2 ${
-                  jackpotFilter
-                    ? 'bg-error/20 border-error text-error'
-                    : 'border-error/50 text-error hover:bg-error/10'
-                }`}
-              >
-                <span className="font-bold">JP</span>
-                Jackpot Only
-              </button>
+              {/* View Toggle Pills */}
+              <div className="flex gap-1 bg-bg-secondary p-1 rounded-xl border border-bg-tertiary">
+                {([
+                  { key: 'listed', label: 'Listed' },
+                  { key: 'all', label: 'All Teams' },
+                  { key: 'top', label: 'Top Teams' },
+                  { key: 'jackpot', label: 'Jackpot' },
+                  { key: 'hof', label: 'HOF' },
+                ] as const).map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setViewFilter(f.key)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      viewFilter === f.key
+                        ? f.key === 'jackpot' ? 'bg-error text-white'
+                        : f.key === 'hof' ? 'bg-hof text-white'
+                        : f.key === 'top' ? 'bg-success text-white'
+                        : 'bg-banana text-black'
+                        : 'text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
 
               {/* Roster/Position Search */}
               <div className="relative">
@@ -396,8 +681,16 @@ export default function MarketplacePage() {
                   type="text"
                   value={rosterFilter}
                   onChange={(e) => setRosterFilter(e.target.value)}
-                  placeholder="Search by team # or roster"
-                  className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-56"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && rosterFilter.trim()) {
+                      const q = rosterFilter.trim().replace(/^#/, '');
+                      if (/^\d+$/.test(q)) {
+                        router.push(`/marketplace/${q}`);
+                      }
+                    }
+                  }}
+                  placeholder="Search by team # or roster (Enter to look up any team)"
+                  className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-72"
                 />
                 {rosterFilter && (
                   <button
@@ -428,23 +721,31 @@ export default function MarketplacePage() {
           </div>
 
           {/* Teams Grid */}
-          {listingsLoading ? (
+          {(viewFilter === 'all' || viewFilter === 'top' || viewFilter === 'jackpot' || viewFilter === 'hof' ? allNftsLoading : listingsLoading) ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
               {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
             </div>
-          ) : filteredTeams.length === 0 ? (
+          ) : deduplicatedTeams.length === 0 ? (
             <div className="text-center py-16 mb-12">
               <div className="text-4xl mb-4">🍌</div>
-              <h3 className="text-text-primary font-semibold text-lg mb-2">No Listings Found</h3>
+              <h3 className="text-text-primary font-semibold text-lg mb-2">
+                {viewFilter === 'listed' ? 'No Listings Found' : 'No Teams Found'}
+              </h3>
               <p className="text-text-secondary text-sm">
-                {hofFilter || jackpotFilter
-                  ? 'No teams match your filters. Try removing some filters.'
+                {viewFilter === 'jackpot'
+                  ? 'No Jackpot teams found. These are rare — only 1 per 100 drafts!'
+                  : viewFilter === 'hof'
+                  ? 'No Hall of Fame teams found in this view.'
+                  : viewFilter === 'top'
+                  ? 'No top performing teams found yet.'
+                  : rosterFilter
+                  ? 'No teams match your search. Try entering a team # and pressing Enter to look up any team.'
                   : 'No BBB4 teams are currently listed for sale. Check back later!'}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
-              {filteredTeams.map((team) => (
+              {deduplicatedTeams.map((team) => (
                 <div
                   key={`${team.id}-${team.orderHash}`}
                   onClick={() => router.push(`/marketplace/${team.tokenId}`)}
@@ -467,8 +768,19 @@ export default function MarketplacePage() {
                         className="rounded-2xl shadow-lg"
                       />
                     ) : (
-                      <div className={`w-32 h-40 rounded-2xl bg-gradient-to-br ${team.color} flex items-center justify-center shadow-lg`}>
-                        <span className="text-5xl">🍌</span>
+                      <div className="flex items-center justify-center">
+                        <svg width="160" height="100" viewBox="0 0 160 100" className="drop-shadow-lg">
+                          <defs>
+                            <linearGradient id={`passGrad-${team.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="#FBBF24"/>
+                              <stop offset="100%" stopColor="#D97706"/>
+                            </linearGradient>
+                          </defs>
+                          <rect x="0" y="0" width="160" height="100" rx="12" fill={`url(#passGrad-${team.id})`}/>
+                          <circle cx="0" cy="50" r="10" fill="#1a1a2e"/>
+                          <circle cx="160" cy="50" r="10" fill="#1a1a2e"/>
+                          <text x="80" y="55" textAnchor="middle" fill="#1C1C1E" fontSize="13" fontWeight="bold" fontFamily="system-ui">Banana Best Ball IV</text>
+                        </svg>
                       </div>
                     )}
 
@@ -539,20 +851,68 @@ export default function MarketplacePage() {
                     {/* Footer */}
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-text-muted text-[10px] mb-0.5">Price</p>
-                        <p className="text-text-primary font-mono text-lg font-bold">
-                          ${team.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </p>
+                        {team.price != null ? (
+                          <>
+                            <p className="text-text-muted text-[10px] mb-0.5">Price</p>
+                            <p className="text-text-primary font-mono text-lg font-bold">
+                              ${team.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-text-muted text-xs">Not listed</p>
+                        )}
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openBuyModal(team);
-                        }}
-                        className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
-                      >
-                        Buy Now
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {walletAddress && team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase() ? (
+                          team.price != null ? (
+                            <span className="text-text-muted text-xs">You</span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setActiveTab('sell');
+                              }}
+                              className="px-5 py-2 bg-banana text-black text-xs font-semibold rounded-xl hover:brightness-110 transition-all"
+                            >
+                              List
+                            </button>
+                          )
+                        ) : team.price != null ? (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                router.push(`/marketplace/${team.tokenId}?offer=true`);
+                              }}
+                              className="text-banana text-xs font-medium hover:underline"
+                            >
+                              Make Offer
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBuyModal(team);
+                              }}
+                              className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
+                            >
+                              Buy Now
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              router.push(`/marketplace/${team.tokenId}?offer=true`);
+                            }}
+                            className="px-5 py-2.5 border border-banana text-banana text-sm font-semibold rounded-xl hover:bg-banana/10 transition-all"
+                          >
+                            Make Offer
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -561,13 +921,14 @@ export default function MarketplacePage() {
           )}
 
           {/* Load More */}
-          {hasMore && !listingsLoading && (
+          {((viewFilter === 'listed' && hasMore && !listingsLoading) ||
+            (viewFilter !== 'listed' && allNftsHasMore && !allNftsLoading)) && (
             <div className="text-center mb-12">
               <button
-                onClick={loadMore}
+                onClick={viewFilter === 'listed' ? loadMore : loadMoreAllNfts}
                 className="px-8 py-3 bg-bg-secondary border border-bg-tertiary text-text-primary rounded-xl hover:bg-bg-tertiary transition-colors text-sm font-medium"
               >
-                Load More Listings
+                Load More
               </button>
             </div>
           )}
@@ -609,9 +970,18 @@ export default function MarketplacePage() {
                       {team.imageUrl ? (
                         <Image src={team.imageUrl} alt={team.name} width={40} height={40} className="rounded-xl" />
                       ) : (
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${team.color} flex items-center justify-center`}>
-                          <span className="text-lg">🍌</span>
-                        </div>
+                        <svg width="40" height="28" viewBox="0 0 88 56" className="flex-shrink-0">
+                          <defs>
+                            <linearGradient id={`lbGrad-${team.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="#FBBF24"/>
+                              <stop offset="100%" stopColor="#D97706"/>
+                            </linearGradient>
+                          </defs>
+                          <rect x="0" y="0" width="88" height="56" rx="6" fill={`url(#lbGrad-${team.id})`}/>
+                          <circle cx="0" cy="28" r="6" fill="#1a1a2e"/>
+                          <circle cx="88" cy="28" r="6" fill="#1a1a2e"/>
+                          <text x="44" y="38" textAnchor="middle" fill="#1C1C1E" fontSize="14" fontWeight="bold" fontFamily="system-ui">BBB IV</text>
+                        </svg>
                       )}
                       <div>
                         <h4 className="text-text-primary font-medium text-sm font-mono">{team.name}</h4>
@@ -636,12 +1006,24 @@ export default function MarketplacePage() {
                       ${team.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </span>
                     <div>
-                      <button
-                        onClick={() => openBuyModal(team)}
-                        className="px-4 py-1.5 bg-banana text-black text-xs font-semibold rounded-lg hover:brightness-110 transition-all"
-                      >
-                        Buy Now
-                      </button>
+                      {walletAddress && team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase() ? (
+                        <span className="text-text-muted text-xs">Listed</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => router.push(`/marketplace/${team.tokenId}?offer=true`)}
+                            className="px-4 py-1.5 border border-banana text-banana text-xs font-semibold rounded-lg hover:bg-banana/10 transition-all"
+                          >
+                            Make Offer
+                          </button>
+                          <button
+                            onClick={() => openBuyModal(team)}
+                            className="px-4 py-1.5 bg-banana text-black text-xs font-semibold rounded-lg hover:brightness-110 transition-all"
+                          >
+                            Buy Now
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -676,13 +1058,14 @@ export default function MarketplacePage() {
                   <span className="text-error font-bold text-sm">JP</span>
                 </div>
                 <h4 className="text-text-primary font-medium mb-2">Get Jackpot Access</h4>
-                <p className="text-text-secondary text-sm">Missed the 1% Jackpot draw? Buy one here and skip straight to finals.</p>
+                <p className="text-text-secondary text-sm">Buy a Jackpot team or unused Jackpot pass. Win the league and you skip straight to finals.</p>
               </div>
             </div>
           </div>
         </>
-      ) : (
-        /* Sell Tab */
+      )}
+
+      {activeTab === 'sell' && (
         <div>
           <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6 mb-8">
             <h3 className="text-lg font-semibold text-text-primary mb-2">Sell Your Teams</h3>
@@ -737,16 +1120,38 @@ export default function MarketplacePage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => openSellModal(team)}
-                        className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-banana text-black hover:brightness-110"
-                      >
-                        List for Sale
-                      </button>
+                    <div className="flex items-center gap-3">
+                      <SellTabOfferBadge tokenId={team.tokenId} />
+                      {team.orderHash ? (
+                        <>
+                          <span className="text-sm text-green-400 font-medium">
+                            Listed at ${team.price?.toFixed(2)}
+                          </span>
+                          <button
+                            onClick={() => handleCancel(team)}
+                            disabled={cancellingTokenId === team.tokenId}
+                            className="px-4 py-2 rounded-xl text-sm font-semibold transition-all border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                          >
+                            {cancellingTokenId === team.tokenId ? 'Cancelling...' : 'Delist'}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => openSellModal(team)}
+                          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-banana text-black hover:brightness-110"
+                        >
+                          List for Sale
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {txError && !showBuyModal && !showSellModal && (
+              <div className="mt-4 p-3 bg-error/10 border border-error/30 rounded-xl">
+                <p className="text-error text-sm">{txError}</p>
               </div>
             )}
 
@@ -781,7 +1186,7 @@ export default function MarketplacePage() {
                 </div>
                 <div>
                   <h4 className="text-text-primary font-medium text-sm">Highlight your perks</h4>
-                  <p className="text-text-secondary text-xs">Jackpot teams skip to finals. HOF teams compete for bonus prizes. Buyers pay more for these.</p>
+                  <p className="text-text-secondary text-xs">Jackpot teams that win their league skip to finals. HOF teams compete for bonus prizes. Buyers pay more for these.</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -789,11 +1194,224 @@ export default function MarketplacePage() {
                   <span className="text-banana text-xs font-bold">3</span>
                 </div>
                 <div>
-                  <h4 className="text-text-primary font-medium text-sm">0% platform fees</h4>
-                  <p className="text-text-secondary text-xs">We don&apos;t take any cut. You keep 100% of your sale price.</p>
+                  <h4 className="text-text-primary font-medium text-sm">Low fees</h4>
+                  <p className="text-text-secondary text-xs">Only a 1% OpenSea fee. No hidden charges — SBS takes zero cut.</p>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'activity' && (
+        <div className="space-y-8">
+          {/* Active Listings */}
+          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
+            <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+              Your Active Listings
+              {myNfts.filter(n => n.orderHash).length > 0 && (
+                <span className="text-xs bg-banana/20 text-banana px-2 py-0.5 rounded-full font-normal">
+                  {myNfts.filter(n => n.orderHash).length}
+                </span>
+              )}
+            </h3>
+
+            {myNftsLoading ? (
+              <div className="space-y-3">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="h-16 bg-bg-tertiary rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : myNfts.filter(n => n.orderHash).length === 0 ? (
+              <p className="text-text-muted text-sm py-4 text-center">No active listings</p>
+            ) : (
+              <div className="space-y-3">
+                {myNfts.filter(n => n.orderHash).map(team => (
+                  <div
+                    key={`listing-${team.id}`}
+                    className={`flex items-center justify-between p-4 rounded-xl border ${
+                      team.isHof ? 'border-hof/30 bg-hof/5' : 'border-bg-tertiary bg-bg-primary'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {team.imageUrl ? (
+                        <Image src={team.imageUrl} alt={team.name} width={48} height={48} className="rounded-xl" />
+                      ) : (
+                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${team.color} flex items-center justify-center`}>
+                          <span className="text-lg">🍌</span>
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-text-primary font-semibold font-mono text-sm">{team.name}</h4>
+                          {team.isJackpot && <span className="px-2 py-0.5 bg-error/20 text-error text-[9px] font-bold rounded">JP</span>}
+                          {team.isHof && <span className="px-2 py-0.5 bg-hof/20 text-hof text-[9px] font-bold rounded">HOF</span>}
+                        </div>
+                        <p className="text-text-muted text-xs mt-0.5">
+                          Listed at <span className="text-banana font-mono font-semibold">${team.price?.toFixed(2)}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/marketplace/${team.tokenId}`}
+                        className="text-text-secondary text-xs hover:text-text-primary transition-colors"
+                      >
+                        View
+                      </Link>
+                      <button
+                        onClick={() => handleCancel(team)}
+                        disabled={cancellingTokenId === team.tokenId}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold transition-all border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        {cancellingTokenId === team.tokenId ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active Offers on Your NFTs */}
+          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
+            <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+              Offers on Your Teams
+              {myNftOffers.length > 0 && (
+                <span className="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full font-normal">
+                  {myNftOffers.length}
+                </span>
+              )}
+            </h3>
+
+            {myNftOffersLoading ? (
+              <div className="space-y-3">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="h-16 bg-bg-tertiary rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : myNftOffers.length === 0 ? (
+              <p className="text-text-muted text-sm py-4 text-center">No active offers on your teams</p>
+            ) : (
+              <div className="space-y-3">
+                {myNftOffers.map((offer, i) => (
+                  <div
+                    key={`offer-${offer.orderHash}`}
+                    className={`flex items-center justify-between p-4 rounded-xl border ${
+                      i === 0 ? 'border-banana/20 bg-banana/5' : 'border-bg-tertiary bg-bg-primary'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {offer.imageUrl ? (
+                        <Image src={offer.imageUrl} alt={offer.teamName} width={48} height={48} className="rounded-xl" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-bg-tertiary flex items-center justify-center">
+                          <span className="text-lg">🍌</span>
+                        </div>
+                      )}
+                      <div>
+                        <h4 className="text-text-primary font-semibold font-mono text-sm">{offer.teamName}</h4>
+                        <p className="text-text-muted text-xs mt-0.5">
+                          <span className="text-banana font-mono font-semibold">${offer.amount.toFixed(2)}</span>
+                          {' '}from {offer.offererName}
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      href={`/marketplace/${offer.tokenId}`}
+                      className="px-4 py-2 bg-success text-white text-xs font-semibold rounded-xl hover:brightness-110 transition-all"
+                    >
+                      Review
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Transaction History */}
+          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
+            <h3 className="text-lg font-semibold text-text-primary mb-4">Transaction History</h3>
+
+            {activityLoading && activities.length === 0 ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-14 bg-bg-tertiary rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : activities.length === 0 ? (
+              <p className="text-text-muted text-sm py-8 text-center">No transaction history yet. Buy, sell, or list a team to get started.</p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {activities.map(activity => {
+                    const typeConfig: Record<string, { label: string; icon: string; color: string }> = {
+                      buy: { label: 'Bought', icon: '🛒', color: 'text-success' },
+                      sell: { label: 'Sold', icon: '💵', color: 'text-banana' },
+                      list: { label: 'Listed', icon: '📋', color: 'text-pro' },
+                      cancel: { label: 'Cancelled', icon: '❌', color: 'text-error' },
+                      offer_made: { label: 'Offer Made', icon: '💰', color: 'text-banana' },
+                      offer_accepted: { label: 'Sold (Offer)', icon: '✅', color: 'text-success' },
+                    };
+                    const config = typeConfig[activity.type] || { label: activity.type, icon: '📝', color: 'text-text-secondary' };
+
+                    const timeAgo = (() => {
+                      const diff = Date.now() - new Date(activity.timestamp).getTime();
+                      const mins = Math.floor(diff / 60000);
+                      if (mins < 1) return 'Just now';
+                      if (mins < 60) return `${mins}m ago`;
+                      const hrs = Math.floor(mins / 60);
+                      if (hrs < 24) return `${hrs}h ago`;
+                      const days = Math.floor(hrs / 24);
+                      if (days < 7) return `${days}d ago`;
+                      return new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    })();
+
+                    return (
+                      <Link
+                        key={activity.id}
+                        href={`/marketplace/${activity.tokenId}`}
+                        className="flex items-center justify-between p-3 rounded-xl bg-bg-primary border border-bg-tertiary hover:bg-bg-tertiary/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-bg-tertiary flex items-center justify-center text-base">
+                            {config.icon}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-semibold ${config.color}`}>{config.label}</span>
+                              <span className="text-text-primary text-sm font-mono">{activity.teamName}</span>
+                            </div>
+                            {activity.counterparty && (
+                              <p className="text-text-muted text-[11px]">
+                                {activity.type === 'buy' ? 'from' : 'to'} {activity.counterparty.slice(0, 6)}...{activity.counterparty.slice(-4)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {activity.price != null && (
+                            <p className="text-text-primary font-mono text-sm font-medium">${activity.price.toFixed(2)}</p>
+                          )}
+                          <p className="text-text-muted text-[10px]">{timeAgo}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                {activityHasMore && (
+                  <div className="text-center mt-4">
+                    <button
+                      onClick={loadMoreActivity}
+                      className="px-6 py-2 bg-bg-primary border border-bg-tertiary text-text-primary rounded-xl hover:bg-bg-tertiary transition-colors text-sm font-medium"
+                    >
+                      Load More
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -907,7 +1525,7 @@ export default function MarketplacePage() {
                         <span className={`text-sm font-medium ${paymentMethod === 'card' ? 'text-text-primary' : 'text-text-secondary'}`}>
                           Card
                         </span>
-                        <p className="text-text-muted text-[10px] mt-1">Powered by Coinbase</p>
+                        <p className="text-text-muted text-[10px] mt-1">Powered by MoonPay</p>
                       </button>
                       <button
                         onClick={() => setPaymentMethod('usdc')}
@@ -993,7 +1611,7 @@ export default function MarketplacePage() {
                   </button>
                   <p className="text-center text-text-muted text-xs mt-3">
                     {paymentMethod === 'card'
-                      ? 'Secure payment powered by Coinbase'
+                      ? 'Secure payment powered by MoonPay'
                       : 'USDC payment on Base network'
                     }
                   </p>
@@ -1008,11 +1626,55 @@ export default function MarketplacePage() {
                   <div className="absolute inset-0 border-4 border-banana rounded-full border-t-transparent animate-spin"></div>
                 </div>
                 <h3 className="text-text-primary font-semibold text-lg mb-2">
-                  Processing Payment
+                  {paymentMethod === 'card'
+                    ? cardFlowStep === 'funding' ? 'Completing Payment'
+                    : cardFlowStep === 'waiting' ? 'Waiting for Funds'
+                    : 'Purchasing Team'
+                    : 'Processing Payment'
+                  }
                 </h3>
                 <p className="text-text-secondary text-sm">
-                  Completing your purchase on Base...
+                  {paymentMethod === 'card'
+                    ? cardFlowStep === 'funding' ? 'Complete your payment in the MoonPay window...'
+                    : cardFlowStep === 'waiting' ? 'Your funds are on the way. This may take a moment...'
+                    : 'Completing your purchase on Base...'
+                    : 'Completing your purchase on Base...'
+                  }
                 </p>
+                {paymentMethod === 'card' && cardFlowStep !== 'idle' && (
+                  <div className="mt-6 space-y-2 text-left max-w-[240px] mx-auto">
+                    {[
+                      { key: 'funding', label: 'Card payment' },
+                      { key: 'waiting', label: 'Funds arriving' },
+                      { key: 'buying', label: 'Purchase team' },
+                    ].map(({ key, label }) => {
+                      const stepOrder = ['funding', 'waiting', 'buying'];
+                      const currentIdx = stepOrder.indexOf(cardFlowStep);
+                      const stepIdx = stepOrder.indexOf(key);
+                      const isComplete = stepIdx < currentIdx;
+                      const isActive = key === cardFlowStep;
+
+                      return (
+                        <div key={key} className="flex items-center gap-2.5 text-sm">
+                          {isComplete ? (
+                            <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center">
+                              <svg className="w-3 h-3 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path d="M5 13l4 4L19 7"/>
+                              </svg>
+                            </div>
+                          ) : isActive ? (
+                            <div className="w-5 h-5 rounded-full border-2 border-banana/30 border-t-banana animate-spin" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border border-bg-tertiary" />
+                          )}
+                          <span className={isComplete ? 'text-text-primary' : isActive ? 'text-text-secondary' : 'text-text-muted'}>
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1074,7 +1736,7 @@ export default function MarketplacePage() {
 
               {/* Price Input */}
               <div className="mb-6">
-                <label className="block text-text-secondary text-sm mb-2">Set your price (USDC)</label>
+                <label className="block text-text-secondary text-sm mb-2">Set your price</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-mono">$</span>
                   <input
@@ -1086,6 +1748,21 @@ export default function MarketplacePage() {
                     className="w-full bg-bg-primary border border-bg-tertiary rounded-xl pl-8 pr-4 py-3 text-text-primary font-mono text-lg focus:outline-none focus:border-banana"
                   />
                 </div>
+                {/* Floor price hint */}
+                {collectionStats && collectionStats.floorPrice > 0 && (
+                  <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
+                    <span>Floor: <span className="text-banana font-mono font-medium">${collectionStats.floorPrice.toFixed(2)}</span></span>
+                    <span>&middot;</span>
+                    <span>Avg: <span className="text-text-secondary font-mono font-medium">${collectionStats.averagePrice.toFixed(2)}</span></span>
+                    <button
+                      type="button"
+                      onClick={() => setListPrice(collectionStats.floorPrice.toFixed(2))}
+                      className="text-banana hover:underline ml-auto"
+                    >
+                      Use floor
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Error display */}
@@ -1096,14 +1773,22 @@ export default function MarketplacePage() {
               )}
 
               {/* Fee Info */}
-              <div className="p-4 bg-success/10 border border-success/30 rounded-xl mb-6">
-                <p className="text-success text-sm font-medium flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path d="M5 13l4 4L19 7"/>
-                  </svg>
-                  0% platform fees — you keep everything
-                </p>
-              </div>
+              {listPrice && parseFloat(listPrice) > 0 && (
+                <div className="p-4 bg-bg-primary border border-bg-tertiary rounded-xl mb-6 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-secondary">Listing price</span>
+                    <span className="text-text-primary font-mono">${parseFloat(listPrice).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-secondary">OpenSea fee (1%)</span>
+                    <span className="text-text-muted font-mono">-${(parseFloat(listPrice) * 0.01).toFixed(2)}</span>
+                  </div>
+                  <div className="border-t border-bg-tertiary pt-2 flex justify-between text-sm font-medium">
+                    <span className="text-text-secondary">You receive</span>
+                    <span className="text-success font-mono">${(parseFloat(listPrice) * 0.99).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-6 pt-0">
@@ -1112,7 +1797,7 @@ export default function MarketplacePage() {
                 disabled={!listPrice || parseFloat(listPrice) <= 0}
                 className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                List for ${listPrice ? parseFloat(listPrice).toLocaleString() : '0'} USDC
+                List for ${listPrice ? parseFloat(listPrice).toLocaleString() : '0'}
               </button>
             </div>
           </div>
@@ -1139,40 +1824,70 @@ export default function MarketplacePage() {
             </h3>
             <p className="text-text-secondary text-sm mb-6">
               {successType === 'buy'
-                ? 'The team has been transferred to your account.'
-                : 'Your team is now visible to buyers on OpenSea.'
+                ? 'The team has been transferred to your wallet.'
+                : 'Your team is now live on the marketplace.'
               }
             </p>
+            {selectedTeam && (
+              <Link
+                href={`/marketplace/${selectedTeam.tokenId}`}
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all block mb-3"
+              >
+                {successType === 'buy' ? 'View Your Team' : 'View Listing'}
+              </Link>
+            )}
             <button
               onClick={() => setShowSuccessModal(false)}
-              className="w-full py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
+              className="w-full py-3 border border-bg-tertiary text-text-secondary rounded-xl hover:bg-bg-tertiary transition-all text-sm"
             >
-              Done
+              Back to Marketplace
             </button>
           </div>
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="mt-16 pt-10 border-t border-bg-tertiary">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/sbs-logo.png"
-              alt="SBS"
-              width={32}
-              height={32}
-            />
-            <span className="text-text-secondary text-sm">© 2026 Spoiled Banana Society. All Rights Reserved.</span>
-          </div>
-          <div className="flex items-center gap-6">
-            <a href="#" className="text-text-secondary hover:text-text-primary text-sm transition-colors">Terms</a>
-            <a href="#" className="text-text-secondary hover:text-text-primary text-sm transition-colors">Privacy</a>
-            <a href="#" className="text-text-secondary hover:text-text-primary text-sm transition-colors">Support</a>
-            <a href="#" className="text-text-secondary hover:text-text-primary text-sm transition-colors">Discord</a>
+      {/* Cancel Confirmation Modal */}
+      {cancelConfirmTeam && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setCancelConfirmTeam(null)}
+        >
+          <div
+            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 mx-auto mb-4 bg-error/10 rounded-full flex items-center justify-center">
+                <svg className="w-7 h-7 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-text-primary font-semibold text-lg mb-2">Cancel Listing?</h3>
+              <p className="text-text-secondary text-sm">
+                Remove <span className="text-text-primary font-mono font-medium">{cancelConfirmTeam.name}</span> from sale at ${cancelConfirmTeam.price?.toFixed(2)}?
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCancelConfirmTeam(null)}
+                className="flex-1 py-3 border border-bg-tertiary text-text-secondary rounded-xl hover:bg-bg-tertiary transition-all text-sm font-medium"
+              >
+                Keep Listed
+              </button>
+              <button
+                onClick={() => executeCancel(cancelConfirmTeam)}
+                disabled={cancellingTokenId === cancelConfirmTeam.tokenId}
+                className="flex-1 py-3 bg-error text-white rounded-xl hover:brightness-110 transition-all text-sm font-semibold disabled:opacity-50"
+              >
+                {cancellingTokenId === cancelConfirmTeam.tokenId ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
           </div>
         </div>
-      </footer>
+      )}
+
     </div>
   );
 }

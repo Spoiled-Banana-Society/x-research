@@ -104,6 +104,11 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 - BBB4 Contract: `0x14065412b3A431a660e6E576A14b104F1b3E463b`
 - USDC on Base: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 
+## Git Commit Safety (ALL DEVELOPERS)
+- **ALWAYS `git pull origin main` before committing.** Your local files may be stale.
+- **Only stage files you actually changed:** Use `git add <specific-files>`, NEVER `git add -A` or `git add .`. Blanket staging will include stale versions of files others have changed and silently revert their work.
+- **Before pushing, run `git diff --stat HEAD~1` to verify** you're only changing the files you intended.
+
 ## Troubleshooting
 - **Draft server 503:** Usually Redis unreachable. Check: Redis instance READY, VPC connector attached, `REDIS_URL` env var.
 - **gcloud permission errors:** Firebase SA can deploy Cloud Run but CANNOT create infra (Redis, VPC). Use GCP Console.

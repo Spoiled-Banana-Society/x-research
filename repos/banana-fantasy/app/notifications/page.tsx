@@ -13,6 +13,11 @@ const TYPE_CONFIG: Record<NotificationType, { emoji: string; color: string; labe
   jackpot: { emoji: '🎰', color: '#ef4444', label: 'Jackpot' },
   hof: { emoji: '🏆', color: '#d4af37', label: 'HOF' },
   system: { emoji: '📢', color: '#6b7280', label: 'System' },
+  offer_received: { emoji: '💰', color: '#22c55e', label: 'Offer' },
+  offer_accepted: { emoji: '✅', color: '#3b82f6', label: 'Offer' },
+  purchase_complete: { emoji: '🛒', color: '#22c55e', label: 'Purchase' },
+  sale_complete: { emoji: '💵', color: '#3b82f6', label: 'Sale' },
+  listing_created: { emoji: '📋', color: '#a855f7', label: 'Listing' },
 };
 
 function timeAgo(iso: string): string {

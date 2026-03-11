@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MarketplaceTeam, DraftType } from '@/lib/opensea';
+import type { MarketplaceTeam, DraftType, OfferData } from '@/lib/opensea';
 import type { CollectionStats } from '@/lib/opensea';
 import { getOwnerDraftTokens, type ApiDraftToken } from '@/lib/api/owner';
 
@@ -40,6 +40,61 @@ export function useCollectionStats(): UseCollectionStatsResult {
   }, [fetchStats]);
 
   return { data, isLoading, error, refetch: fetchStats };
+}
+
+// ── All Collection NFTs ──────────────────────────────────────────────
+
+interface UseCollectionNftsResult {
+  data: MarketplaceTeam[];
+  isLoading: boolean;
+  error: unknown;
+  hasMore: boolean;
+  loadMore: () => void;
+  refetch: () => void;
+}
+
+export function useCollectionNfts(limit: number = 50): UseCollectionNftsResult {
+  const [data, setData] = useState<MarketplaceTeam[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const fetchNfts = useCallback(async (append = false, nextCursor?: string | null) => {
+    if (!append) setIsLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (nextCursor) params.set('cursor', nextCursor);
+
+      const res = await fetch(`/api/marketplace/collection-nfts?${params}`);
+      if (!res.ok) throw new Error(`Failed to fetch collection NFTs: ${res.status}`);
+      const json = await res.json();
+
+      const nfts: MarketplaceTeam[] = json.nfts ?? [];
+      setData(prev => append ? [...prev, ...nfts] : nfts);
+      setCursor(json.next ?? null);
+      setHasMore(!!json.next);
+      setError(null);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [limit]);
+
+  useEffect(() => {
+    fetchNfts(false);
+  }, [fetchNfts]);
+
+  const loadMore = useCallback(() => {
+    if (cursor) fetchNfts(true, cursor);
+  }, [cursor, fetchNfts]);
+
+  const refetch = useCallback(() => {
+    fetchNfts(false);
+  }, [fetchNfts]);
+
+  return { data, isLoading, error, hasMore, loadMore, refetch };
 }
 
 // ── Listings (Buy Tab) ──────────────────────────────────────────────
@@ -240,4 +295,323 @@ export function useNftDetail(tokenId: string | null) {
   }, [fetchNft]);
 
   return { data, isLoading, error, refetch: fetchNft };
+}
+
+// ── NFT Offers ──────────────────────────────────────────────────────
+
+interface UseNftOffersResult {
+  offers: OfferData[];
+  isLoading: boolean;
+  error: unknown;
+  refetch: () => void;
+  bestOffer: OfferData | null;
+}
+
+export function useNftOffers(tokenId: string | null): UseNftOffersResult {
+  const [offers, setOffers] = useState<OfferData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const fetchOffers = useCallback(async () => {
+    if (!tokenId) {
+      setOffers([]);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/marketplace/offers?tokenId=${tokenId}`);
+      if (!res.ok) throw new Error(`Failed to fetch offers: ${res.status}`);
+      const json = await res.json();
+      setOffers(json.offers ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [tokenId]);
+
+  useEffect(() => {
+    fetchOffers();
+    const interval = setInterval(fetchOffers, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchOffers]);
+
+  const bestOffer = useMemo(() => {
+    if (offers.length === 0) return null;
+    return offers.reduce((best, o) => o.amount > best.amount ? o : best, offers[0]);
+  }, [offers]);
+
+  return { offers, isLoading, error, refetch: fetchOffers, bestOffer };
+}
+
+// ── Activity History ─────────────────────────────────────────────
+
+export interface ActivityEntry {
+  id: string;
+  type: 'buy' | 'sell' | 'list' | 'cancel' | 'offer_made' | 'offer_accepted';
+  walletAddress: string;
+  tokenId: string;
+  teamName: string;
+  price: number | null;
+  counterparty: string | null;
+  orderHash: string | null;
+  txHash: string | null;
+  timestamp: string;
+}
+
+interface UseActivityHistoryResult {
+  activities: ActivityEntry[];
+  isLoading: boolean;
+  hasMore: boolean;
+  loadMore: () => void;
+  refetch: () => void;
+}
+
+export function useActivityHistory(walletAddress: string | null): UseActivityHistoryResult {
+  const [activities, setActivities] = useState<ActivityEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const fetchActivities = useCallback(async (append = false, nextCursor?: string | null) => {
+    if (!walletAddress) {
+      setActivities([]);
+      return;
+    }
+    if (!append) setIsLoading(true);
+    try {
+      const params = new URLSearchParams({ wallet: walletAddress, limit: '20' });
+      if (nextCursor) params.set('cursor', nextCursor);
+
+      const res = await fetch(`/api/marketplace/activity?${params}`);
+      if (!res.ok) throw new Error(`Failed to fetch activity: ${res.status}`);
+      const json = await res.json();
+
+      const items: ActivityEntry[] = json.activities ?? [];
+      setActivities(prev => append ? [...prev, ...items] : items);
+      setCursor(json.nextCursor ?? null);
+      setHasMore(json.hasMore ?? false);
+    } catch (err) {
+      console.error('[useActivityHistory] error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [walletAddress]);
+
+  useEffect(() => {
+    fetchActivities(false);
+  }, [fetchActivities]);
+
+  const loadMore = useCallback(() => {
+    if (cursor) fetchActivities(true, cursor);
+  }, [cursor, fetchActivities]);
+
+  const refetch = useCallback(() => {
+    fetchActivities(false);
+  }, [fetchActivities]);
+
+  return { activities, isLoading, hasMore, loadMore, refetch };
+}
+
+// ── Offers on All My NFTs ────────────────────────────────────────
+
+export interface MyNftOffer extends OfferData {
+  tokenId: string;
+  teamName: string;
+  imageUrl?: string;
+}
+
+interface UseMyNftOffersResult {
+  allOffers: MyNftOffer[];
+  isLoading: boolean;
+  refetch: () => void;
+}
+
+export function useMyNftOffers(
+  walletAddress: string | null,
+  ownedNfts: MarketplaceTeam[],
+): UseMyNftOffersResult {
+  const [allOffers, setAllOffers] = useState<MyNftOffer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchAllOffers = useCallback(async () => {
+    if (!walletAddress || ownedNfts.length === 0) {
+      setAllOffers([]);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const results = await Promise.all(
+        ownedNfts.map(async (nft) => {
+          try {
+            const res = await fetch(`/api/marketplace/offers?tokenId=${nft.tokenId}`);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return (json.offers ?? []).map((o: OfferData) => ({
+              ...o,
+              tokenId: nft.tokenId,
+              teamName: nft.name,
+              imageUrl: nft.imageUrl,
+            }));
+          } catch {
+            return [];
+          }
+        })
+      );
+      setAllOffers(results.flat().sort((a, b) => b.amount - a.amount));
+    } catch (err) {
+      console.error('[useMyNftOffers] error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [walletAddress, ownedNfts]);
+
+  useEffect(() => {
+    fetchAllOffers();
+  }, [fetchAllOffers]);
+
+  return { allOffers, isLoading, refetch: fetchAllOffers };
+}
+
+// ── Log Activity Helper ──────────────────────────────────────────
+
+export async function logActivity(data: {
+  type: ActivityEntry['type'];
+  walletAddress: string;
+  tokenId: string;
+  teamName?: string;
+  price?: number | null;
+  counterparty?: string | null;
+  orderHash?: string | null;
+  txHash?: string | null;
+}) {
+  try {
+    await fetch('/api/marketplace/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch (err) {
+    console.error('[logActivity] error:', err);
+  }
+}
+
+// ── Firestore Notification Helpers ───────────────────────────────
+
+async function postNotification(data: {
+  wallet: string;
+  type: string;
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  try {
+    await fetch('/api/marketplace/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch (err) {
+    console.error('[postNotification] error:', err);
+  }
+}
+
+/** Notify seller that their item was sold */
+export function notifySeller(data: {
+  sellerWallet: string;
+  tokenId: string;
+  teamName: string;
+  price: number;
+  buyerWallet: string;
+}) {
+  postNotification({
+    wallet: data.sellerWallet,
+    type: 'sale_complete',
+    title: 'Your Team Was Sold!',
+    message: `${data.teamName} sold for $${data.price.toFixed(2)}`,
+    link: `/marketplace/${data.tokenId}`,
+  });
+}
+
+/** Notify NFT owner that someone made an offer */
+export function notifyOwnerOfOffer(data: {
+  ownerWallet: string;
+  tokenId: string;
+  teamName: string;
+  offerAmount: number;
+  offererWallet: string;
+}) {
+  postNotification({
+    wallet: data.ownerWallet,
+    type: 'offer_received',
+    title: 'New Offer Received',
+    message: `$${data.offerAmount.toFixed(2)} offer on ${data.teamName}`,
+    link: `/marketplace/${data.tokenId}`,
+  });
+}
+
+// ── Firestore Notifications Hook (for the bell) ─────────────────
+
+export interface FirestoreNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+interface UseFirestoreNotificationsResult {
+  notifications: FirestoreNotification[];
+  isLoading: boolean;
+  markAllRead: () => void;
+  refetch: () => void;
+}
+
+export function useFirestoreNotifications(walletAddress: string | null): UseFirestoreNotificationsResult {
+  const [notifications, setNotifications] = useState<FirestoreNotification[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!walletAddress) {
+      setNotifications([]);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/marketplace/notifications?wallet=${encodeURIComponent(walletAddress)}`);
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      const json = await res.json();
+      setNotifications(json.notifications ?? []);
+    } catch (err) {
+      console.error('[useFirestoreNotifications] error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [walletAddress]);
+
+  useEffect(() => {
+    fetchNotifications();
+    // Poll every 30s for new notifications
+    const interval = setInterval(fetchNotifications, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const markAllRead = useCallback(async () => {
+    if (!walletAddress) return;
+    setNotifications([]);
+    try {
+      await fetch('/api/marketplace/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet: walletAddress, all: true }),
+      });
+    } catch (err) {
+      console.error('[markAllRead] error:', err);
+    }
+  }, [walletAddress]);
+
+  return { notifications, isLoading, markAllRead, refetch: fetchNotifications };
 }

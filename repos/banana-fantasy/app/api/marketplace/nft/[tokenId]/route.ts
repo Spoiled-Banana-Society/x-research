@@ -74,7 +74,46 @@ export async function GET(
       // Silent — listing data is optional
     }
 
-    return json({ ...nft, listing });
+    // Fetch owner of this NFT
+    let owner = null;
+    try {
+      const ownerRes = await fetch(
+        `${OPENSEA_API_BASE}/api/v2/chain/${OPENSEA_CHAIN}/contract/${BBB4_CONTRACT}/nfts/${tokenId}`,
+        {
+          headers: {
+            accept: 'application/json',
+            'x-api-key': OPENSEA_API_KEY,
+          },
+        },
+      );
+      if (ownerRes.ok) {
+        const ownerData = await ownerRes.json();
+        const owners = ownerData.nft?.owners ?? [];
+        if (owners.length > 0) {
+          owner = owners[0].address;
+        }
+      }
+    } catch { /* silent */ }
+
+    // Enrich owner with SBS profile
+    let ownerName: string | null = null;
+    let ownerPfp: string | null = null;
+    if (owner) {
+      const DRAFTS_API = process.env.NEXT_PUBLIC_STAGING_DRAFTS_API_URL
+        || 'https://sbs-drafts-api-staging-652484219017.us-central1.run.app';
+      try {
+        const profileRes = await fetch(`${DRAFTS_API}/owner/${owner.toLowerCase()}`, {
+          signal: AbortSignal.timeout(2500),
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          if (profile?.pfp?.displayName) ownerName = profile.pfp.displayName;
+          if (profile?.pfp?.imageUrl) ownerPfp = profile.pfp.imageUrl;
+        }
+      } catch { /* enrichment optional */ }
+    }
+
+    return json({ ...nft, owner, ownerName, ownerPfp, listing });
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     console.error('[marketplace/nft] GET failed:', err);

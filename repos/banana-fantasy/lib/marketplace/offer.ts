@@ -1,8 +1,9 @@
 /**
- * Sell/list a BBB4 NFT on OpenSea with USDC pricing on Base.
+ * Create and accept offers on BBB4 NFTs using USDC on Base.
  *
- * Uses seaport-js directly (instead of opensea-js) to create orders
- * with USDC as the consideration token.
+ * An offer is the inverse of a listing:
+ * - Listing: offer=[NFT], consideration=[USDC to seller + USDC fee]
+ * - Offer:   offer=[USDC], consideration=[NFT to buyer + USDC fee]
  *
  * Flow: seaport-js createOrder → sign → POST to OpenSea API
  */
@@ -16,22 +17,25 @@ const OPENSEA_API_KEY = process.env.NEXT_PUBLIC_OPENSEA_API_KEY || '';
 const OPENSEA_CONDUIT_KEY = '0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000';
 const OPENSEA_CONDUIT_ADDRESS = '0x1e0049783f008a0085193e00003d00cd54003c71';
 const OPENSEA_FEE_RECIPIENT = '0x0000a26b00c1f0df003000390027140000faa719';
-const OPENSEA_FEE_BPS = 100; // OpenSea takes 1% (since Sept 2025)
+const OPENSEA_FEE_BPS = 100; // 1%
 
-export interface ListingResult {
+export interface OfferResult {
   orderHash: string;
 }
 
 /**
- * Create a new USDC listing on OpenSea via Seaport.
+ * Create a new USDC offer on an NFT via Seaport.
+ *
+ * The offerer puts up USDC and requests an NFT in return.
+ * seaport-js handles USDC approval (via conduit) + EIP-712 signing.
  */
-export async function createListing(
+export async function createOffer(
   tokenId: string,
-  priceUsd: number,
-  sellerAddress: string,
+  offerAmountUsd: number,
+  offererAddress: string,
   provider: ethers.BrowserProvider,
-  expirationDays: number = 30,
-): Promise<ListingResult> {
+  expirationDays: number = 7,
+): Promise<OfferResult> {
   const signer = await provider.getSigner();
 
   const seaport = new Seaport(signer, {
@@ -44,10 +48,9 @@ export async function createListing(
     },
   });
 
-  // Convert USD price to USDC wei (6 decimals)
-  const priceWei = ethers.parseUnits(priceUsd.toString(), 6);
-  const feeAmount = (priceWei * BigInt(OPENSEA_FEE_BPS)) / BigInt(10000);
-  const sellerAmount = priceWei - feeAmount;
+  // Convert USD to USDC wei (6 decimals)
+  const totalWei = ethers.parseUnits(offerAmountUsd.toString(), 6);
+  const feeAmount = (totalWei * BigInt(OPENSEA_FEE_BPS)) / BigInt(10000);
 
   const endTime = Math.floor(Date.now() / 1000) + expirationDays * 24 * 60 * 60;
 
@@ -55,16 +58,16 @@ export async function createListing(
     {
       offer: [
         {
-          itemType: ItemType.ERC721,
-          token: BBB4_CONTRACT,
-          identifier: tokenId,
+          amount: totalWei.toString(),
+          token: USDC_BASE,
         },
       ],
       consideration: [
         {
-          amount: sellerAmount.toString(),
-          token: USDC_BASE,
-          recipient: sellerAddress,
+          itemType: ItemType.ERC721,
+          token: BBB4_CONTRACT,
+          identifier: tokenId,
+          recipient: offererAddress,
         },
         ...(feeAmount > 0n
           ? [
@@ -79,15 +82,15 @@ export async function createListing(
       endTime: endTime.toString(),
       conduitKey: OPENSEA_CONDUIT_KEY,
     },
-    sellerAddress,
+    offererAddress,
   );
 
-  // This handles NFT approval (if needed) + EIP-712 signing
+  // This handles USDC approval (if needed) + EIP-712 signing
   const order = await executeAllActions();
 
-  // Post signed order to OpenSea API
+  // Post signed offer to OpenSea API
   const postRes = await fetch(
-    `https://api.opensea.io/api/v2/orders/base/seaport/listings`,
+    `https://api.opensea.io/api/v2/orders/base/seaport/offers`,
     {
       method: 'POST',
       headers: {
@@ -104,7 +107,7 @@ export async function createListing(
 
   if (!postRes.ok) {
     const text = await postRes.text();
-    console.error('[sell] OpenSea postOrder failed:', postRes.status, text);
+    console.error('[offer] OpenSea postOrder failed:', postRes.status, text);
     let detail = '';
     try {
       const errJson = JSON.parse(text);
@@ -117,28 +120,38 @@ export async function createListing(
   return { orderHash: result.order?.order_hash || '' };
 }
 
+export interface OfferFulfillmentTx {
+  to: string;
+  value: string;
+  data: string;
+}
+
 /**
- * Cancel an existing listing on OpenSea.
- * Uses opensea-js for cancellation (it works fine for this).
+ * Get the encoded Seaport transaction for accepting (fulfilling) an offer.
+ * Returns { to, value, data } ready for Privy's sendTransaction.
  */
-export async function cancelListing(
+export async function getOfferFulfillmentTx(
   orderHash: string,
   sellerAddress: string,
-  provider: ethers.BrowserProvider,
-): Promise<void> {
-  const { OpenSeaSDK, Chain } = await import('opensea-js');
-  const sdk = new OpenSeaSDK(provider, {
-    chain: Chain.Base,
-    apiKey: OPENSEA_API_KEY,
+  protocolAddress: string,
+  tokenId: string,
+): Promise<OfferFulfillmentTx> {
+  const res = await fetch('/api/marketplace/offers/fulfill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      orderHash,
+      sellerAddress,
+      protocolAddress,
+      tokenId,
+      contractAddress: BBB4_CONTRACT,
+    }),
   });
 
-  const order = await sdk.api.getOrder({
-    orderHash,
-    side: 'ask',
-  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `Offer fulfillment failed: ${res.status}`);
+  }
 
-  await sdk.cancelOrder({
-    order: order.protocolData,
-    accountAddress: sellerAddress,
-  });
+  return res.json();
 }

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo, useRef } from 'react';
 import { useSafePrivy as usePrivy, usePrivyAvailable } from '@/providers/PrivyProvider';
 import { User } from '@/types';
-import { getOwnerUser, getOwnerDraftTokens } from '@/lib/api/owner';
+import { getOwnerUser, getOwnerDraftTokens, updateOwnerDisplayName, updateOwnerPfpImage } from '@/lib/api/owner';
 import { ApiError as ClientApiError } from '@/lib/api/client';
 
 const USER_PROFILE_KEY = 'banana-fantasy-user-profile';
@@ -482,6 +482,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profilePicture: updated.profilePicture,
         nflTeam: updated.nflTeam,
       });
+      // Sync profile changes to Go API backend (best-effort, don't block UI)
+      if (prev.walletAddress) {
+        if (updates.username && updates.username !== prev.username) {
+          updateOwnerDisplayName(prev.walletAddress, updates.username).catch(() => {});
+        }
+        if (updates.profilePicture && updates.profilePicture !== prev.profilePicture) {
+          updateOwnerPfpImage(prev.walletAddress, updates.profilePicture).catch(() => {});
+        }
+      }
       return updated;
     });
   }, []);

@@ -1,7 +1,6 @@
 import { rateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { json, jsonError, getSearchParam } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
-import { getOwnerProfile } from '@/lib/api/owner';
 import {
   OPENSEA_API_BASE,
   OPENSEA_CHAIN,
@@ -112,37 +111,44 @@ export async function GET(req: Request) {
       return true;
     });
 
-    // Enrich with SBS owner profiles (name + pfp)
-    const uniqueOwners = [...new Set(listings.map(l => l.ownerAddress.toLowerCase()))];
-    const ownerProfiles = new Map<string, { name: string; pfp: string | null }>();
-    await Promise.all(
-      uniqueOwners.map(async (addr) => {
-        try {
-          const profile = await getOwnerProfile(addr);
-          if (profile?.pfp?.displayName || profile?.pfp?.imageUrl) {
-            ownerProfiles.set(addr, {
-              name: profile.pfp?.displayName || '',
-              pfp: profile.pfp?.imageUrl || null,
-            });
-          }
-        } catch (err) {
-          console.error('[marketplace/listings] Profile fetch failed for', addr, err);
-        }
-      }),
-    );
-    for (const listing of listings) {
-      const profile = ownerProfiles.get(listing.ownerAddress.toLowerCase());
-      if (profile) {
-        if (profile.name) listing.owner = profile.name;
-        if (profile.pfp) listing.ownerPfp = profile.pfp;
-      }
-    }
+    // Enrich with SBS owner profiles (name + pfp) — best-effort with timeout
+    const DRAFTS_API = process.env.NEXT_PUBLIC_STAGING_DRAFTS_API_URL
+      || 'https://sbs-drafts-api-staging-652484219017.us-central1.run.app';
+    try {
+      const uniqueOwners = [...new Set(listings.map(l => l.ownerAddress.toLowerCase()))];
+      const ownerProfiles = new Map<string, { name: string; pfp: string | null }>();
 
-    // Strip full wallet address from client response
-    const sanitized = listings.map(({ ownerAddress, ...rest }) => rest);
+      const enrichWithTimeout = Promise.all(
+        uniqueOwners.map(async (addr) => {
+          try {
+            const res = await fetch(`${DRAFTS_API}/owner/${addr}`, {
+              signal: AbortSignal.timeout(2500),
+            });
+            if (!res.ok) return;
+            const profile = await res.json();
+            if (profile?.pfp?.displayName || profile?.pfp?.imageUrl) {
+              ownerProfiles.set(addr, {
+                name: profile.pfp?.displayName || '',
+                pfp: profile.pfp?.imageUrl || null,
+              });
+            }
+          } catch { /* skip */ }
+        }),
+      );
+
+      await enrichWithTimeout;
+
+      for (const listing of listings) {
+        const profile = ownerProfiles.get(listing.ownerAddress.toLowerCase());
+        if (profile) {
+          if (profile.name) listing.owner = profile.name;
+          if (profile.pfp) listing.ownerPfp = profile.pfp;
+        }
+      }
+    } catch { /* enrichment failed — continue with raw data */ }
 
     return json({
-      listings: sanitized,
+      listings,
       next: listingsData.next ?? null,
     });
   } catch (err) {

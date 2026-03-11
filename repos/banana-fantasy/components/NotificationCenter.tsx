@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
-export type NotificationType = 'draft_starting' | 'draft_results' | 'promo' | 'referral' | 'jackpot' | 'hof' | 'system';
+export type NotificationType = 'draft_starting' | 'draft_results' | 'promo' | 'referral' | 'jackpot' | 'hof' | 'system' | 'offer_received' | 'offer_accepted' | 'purchase_complete' | 'sale_complete' | 'listing_created';
 
 export interface Notification {
   id: string;
@@ -29,10 +30,16 @@ const TYPE_CONFIG: Record<NotificationType, { emoji: string; color: string }> = 
   jackpot: { emoji: '🎰', color: '#ef4444' },
   hof: { emoji: '🏆', color: '#d4af37' },
   system: { emoji: '📢', color: '#6b7280' },
+  offer_received: { emoji: '💰', color: '#22c55e' },
+  offer_accepted: { emoji: '✅', color: '#3b82f6' },
+  purchase_complete: { emoji: '🛒', color: '#22c55e' },
+  sale_complete: { emoji: '💵', color: '#3b82f6' },
+  listing_created: { emoji: '📋', color: '#a855f7' },
 };
 
 const STORAGE_KEY = 'sbs-notifications';
 const MAX_NOTIFICATIONS = 50;
+const SYNC_EVENT = 'sbs-notifications-sync';
 
 // ─── localStorage helpers ────────────────────────────────────────────────
 
@@ -50,6 +57,8 @@ function saveNotifications(notifs: Notification[]) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifs.slice(0, MAX_NOTIFICATIONS)));
+    // Notify other hook instances on this page to re-sync
+    window.dispatchEvent(new Event(SYNC_EVENT));
   } catch { /* quota */ }
 }
 
@@ -134,6 +143,11 @@ export function useNotifications() {
 
   useEffect(() => {
     setNotifications(loadNotifications());
+
+    // Re-sync when another hook instance on this page writes notifications
+    const onSync = () => setNotifications(loadNotifications());
+    window.addEventListener(SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SYNC_EVENT, onSync);
   }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -356,22 +370,71 @@ export function NotificationPanel({ isOpen, onClose, notifications, unreadCount,
 // ─── Combined Header Widget ─────────────────────────────────────────────
 
 export function NotificationWidget() {
-  const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications();
+  const { walletAddress } = useAuth();
+
+  const { notifications: localNotifs, unreadCount: localUnread, markAsRead, markAllRead: markAllLocalRead } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Firestore notifications (sold, offers received)
+  const [firestoreNotifs, setFirestoreNotifs] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    if (!walletAddress) { setFirestoreNotifs([]); return; }
+
+    const fetchRemote = async () => {
+      try {
+        const res = await fetch(`/api/marketplace/notifications?wallet=${encodeURIComponent(walletAddress)}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const mapped: Notification[] = (json.notifications ?? []).map((n: Record<string, unknown>) => ({
+          id: n.id as string,
+          type: (n.type as NotificationType) || 'system',
+          title: n.title as string,
+          message: n.message as string,
+          read: false,
+          createdAt: (n.createdAt as string) || new Date().toISOString(),
+          link: (n.link as string) || undefined,
+        }));
+        setFirestoreNotifs(mapped);
+      } catch { /* silent */ }
+    };
+
+    fetchRemote();
+    const interval = setInterval(fetchRemote, 30_000);
+    return () => clearInterval(interval);
+  }, [walletAddress]);
+
+  // Merge: Firestore (unread) on top, then local
+  const merged = [...firestoreNotifs, ...localNotifs];
+  const totalUnread = localUnread + firestoreNotifs.length;
+
+  const handleMarkAllRead = useCallback(async () => {
+    markAllLocalRead();
+    if (walletAddress && firestoreNotifs.length > 0) {
+      setFirestoreNotifs([]);
+      try {
+        await fetch('/api/marketplace/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet: walletAddress, all: true }),
+        });
+      } catch { /* silent */ }
+    }
+  }, [markAllLocalRead, walletAddress, firestoreNotifs.length]);
 
   return (
     <div className="relative">
       <NotificationBell
-        unreadCount={unreadCount}
+        unreadCount={totalUnread}
         onClick={() => setIsOpen(!isOpen)}
       />
       <NotificationPanel
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        notifications={notifications}
-        unreadCount={unreadCount}
+        notifications={merged}
+        unreadCount={totalUnread}
         onMarkRead={markAsRead}
-        onMarkAllRead={markAllRead}
+        onMarkAllRead={handleMarkAllRead}
       />
     </div>
   );

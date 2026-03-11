@@ -120,6 +120,18 @@ export interface CollectionStats {
   weeklyVolumeChange: number | null;
 }
 
+// ── Offer Types ─────────────────────────────────────────────────────
+
+export interface OfferData {
+  orderHash: string;
+  offererAddress: string;
+  offererName: string;
+  offererPfp: string | null;
+  amount: number;
+  expiresAt: string;
+  protocolAddress: string;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /** Convert USDC amount (6 decimals) from raw string to USD number. */
@@ -200,6 +212,23 @@ function listingPriceUsd(listing: OpenSeaListing): number {
 }
 
 /**
+ * Build display name for an NFT.
+ * OpenSea often returns bare names like "#1" — we want "BBB Pass #1" for undrafted
+ * passes and "BBB #1" for drafted teams with a roster.
+ */
+function nftDisplayName(
+  leagueName: string | null,
+  openSeaName: string | null | undefined,
+  tokenId: string,
+  hasRoster: boolean,
+): string {
+  if (leagueName) return leagueName;
+  // Skip OpenSea names that are just "#N" or bare numbers — not useful
+  if (openSeaName && !/^#?\d+$/.test(openSeaName.trim())) return openSeaName;
+  return hasRoster ? `BBB #${tokenId}` : `BBB Pass #${tokenId}`;
+}
+
+/**
  * Map an OpenSea listing → MarketplaceTeam.
  * Extracts roster, rank, points from NFT traits when available.
  */
@@ -212,7 +241,7 @@ export function mapOpenSeaListingToTeam(listing: OpenSeaListing, nft?: OpenSeaNf
   return {
     id: tokenId,
     tokenId,
-    name: traits.name || nft?.name || `BBB #${tokenId}`,
+    name: nftDisplayName(traits.name, nft?.name, tokenId, traits.roster.length > 0),
     draftType: traits.level,
     isHof: traits.level === 'hof',
     isJackpot: traits.level === 'jackpot',
@@ -242,7 +271,7 @@ export function mapOpenSeaNftToTeam(nft: OpenSeaNft, ownerAddress: string): Mark
   return {
     id: nft.identifier,
     tokenId: nft.identifier,
-    name: traits.name || nft.name || `BBB #${nft.identifier}`,
+    name: nftDisplayName(traits.name, nft.name, nft.identifier, traits.roster.length > 0),
     draftType: traits.level,
     isHof: traits.level === 'hof',
     isJackpot: traits.level === 'jackpot',
