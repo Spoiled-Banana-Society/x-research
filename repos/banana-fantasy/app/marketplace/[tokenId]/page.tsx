@@ -75,7 +75,7 @@ export default function NftDetailPage() {
   const tokenId = params.tokenId as string;
   const autoBuy = searchParams.get('buy') === 'true';
   const autoOffer = searchParams.get('offer') === 'true';
-  const { isLoggedIn, walletAddress, setShowLoginModal } = useAuth();
+  const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
   const { wallets, ready: walletsReady } = useWallets();
   const { sendTransaction } = useSendTransaction();
   const { fundWallet } = useFundWallet();
@@ -92,8 +92,11 @@ export default function NftDetailPage() {
   const [nft, setNft] = useState<NftDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [buyStep, setBuyStep] = useState<'idle' | 'processing' | 'complete'>('idle');
+  const [buyStep, setBuyStep] = useState<'confirm' | 'processing' | 'complete'>('confirm');
   const [txError, setTxError] = useState<string | null>(null);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'usdc'>('card');
+  const [cardFlowStep, setCardFlowStep] = useState<'idle' | 'funding' | 'waiting' | 'buying'>('idle');
 
   // Offer state
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -132,12 +135,16 @@ export default function NftDetailPage() {
   // Auto-trigger buy flow when navigated with ?buy=true
   const buyTriggered = React.useRef(false);
   useEffect(() => {
-    if (autoBuy && nft?.listing && isLoggedIn && !buyTriggered.current && buyStep === 'idle') {
+    if (autoBuy && nft?.listing && isLoggedIn && !buyTriggered.current && !showBuyModal) {
       buyTriggered.current = true;
-      const timer = setTimeout(() => handleBuy(), 500);
+      const timer = setTimeout(() => {
+        setBuyStep('confirm');
+        setTxError(null);
+        setShowBuyModal(true);
+      }, 500);
       return () => clearTimeout(timer);
     }
-  }, [autoBuy, nft, isLoggedIn, buyStep]);
+  }, [autoBuy, nft, isLoggedIn, showBuyModal]);
 
   // Auto-open offer modal when navigated with ?offer=true
   const offerTriggered = React.useRef(false);
@@ -148,90 +155,147 @@ export default function NftDetailPage() {
     }
   }, [autoOffer, nft, isLoggedIn]);
 
-  const handleBuy = useCallback(async () => {
+  const executeBuy = useCallback(async () => {
     if (!nft?.listing?.order_hash || !nft?.listing?.protocol_address || !walletAddress) return;
-    setBuyStep('processing');
-    setTxError(null);
 
     const buyPrice = nft.listing?.price?.current
       ? Number(nft.listing.price.current.value) / Math.pow(10, nft.listing.price.current.decimals ?? 18)
       : null;
 
-    try {
-      // Check balance first
-      if (buyPrice && buyPrice > 0) {
+    const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
+    const tx = await getFulfillmentTx(
+      nft.listing.order_hash,
+      walletAddress,
+      nft.listing.protocol_address,
+    );
+    const receipt = await sendTransaction(
+      { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
+      { sponsor: true, uiOptions: { description: 'Purchase NFT — gas fees covered by SBS' } },
+    );
+    const txHashResult = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
+
+    const sellerAddr = nft.listing?.protocol_data?.parameters?.offerer || nft.owner;
+    if (sellerAddr) {
+      notifySeller({
+        sellerWallet: sellerAddr,
+        tokenId,
+        teamName: nft.name || `BBB #${tokenId}`,
+        price: buyPrice || 0,
+        buyerWallet: walletAddress,
+      });
+    }
+
+    logActivity({
+      type: 'buy',
+      walletAddress,
+      tokenId,
+      teamName: nft.name || `BBB #${tokenId}`,
+      price: buyPrice,
+      counterparty: nft.listing?.protocol_data?.parameters?.offerer || null,
+      orderHash: nft.listing?.order_hash || null,
+      txHash: txHashResult ? String(txHashResult) : null,
+    });
+
+    if (sellerAddr) {
+      logActivity({
+        type: 'sell',
+        walletAddress: sellerAddr,
+        tokenId,
+        teamName: nft.name || `BBB #${tokenId}`,
+        price: buyPrice,
+        counterparty: walletAddress,
+        orderHash: nft.listing?.order_hash || null,
+        txHash: txHashResult ? String(txHashResult) : null,
+      });
+    }
+
+    addNotification({
+      type: 'purchase_complete',
+      title: 'Purchase Complete',
+      message: `You bought ${nft.name || `BBB #${tokenId}`} for $${(buyPrice || 0).toFixed(2)}`,
+      link: `/marketplace/${tokenId}`,
+    });
+
+    return txHashResult;
+  }, [nft, walletAddress, sendTransaction, tokenId, addNotification]);
+
+  const handleBuy = useCallback(async () => {
+    if (!nft?.listing?.order_hash || !nft?.listing?.protocol_address || !walletAddress) return;
+
+    const buyPrice = nft.listing?.price?.current
+      ? Number(nft.listing.price.current.value) / Math.pow(10, nft.listing.price.current.decimals ?? 18)
+      : 0;
+
+    if (paymentMethod === 'usdc') {
+      setBuyStep('processing');
+      setTxError(null);
+      try {
         const { checkUsdcBalance } = await import('@/lib/marketplace/buy');
         const { sufficient, balance } = await checkUsdcBalance(walletAddress, buyPrice);
         if (!sufficient) {
           setTxError(`Insufficient balance. You have $${balance.toFixed(2)} but need $${buyPrice.toFixed(2)}.`);
-          setBuyStep('idle');
+          setBuyStep('confirm');
           return;
         }
+
+        await executeBuy();
+        setBuyStep('complete');
+        setTimeout(() => fetchNft(), 2000);
+      } catch (err) {
+        console.error('[NFT Detail] Buy failed:', err);
+        setTxError(err instanceof Error ? err.message : 'Transaction failed');
+        setBuyStep('confirm');
       }
+    } else {
+      // Card flow via MoonPay
+      setTxError(null);
+      setCardFlowStep('funding');
+      setBuyStep('processing');
 
-      const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
-      const tx = await getFulfillmentTx(
-        nft.listing.order_hash,
-        walletAddress,
-        nft.listing.protocol_address,
-      );
-      const receipt = await sendTransaction(
-        { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
-        { sponsor: true },
-      );
-      const txHashResult = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
-      setBuyStep('complete');
-
-      const sellerAddr = nft.listing?.protocol_data?.parameters?.offerer || nft.owner;
-      if (sellerAddr) {
-        notifySeller({
-          sellerWallet: sellerAddr,
-          tokenId,
-          teamName: nft.name || `BBB #${tokenId}`,
-          price: buyPrice || 0,
-          buyerWallet: walletAddress,
+      try {
+        const result = await fundWallet({
+          address: walletAddress,
+          options: {
+            chain: BASE_SEPOLIA,
+            amount: String(buyPrice),
+            asset: 'USDC',
+            card: { preferredProvider: 'moonpay' },
+          },
         });
+
+        if (result.status === 'cancelled') {
+          setCardFlowStep('idle');
+          setBuyStep('confirm');
+          return;
+        }
+
+        // Poll for USDC arrival
+        setCardFlowStep('waiting');
+        const requiredUsdc = BigInt(Math.ceil(buyPrice * 1e6));
+        const startTime = Date.now();
+        const maxWait = 300_000;
+
+        while (Date.now() - startTime < maxWait) {
+          const balance = await getUsdcBalance(walletAddress as Address);
+          if (balance >= requiredUsdc) break;
+          await new Promise(r => setTimeout(r, 3000));
+        }
+
+        // Execute Seaport buy
+        setCardFlowStep('buying');
+        await executeBuy();
+
+        setBuyStep('complete');
+        setCardFlowStep('idle');
+        setTimeout(() => fetchNft(), 2000);
+      } catch (err) {
+        console.error('[NFT Detail] Card buy failed:', err);
+        setTxError(err instanceof Error ? err.message : 'Payment failed');
+        setBuyStep('confirm');
+        setCardFlowStep('idle');
       }
-
-      logActivity({
-        type: 'buy',
-        walletAddress,
-        tokenId,
-        teamName: nft.name || `BBB #${tokenId}`,
-        price: buyPrice,
-        counterparty: nft.listing?.protocol_data?.parameters?.offerer || null,
-        orderHash: nft.listing?.order_hash || null,
-        txHash: txHashResult ? String(txHashResult) : null,
-      });
-
-      // Log seller-side activity
-      if (sellerAddr) {
-        logActivity({
-          type: 'sell',
-          walletAddress: sellerAddr,
-          tokenId,
-          teamName: nft.name || `BBB #${tokenId}`,
-          price: buyPrice,
-          counterparty: walletAddress,
-          orderHash: nft.listing?.order_hash || null,
-          txHash: txHashResult ? String(txHashResult) : null,
-        });
-      }
-
-      addNotification({
-        type: 'purchase_complete',
-        title: 'Purchase Complete',
-        message: `You bought ${nft.name || `BBB #${tokenId}`} for $${(buyPrice || 0).toFixed(2)}`,
-        link: `/marketplace/${tokenId}`,
-      });
-
-      setTimeout(() => fetchNft(), 2000);
-    } catch (err) {
-      console.error('[NFT Detail] Buy failed:', err);
-      setTxError(err instanceof Error ? err.message : 'Transaction failed');
-      setBuyStep('idle');
     }
-  }, [nft, walletAddress, sendTransaction, tokenId, fetchNft]);
+  }, [nft, walletAddress, paymentMethod, executeBuy, fundWallet, fetchNft]);
 
   const handleMakeOffer = useCallback(async () => {
     if (!walletAddress || !selectedWallet || !offerAmount) return;
@@ -667,7 +731,7 @@ export default function NftDetailPage() {
                     </p>
                   </div>
 
-                  {buyStep === 'complete' ? (
+                  {buyStep === 'complete' && showBuyModal ? null : buyStep === 'complete' ? (
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 text-success font-semibold">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -683,20 +747,13 @@ export default function NftDetailPage() {
                     <button
                       onClick={() => {
                         if (!isLoggedIn) { setShowLoginModal(true); return; }
-                        handleBuy();
+                        setBuyStep('confirm');
+                        setTxError(null);
+                        setShowBuyModal(true);
                       }}
-                      disabled={buyStep === 'processing' || !walletsReady || !selectedWallet}
-                      className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
                     >
-                      {buyStep === 'processing' ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                          </svg>
-                          Processing...
-                        </span>
-                      ) : 'Buy Now'}
+                      Buy Now
                     </button>
                   ) : null}
                 </div>
@@ -819,6 +876,273 @@ export default function NftDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Buy Modal */}
+      {showBuyModal && nft?.listing && price !== null && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => buyStep === 'confirm' && setShowBuyModal(false)}
+        >
+          <div
+            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-md"
+            onClick={e => e.stopPropagation()}
+          >
+            {buyStep === 'confirm' && (
+              <>
+                <div className="flex items-center justify-between p-6 border-b border-bg-tertiary">
+                  <h2 className="text-lg font-semibold text-text-primary">Buy Team</h2>
+                  <button
+                    onClick={() => setShowBuyModal(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-primary text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="p-6">
+                  {/* Team Preview */}
+                  <div className="flex items-center gap-4 p-4 bg-bg-primary rounded-xl mb-4">
+                    {imageUrl ? (
+                      <Image src={imageUrl} alt={teamName} width={56} height={56} className="rounded-xl object-cover" />
+                    ) : (
+                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${
+                        draftType === 'jackpot' ? 'from-error/40 to-error/20'
+                        : draftType === 'hof' ? 'from-hof/40 to-hof/20'
+                        : 'from-pro/40 to-pro/20'
+                      } flex items-center justify-center`}>
+                        <span className="text-2xl">🍌</span>
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-text-primary font-semibold font-mono">{teamName}</h3>
+                      <div className="flex gap-2 mt-1">
+                        {draftType === 'jackpot' && (
+                          <span className="px-2 py-0.5 bg-error/20 text-error text-[10px] font-bold rounded">JACKPOT</span>
+                        )}
+                        {draftType === 'hof' && (
+                          <span className="px-2 py-0.5 bg-hof/20 text-hof text-[10px] font-bold rounded">HOF</span>
+                        )}
+                        {rank && rank !== 'N/A' && (
+                          <span className="text-text-muted text-xs">Rank #{rank}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div className="mb-4">
+                    <label className="block text-text-secondary text-sm mb-3">Payment Method</label>
+                    <div className="grid gap-3 grid-cols-2">
+                      <button
+                        onClick={() => setPaymentMethod('card')}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          paymentMethod === 'card'
+                            ? 'border-banana bg-banana/10'
+                            : 'border-bg-tertiary hover:border-bg-elevated'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <svg className="w-6 h-4" viewBox="0 0 24 16" fill="none">
+                            <rect width="24" height="16" rx="2" fill="#1A1F71"/>
+                            <path d="M9.5 10.5L10.5 5.5H12L11 10.5H9.5Z" fill="white"/>
+                            <path d="M15.5 5.5C15 5.5 14.5 5.7 14.3 6L12 10.5H13.7L14 9.7H16L16.2 10.5H17.7L16.5 5.5H15.5ZM14.5 8.5L15.2 6.7L15.6 8.5H14.5Z" fill="white"/>
+                            <path d="M8 5.5L6 10.5H7.5L7.8 9.5H9.5L9.8 10.5H11.3L9.3 5.5H8ZM8 8.3L8.5 6.7L9 8.3H8Z" fill="white"/>
+                          </svg>
+                          <svg className="w-8 h-5" viewBox="0 0 32 20" fill="none">
+                            <rect width="32" height="20" rx="2" fill="#EB001B"/>
+                            <circle cx="12" cy="10" r="6" fill="#EB001B"/>
+                            <circle cx="20" cy="10" r="6" fill="#F79E1B"/>
+                            <path d="M16 5.5C17.5 6.7 18.5 8.2 18.5 10C18.5 11.8 17.5 13.3 16 14.5C14.5 13.3 13.5 11.8 13.5 10C13.5 8.2 14.5 6.7 16 5.5Z" fill="#FF5F00"/>
+                          </svg>
+                        </div>
+                        <span className={`text-sm font-medium ${paymentMethod === 'card' ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          Card
+                        </span>
+                        <p className="text-text-muted text-[10px] mt-1">Powered by MoonPay</p>
+                      </button>
+                      <button
+                        onClick={() => setPaymentMethod('usdc')}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          paymentMethod === 'usdc'
+                            ? 'border-banana bg-banana/10'
+                            : 'border-bg-tertiary hover:border-bg-elevated'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <span className="text-lg font-bold text-text-primary">$</span>
+                        </div>
+                        <span className={`text-sm font-medium ${paymentMethod === 'usdc' ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          USDC
+                        </span>
+                        {user?.usdcBalance != null && (
+                          <p className="text-text-muted text-[10px] mt-1">
+                            Balance: ${user.usdcBalance.toFixed(2)}
+                          </p>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Error display */}
+                  {txError && (
+                    <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
+                      <p className="text-error text-sm">{txError}</p>
+                    </div>
+                  )}
+
+                  {/* Price Summary */}
+                  <div className="p-4 bg-bg-primary rounded-xl space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-secondary">Price</span>
+                      <span className="text-text-primary font-mono">
+                        ${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {paymentMethod === 'card' ? (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-secondary">Processing Fee (3%)</span>
+                        <span className="text-text-primary font-mono">
+                          ${(price * 0.03).toFixed(2)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-secondary">Network Fee (est.)</span>
+                        <span className="text-text-primary font-mono">~$0.01</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm pt-3 border-t border-bg-tertiary font-semibold">
+                      <span className="text-text-primary">Total</span>
+                      <span className="text-text-primary font-mono">
+                        {paymentMethod === 'card'
+                          ? `$${(price * 1.03).toFixed(2)}`
+                          : `$${(price + 0.01).toFixed(2)}`
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 pt-0">
+                  <button
+                    onClick={handleBuy}
+                    className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                  >
+                    {paymentMethod === 'card' ? (
+                      <>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        Pay ${(price * 1.03).toFixed(2)}
+                      </>
+                    ) : (
+                      <>
+                        Pay ${(price + 0.01).toFixed(2)} USDC
+                      </>
+                    )}
+                  </button>
+                  <p className="text-center text-text-muted text-xs mt-3">
+                    {paymentMethod === 'card'
+                      ? 'Secure payment powered by MoonPay'
+                      : 'USDC payment on Base network'
+                    }
+                  </p>
+                </div>
+              </>
+            )}
+
+            {buyStep === 'processing' && (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 mx-auto mb-6 relative">
+                  <div className="absolute inset-0 border-4 border-bg-tertiary rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-banana rounded-full border-t-transparent animate-spin"></div>
+                </div>
+                <h3 className="text-text-primary font-semibold text-lg mb-2">
+                  {paymentMethod === 'card'
+                    ? cardFlowStep === 'funding' ? 'Completing Payment'
+                    : cardFlowStep === 'waiting' ? 'Waiting for Funds'
+                    : 'Purchasing Team'
+                    : 'Processing Payment'
+                  }
+                </h3>
+                <p className="text-text-secondary text-sm">
+                  {paymentMethod === 'card'
+                    ? cardFlowStep === 'funding' ? 'Complete your payment in the MoonPay window...'
+                    : cardFlowStep === 'waiting' ? 'Your funds are on the way. This may take a moment...'
+                    : 'Completing your purchase on Base...'
+                    : 'Completing your purchase on Base...'
+                  }
+                </p>
+                {paymentMethod === 'card' && cardFlowStep !== 'idle' && (
+                  <div className="mt-6 space-y-2 text-left max-w-[240px] mx-auto">
+                    {[
+                      { key: 'funding', label: 'Card payment' },
+                      { key: 'waiting', label: 'Funds arriving' },
+                      { key: 'buying', label: 'Purchase team' },
+                    ].map(({ key, label }) => {
+                      const stepOrder = ['funding', 'waiting', 'buying'];
+                      const currentIdx = stepOrder.indexOf(cardFlowStep);
+                      const stepIdx = stepOrder.indexOf(key);
+                      const isComplete = stepIdx < currentIdx;
+                      const isActive = key === cardFlowStep;
+
+                      return (
+                        <div key={key} className="flex items-center gap-2.5 text-sm">
+                          {isComplete ? (
+                            <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center">
+                              <svg className="w-3 h-3 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path d="M5 13l4 4L19 7"/>
+                              </svg>
+                            </div>
+                          ) : isActive ? (
+                            <div className="w-5 h-5 rounded-full border-2 border-banana/30 border-t-banana animate-spin" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border border-bg-tertiary" />
+                          )}
+                          <span className={isComplete ? 'text-text-primary' : isActive ? 'text-text-secondary' : 'text-text-muted'}>
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {buyStep === 'complete' && (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 mx-auto mb-6 bg-success/20 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <h3 className="text-text-primary font-semibold text-lg mb-2">Purchase Complete!</h3>
+                <p className="text-text-secondary text-sm mb-6">{teamName} is now yours</p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => {
+                      setShowBuyModal(false);
+                      fetchNft();
+                    }}
+                    className="px-6 py-3 bg-bg-primary border border-bg-tertiary text-text-primary font-semibold rounded-xl hover:bg-bg-tertiary transition-all text-sm"
+                  >
+                    Close
+                  </button>
+                  <Link
+                    href="/marketplace?tab=sell"
+                    className="px-6 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all text-sm"
+                  >
+                    View My Teams
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Make Offer Modal */}
       {showOfferModal && (
