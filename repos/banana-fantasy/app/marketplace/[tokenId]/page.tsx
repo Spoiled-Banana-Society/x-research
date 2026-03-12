@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
-import { useNftOffers, logActivity, notifySeller, notifyOwnerOfOffer } from '@/hooks/useMarketplace';
+import { useNftOffers, useTokenSaleHistory, logActivity, notifySeller, notifyOwnerOfOffer } from '@/hooks/useMarketplace';
 import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
@@ -112,8 +112,14 @@ export default function NftDetailPage() {
   // Cancel offer state
   const [cancellingOfferHash, setCancellingOfferHash] = useState<string | null>(null);
 
+  // Share state
+  const [shareCopied, setShareCopied] = useState(false);
+
   // Offers data
   const { offers, isLoading: offersLoading, refetch: refetchOffers, bestOffer } = useNftOffers(tokenId);
+
+  // Sale history
+  const { activities: saleHistory, isLoading: saleHistoryLoading } = useTokenSaleHistory(tokenId);
 
   const fetchNft = useCallback(() => {
     if (!tokenId) return;
@@ -131,6 +137,24 @@ export default function NftDetailPage() {
   useEffect(() => {
     fetchNft();
   }, [fetchNft]);
+
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    const name = nft?.name || `BBB #${tokenId}`;
+    const listing = nft?.listing;
+    const buyPrice = listing?.price?.current
+      ? Number(listing.price.current.value) / Math.pow(10, listing.price.current.decimals ?? 18)
+      : null;
+    const text = `Check out ${name}${buyPrice ? ` - $${buyPrice.toFixed(2)}` : ''} on SBS Marketplace`;
+
+    if (navigator.share) {
+      navigator.share({ title: name, text, url }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
+  }, [nft, tokenId]);
 
   // Auto-trigger buy flow when navigated with ?buy=true
   const buyTriggered = React.useRef(false);
@@ -645,7 +669,23 @@ export default function NftDetailPage() {
         {/* Right: Details */}
         <div>
           {/* Title */}
-          <h1 className="text-2xl font-bold text-text-primary font-mono mb-1">{teamName}</h1>
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-2xl font-bold text-text-primary font-mono">{teamName}</h1>
+            <button
+              onClick={handleShare}
+              className="w-10 h-10 rounded-xl bg-bg-secondary border border-bg-tertiary flex items-center justify-center text-text-secondary hover:text-text-primary hover:border-banana transition-all"
+            >
+              {shareCopied ? (
+                <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path d="M5 13l4 4L19 7"/>
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              )}
+            </button>
+          </div>
           <div className="flex items-center gap-2 text-text-muted text-sm mb-6">
             <span>Token #{tokenId}</span>
             {nftOwner && (
@@ -871,6 +911,63 @@ export default function NftDetailPage() {
 
               {acceptError && (
                 <p className="text-error text-xs mt-3">{acceptError}</p>
+              )}
+            </div>
+          )}
+
+          {/* Sale History */}
+          {(saleHistory.length > 0 || saleHistoryLoading) && (
+            <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-5 mt-6">
+              <h3 className="text-text-primary font-semibold text-sm mb-4">
+                Sale History {saleHistory.length > 0 && <span className="text-text-muted font-normal">({saleHistory.length})</span>}
+              </h3>
+              {saleHistoryLoading && saleHistory.length === 0 ? (
+                <div className="space-y-3">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="h-10 bg-bg-tertiary rounded-xl animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {saleHistory.map(sale => {
+                    const saleDate = new Date(sale.timestamp);
+                    const timeAgo = (() => {
+                      const diff = Date.now() - saleDate.getTime();
+                      const mins = Math.floor(diff / 60000);
+                      if (mins < 60) return `${mins}m ago`;
+                      const hrs = Math.floor(mins / 60);
+                      if (hrs < 24) return `${hrs}h ago`;
+                      const days = Math.floor(hrs / 24);
+                      if (days < 30) return `${days}d ago`;
+                      return saleDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    })();
+                    return (
+                      <div
+                        key={sale.id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-bg-primary border border-bg-tertiary"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-banana/10 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-banana" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-text-primary text-sm font-mono font-medium">
+                              ${sale.price?.toFixed(2) ?? '—'}
+                            </p>
+                            {sale.counterparty && (
+                              <p className="text-text-muted text-[11px]">
+                                {sale.type === 'buy' ? 'Bought by' : 'Sold to'} {sale.counterparty.slice(0, 6)}...{sale.counterparty.slice(-4)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-text-muted text-xs">{timeAgo}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

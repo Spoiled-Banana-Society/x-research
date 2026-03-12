@@ -497,6 +497,169 @@ export async function logActivity(data: {
   }
 }
 
+// ── Last Sale Prices (batch) ─────────────────────────────────────
+
+interface LastSaleData {
+  price: number;
+  timestamp: string;
+}
+
+export function useLastSales(tokenIds: string[]): Record<string, LastSaleData> {
+  const [data, setData] = useState<Record<string, LastSaleData>>({});
+  const idsKey = tokenIds.sort().join(',');
+
+  const fetchLastSales = useCallback(async () => {
+    if (tokenIds.length === 0) {
+      setData({});
+      return;
+    }
+
+    // Chunk into groups of 30 for Firestore 'in' limit
+    const chunks: string[][] = [];
+    for (let i = 0; i < tokenIds.length; i += 30) {
+      chunks.push(tokenIds.slice(i, i + 30));
+    }
+
+    try {
+      const results = await Promise.all(
+        chunks.map(async (chunk) => {
+          const res = await fetch(`/api/marketplace/activity?tokenIds=${chunk.join(',')}`);
+          if (!res.ok) return {};
+          const json = await res.json();
+          return json.lastSales ?? {};
+        })
+      );
+
+      const merged: Record<string, LastSaleData> = {};
+      for (const result of results) {
+        Object.assign(merged, result);
+      }
+      setData(merged);
+    } catch (err) {
+      console.error('[useLastSales] error:', err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+
+  useEffect(() => {
+    fetchLastSales();
+  }, [fetchLastSales]);
+
+  return data;
+}
+
+// ── Token Sale History ──────────────────────────────────────────
+
+export function useTokenSaleHistory(tokenId: string | null) {
+  const [activities, setActivities] = useState<ActivityEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    if (!tokenId) {
+      setActivities([]);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/marketplace/activity?tokenId=${tokenId}&type=buy,sell`);
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      const json = await res.json();
+      setActivities(json.activities ?? []);
+    } catch (err) {
+      console.error('[useTokenSaleHistory] error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [tokenId]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  return { activities, isLoading, refetch: fetchHistory };
+}
+
+// ── Watchlist ────────────────────────────────────────────────────
+
+interface WatchlistItem {
+  id: string;
+  tokenId: string;
+  lastKnownPrice: number | null;
+  addedAt: string;
+}
+
+interface UseWatchlistResult {
+  watchlist: WatchlistItem[];
+  watchlistSet: Set<string>;
+  toggle: (tokenId: string, price?: number | null) => void;
+  refetch: () => void;
+  isLoading: boolean;
+}
+
+export function useWatchlist(walletAddress: string | null): UseWatchlistResult {
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchWatchlist = useCallback(async () => {
+    if (!walletAddress) {
+      setWatchlist([]);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/marketplace/watchlist?wallet=${encodeURIComponent(walletAddress)}`);
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      const json = await res.json();
+      setWatchlist(json.items ?? []);
+    } catch (err) {
+      console.error('[useWatchlist] error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [walletAddress]);
+
+  useEffect(() => {
+    fetchWatchlist();
+  }, [fetchWatchlist]);
+
+  const watchlistSet = useMemo(
+    () => new Set(watchlist.map(w => w.tokenId)),
+    [watchlist],
+  );
+
+  const toggle = useCallback(
+    (tokenId: string, price?: number | null) => {
+      if (!walletAddress) return;
+
+      const isWatchlisted = watchlistSet.has(tokenId);
+
+      if (isWatchlisted) {
+        // Optimistic remove
+        setWatchlist(prev => prev.filter(w => w.tokenId !== tokenId));
+        fetch('/api/marketplace/watchlist', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet: walletAddress, tokenId }),
+        }).catch(() => fetchWatchlist());
+      } else {
+        // Optimistic add
+        setWatchlist(prev => [
+          { id: `temp-${tokenId}`, tokenId, lastKnownPrice: price ?? null, addedAt: new Date().toISOString() },
+          ...prev,
+        ]);
+        fetch('/api/marketplace/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet: walletAddress, tokenId, price }),
+        }).catch(() => fetchWatchlist());
+      }
+    },
+    [walletAddress, watchlistSet, fetchWatchlist],
+  );
+
+  return { watchlist, watchlistSet, toggle, refetch: fetchWatchlist, isLoading };
+}
+
 // ── Firestore Notification Helpers ───────────────────────────────
 
 async function postNotification(data: {

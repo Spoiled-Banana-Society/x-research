@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
-import { useCollectionStats, useListings, useMyNfts, useNftOffers, useCollectionNfts, useActivityHistory, useMyNftOffers, logActivity, notifySeller } from '@/hooks/useMarketplace';
+import { useCollectionStats, useListings, useMyNfts, useNftOffers, useCollectionNfts, useActivityHistory, useMyNftOffers, useLastSales, useWatchlist, logActivity, notifySeller } from '@/hooks/useMarketplace';
 import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
@@ -73,12 +73,12 @@ export default function MarketplacePage() {
     return wallets[0];
   }, [walletAddress, wallets]);
 
-  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'activity'>('buy');
+  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'activity' | 'watchlist'>('buy');
 
   // Handle ?tab= URL parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'sell' || tabParam === 'activity') {
+    if (tabParam === 'sell' || tabParam === 'activity' || tabParam === 'watchlist') {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -99,6 +99,15 @@ export default function MarketplacePage() {
   const [txError, setTxError] = useState<string | null>(null);
   const [cancelConfirmTeam, setCancelConfirmTeam] = useState<MarketplaceTeam | null>(null);
   const [cardFlowStep, setCardFlowStep] = useState<'idle' | 'funding' | 'waiting' | 'buying'>('idle');
+  const [shareCopied, setShareCopied] = useState<string | null>(null);
+
+  // Sweep state
+  const [sweepMode, setSweepMode] = useState(false);
+  const [sweepSelected, setSweepSelected] = useState<Set<string>>(new Set());
+  const [showSweepModal, setShowSweepModal] = useState(false);
+  const [sweepStep, setSweepStep] = useState<'confirm' | 'processing' | 'complete'>('confirm');
+  const [sweepProgress, setSweepProgress] = useState<Record<string, 'pending' | 'processing' | 'done' | 'failed'>>({});
+  const [sweepPaymentMethod, setSweepPaymentMethod] = useState<'card' | 'usdc'>('card');
 
   // Real data hooks
   const { data: collectionStats, isLoading: statsLoading } = useCollectionStats();
@@ -147,6 +156,9 @@ export default function MarketplacePage() {
     allOffers: myNftOffers,
     isLoading: myNftOffersLoading,
   } = useMyNftOffers(isLoggedIn ? walletAddress : null, myNfts);
+
+  // Watchlist hook
+  const { watchlist, watchlistSet, toggle: toggleWatchlist } = useWatchlist(isLoggedIn ? walletAddress : null);
 
   // Enrich listings with current user's profile (backend may not have it yet)
   const enrichedListings = useMemo(() => {
@@ -220,6 +232,143 @@ export default function MarketplacePage() {
       return true;
     });
   }, [filteredTeams]);
+
+  // Last sale prices for displayed cards
+  const displayedTokenIds = useMemo(() => deduplicatedTeams.map(t => t.tokenId), [deduplicatedTeams]);
+  const lastSales = useLastSales(displayedTokenIds);
+
+  // Share handler
+  const handleShare = useCallback(async (team: { name: string; tokenId: string; price?: number | null }, e?: React.MouseEvent) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    const url = `${window.location.origin}/marketplace/${team.tokenId}`;
+    const text = `Check out ${team.name}${team.price ? ` - $${team.price.toFixed(2)}` : ''} on SBS Marketplace`;
+
+    if (navigator.share) {
+      navigator.share({ title: team.name, text, url }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setShareCopied(team.tokenId);
+      setTimeout(() => setShareCopied(null), 2000);
+    }
+  }, []);
+
+  // Sweep helpers
+  const toggleSweepSelect = useCallback((tokenId: string) => {
+    setSweepSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(tokenId)) next.delete(tokenId);
+      else next.add(tokenId);
+      return next;
+    });
+  }, []);
+
+  const sweepTeams = useMemo(
+    () => deduplicatedTeams.filter(t => sweepSelected.has(t.tokenId) && t.price != null),
+    [deduplicatedTeams, sweepSelected],
+  );
+  const sweepTotal = useMemo(
+    () => sweepTeams.reduce((sum, t) => sum + (t.price || 0), 0),
+    [sweepTeams],
+  );
+
+  const executeSweep = useCallback(async () => {
+    if (sweepTeams.length === 0 || !walletAddress) return;
+
+    setSweepStep('processing');
+
+    // Init progress
+    const progress: Record<string, 'pending' | 'processing' | 'done' | 'failed'> = {};
+    sweepTeams.forEach(t => { progress[t.tokenId] = 'pending'; });
+    setSweepProgress({ ...progress });
+
+    if (sweepPaymentMethod === 'card') {
+      // Fund wallet for total first
+      try {
+        const result = await fundWallet({
+          address: walletAddress,
+          options: {
+            chain: BASE_SEPOLIA,
+            amount: String(sweepTotal),
+            asset: 'USDC',
+            card: { preferredProvider: 'moonpay' },
+          },
+        });
+        if (result.status === 'cancelled') {
+          setSweepStep('confirm');
+          return;
+        }
+        // Wait for funds
+        const requiredUsdc = BigInt(Math.ceil(sweepTotal * 1e6));
+        const startTime = Date.now();
+        while (Date.now() - startTime < 300_000) {
+          const balance = await getUsdcBalance(walletAddress as Address);
+          if (balance >= requiredUsdc) break;
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      } catch (err) {
+        console.error('[Sweep] Fund failed:', err);
+        setSweepStep('confirm');
+        return;
+      }
+    } else {
+      // USDC: check balance upfront
+      try {
+        const { checkUsdcBalance } = await import('@/lib/marketplace/buy');
+        const { sufficient, balance } = await checkUsdcBalance(walletAddress, sweepTotal);
+        if (!sufficient) {
+          setTxError(`Insufficient balance. You have $${balance.toFixed(2)} but need $${sweepTotal.toFixed(2)}.`);
+          setSweepStep('confirm');
+          return;
+        }
+      } catch {
+        setSweepStep('confirm');
+        return;
+      }
+    }
+
+    // Execute each purchase sequentially
+    const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
+
+    for (const team of sweepTeams) {
+      progress[team.tokenId] = 'processing';
+      setSweepProgress({ ...progress });
+
+      try {
+        if (!team.orderHash || !team.protocolAddress) throw new Error('Missing order data');
+        const tx = await getFulfillmentTx(team.orderHash, walletAddress, team.protocolAddress);
+        const receipt = await sendTransaction(
+          { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
+          { sponsor: true, uiOptions: { description: `Purchase ${team.name} — gas fees covered by SBS` } },
+        );
+        const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
+
+        if (team.ownerAddress) {
+          notifySeller({
+            sellerWallet: team.ownerAddress,
+            tokenId: team.tokenId,
+            teamName: team.name,
+            price: team.price || 0,
+            buyerWallet: walletAddress,
+          });
+        }
+        logActivity({ type: 'buy', walletAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, counterparty: team.ownerAddress || null, orderHash: team.orderHash || null, txHash: txHash ? String(txHash) : null });
+        if (team.ownerAddress) {
+          logActivity({ type: 'sell', walletAddress: team.ownerAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, counterparty: walletAddress, orderHash: team.orderHash || null, txHash: txHash ? String(txHash) : null });
+        }
+
+        progress[team.tokenId] = 'done';
+      } catch (err) {
+        console.error(`[Sweep] Failed ${team.tokenId}:`, err);
+        progress[team.tokenId] = 'failed';
+      }
+      setSweepProgress({ ...progress });
+    }
+
+    setSweepStep('complete');
+    refetchListings();
+    refetchMyNfts();
+    refetchActivity();
+  }, [sweepTeams, sweepTotal, sweepPaymentMethod, walletAddress, sendTransaction, fundWallet, refetchListings, refetchMyNfts, refetchActivity]);
 
   // Top performing listings for leaderboard section
   const leaderboardTeams = [...enrichedListings]
@@ -591,6 +740,30 @@ export default function MarketplacePage() {
             >
               Activity
             </button>
+            <button
+              onClick={() => {
+                if (!isLoggedIn) {
+                  setShowLoginModal(true);
+                  return;
+                }
+                setActiveTab('watchlist');
+              }}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                activeTab === 'watchlist'
+                  ? 'bg-banana text-black'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill={activeTab === 'watchlist' ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Watchlist
+              {watchlist.length > 0 && (
+                <span className="text-[10px] bg-error/20 text-error px-1.5 py-0.5 rounded-full font-bold leading-none">
+                  {watchlist.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -750,19 +923,42 @@ export default function MarketplacePage() {
               </div>
             </div>
 
-            {/* Sort Dropdown */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-bg-secondary border border-bg-tertiary rounded-xl px-4 py-2 text-sm text-text-primary appearance-none cursor-pointer pr-10 focus:outline-none focus:border-banana"
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px' }}
-            >
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rank">Best Rank</option>
-              <option value="points">Most Points</option>
-              <option value="playoffs">Playoff Odds</option>
-            </select>
+            <div className="flex items-center gap-3">
+              {/* Sweep Toggle */}
+              <button
+                onClick={() => {
+                  if (!isLoggedIn) { setShowLoginModal(true); return; }
+                  setSweepMode(prev => {
+                    if (prev) setSweepSelected(new Set());
+                    return !prev;
+                  });
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                  sweepMode
+                    ? 'bg-banana text-black'
+                    : 'bg-bg-secondary border border-bg-tertiary text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Sweep
+              </button>
+
+              {/* Sort Dropdown */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-bg-secondary border border-bg-tertiary rounded-xl px-4 py-2 text-sm text-text-primary appearance-none cursor-pointer pr-10 focus:outline-none focus:border-banana"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px' }}
+              >
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="rank">Best Rank</option>
+                <option value="points">Most Points</option>
+                <option value="playoffs">Playoff Odds</option>
+              </select>
+            </div>
           </div>
 
           {/* Teams Grid */}
@@ -793,9 +989,17 @@ export default function MarketplacePage() {
               {deduplicatedTeams.map((team) => (
                 <div
                   key={`${team.id}-${team.orderHash}`}
-                  onClick={() => router.push(`/marketplace/${team.tokenId}`)}
+                  onClick={() => {
+                    if (sweepMode && team.price != null) {
+                      toggleSweepSelect(team.tokenId);
+                    } else {
+                      router.push(`/marketplace/${team.tokenId}`);
+                    }
+                  }}
                   className={`bg-bg-secondary border rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer ${
-                    team.isJackpot
+                    sweepMode && sweepSelected.has(team.tokenId)
+                      ? 'ring-2 ring-banana border-banana/50'
+                      : team.isJackpot
                       ? 'border-error/30 hover:shadow-error/20'
                       : team.isHof
                       ? 'border-hof/30 hover:shadow-hof/20'
@@ -828,6 +1032,43 @@ export default function MarketplacePage() {
                         </svg>
                       </div>
                     )}
+
+                    {/* Share + Heart icons */}
+                    <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
+                      <button
+                        onClick={(e) => handleShare(team, e)}
+                        className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                      >
+                        {shareCopied === team.tokenId ? (
+                          <svg className="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path d="M5 13l4 4L19 7"/>
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          if (!isLoggedIn) { setShowLoginModal(true); return; }
+                          toggleWatchlist(team.tokenId, team.price);
+                        }}
+                        className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-colors"
+                      >
+                        <svg
+                          className={`w-3.5 h-3.5 ${watchlistSet.has(team.tokenId) ? 'text-red-500' : 'text-white'}`}
+                          fill={watchlistSet.has(team.tokenId) ? 'currentColor' : 'none'}
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                      </button>
+                    </div>
 
                     {/* Draft Type Badge */}
                     <div className="absolute top-3 left-3">
@@ -902,13 +1143,44 @@ export default function MarketplacePage() {
                             <p className="text-text-primary font-mono text-lg font-bold">
                               ${team.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </p>
+                            {lastSales[team.tokenId] && (
+                              <p className="text-text-muted text-[10px] font-mono">
+                                Last sale: ${lastSales[team.tokenId].price.toFixed(2)}
+                              </p>
+                            )}
                           </>
                         ) : (
-                          <p className="text-text-muted text-xs">Not listed</p>
+                          <>
+                            <p className="text-text-muted text-xs">Not listed</p>
+                            {lastSales[team.tokenId] && (
+                              <p className="text-text-muted text-[10px] font-mono">
+                                Last sale: ${lastSales[team.tokenId].price.toFixed(2)}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {walletAddress && team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase() ? (
+                        {sweepMode && team.price != null ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              toggleSweepSelect(team.tokenId);
+                            }}
+                            className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${
+                              sweepSelected.has(team.tokenId)
+                                ? 'border-banana bg-banana text-black'
+                                : 'border-bg-tertiary hover:border-text-muted'
+                            }`}
+                          >
+                            {sweepSelected.has(team.tokenId) && (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path d="M5 13l4 4L19 7"/>
+                              </svg>
+                            )}
+                          </button>
+                        ) : walletAddress && team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase() ? (
                           team.price != null ? (
                             <span className="text-text-muted text-xs">You</span>
                           ) : (
@@ -1456,6 +1728,285 @@ export default function MarketplacePage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Watchlist Tab */}
+      {activeTab === 'watchlist' && (
+        <div>
+          {watchlist.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="w-16 h-16 mx-auto mb-6 bg-bg-secondary rounded-full flex items-center justify-center border border-bg-tertiary">
+                <svg className="w-8 h-8 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </div>
+              <h3 className="text-text-primary font-semibold text-lg mb-2">No teams watchlisted yet</h3>
+              <p className="text-text-secondary text-sm mb-6">Tap the heart icon on any team card to add it to your watchlist.</p>
+              <button
+                onClick={() => setActiveTab('buy')}
+                className="px-6 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all text-sm"
+              >
+                Browse Teams
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {deduplicatedTeams.filter(t => watchlistSet.has(t.tokenId)).map((team) => (
+                <div
+                  key={`wl-${team.id}-${team.orderHash}`}
+                  onClick={() => router.push(`/marketplace/${team.tokenId}`)}
+                  className={`bg-bg-secondary border rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer ${
+                    team.isJackpot
+                      ? 'border-error/30 hover:shadow-error/20'
+                      : team.isHof
+                      ? 'border-hof/30 hover:shadow-hof/20'
+                      : 'border-bg-tertiary hover:border-bg-elevated'
+                  }`}
+                >
+                  <div className="relative h-80 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
+                    {team.imageUrl ? (
+                      <Image src={team.imageUrl} alt={team.name} width={230} height={300} className="rounded-2xl shadow-lg" />
+                    ) : (
+                      <div className="flex items-center justify-center">
+                        <svg width="160" height="100" viewBox="0 0 160 100" className="drop-shadow-lg">
+                          <defs><linearGradient id={`wlGrad-${team.id}`} x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#FBBF24"/><stop offset="100%" stopColor="#D97706"/></linearGradient></defs>
+                          <rect x="0" y="0" width="160" height="100" rx="12" fill={`url(#wlGrad-${team.id})`}/>
+                          <circle cx="0" cy="50" r="10" fill="#1a1a2e"/><circle cx="160" cy="50" r="10" fill="#1a1a2e"/>
+                          <text x="80" y="55" textAnchor="middle" fill="#1C1C1E" fontSize="13" fontWeight="bold" fontFamily="system-ui">Banana Best Ball IV</text>
+                        </svg>
+                      </div>
+                    )}
+                    {/* Heart (remove) */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleWatchlist(team.tokenId, team.price); }}
+                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-colors z-10"
+                    >
+                      <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    <h3 className="text-lg font-semibold text-text-primary font-mono mb-1">{team.name}</h3>
+                    <div className="flex items-center justify-between mt-3">
+                      <div>
+                        {team.price != null ? (
+                          <p className="text-text-primary font-mono text-lg font-bold">${team.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        ) : (
+                          <p className="text-text-muted text-xs">Not listed</p>
+                        )}
+                      </div>
+                      {team.price != null && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openBuyModal(team); }}
+                          className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
+                        >
+                          Buy Now
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {/* Show watchlisted tokens not in current view */}
+              {watchlist.filter(w => !deduplicatedTeams.some(t => t.tokenId === w.tokenId)).length > 0 && (
+                <div className="col-span-full text-center py-6">
+                  <p className="text-text-muted text-sm">
+                    {watchlist.filter(w => !deduplicatedTeams.some(t => t.tokenId === w.tokenId)).length} watchlisted teams not currently loaded.
+                    <button onClick={() => { setViewFilter('all'); setActiveTab('buy'); }} className="text-banana hover:underline ml-1">View All Teams</button>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sweep Floating Bar */}
+      {sweepMode && sweepSelected.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-bg-secondary/95 backdrop-blur-md border-t border-bg-tertiary px-4 sm:px-8 py-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-text-primary font-semibold text-sm">
+                {sweepSelected.size} team{sweepSelected.size > 1 ? 's' : ''} selected
+              </span>
+              <span className="text-text-muted text-sm font-mono">
+                Total: ${sweepTotal.toFixed(2)}
+              </span>
+              <button
+                onClick={() => setSweepSelected(new Set())}
+                className="text-text-muted text-xs hover:text-text-primary transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                setSweepStep('confirm');
+                setShowSweepModal(true);
+              }}
+              className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all text-sm"
+            >
+              Buy {sweepSelected.size} Team{sweepSelected.size > 1 ? 's' : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sweep Modal */}
+      {showSweepModal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => sweepStep === 'confirm' && setShowSweepModal(false)}
+        >
+          <div
+            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {sweepStep === 'confirm' && (
+              <>
+                <div className="flex items-center justify-between p-6 border-b border-bg-tertiary sticky top-0 bg-bg-secondary z-10">
+                  <h2 className="text-lg font-semibold text-text-primary">Sweep Buy</h2>
+                  <button
+                    onClick={() => setShowSweepModal(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-primary text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+                <div className="p-6">
+                  {/* Selected teams */}
+                  <div className="space-y-3 mb-6">
+                    {sweepTeams.map(team => (
+                      <div key={team.tokenId} className="flex items-center justify-between p-3 bg-bg-primary rounded-xl border border-bg-tertiary">
+                        <div className="flex items-center gap-3">
+                          {team.imageUrl ? (
+                            <Image src={team.imageUrl} alt={team.name} width={40} height={40} className="rounded-lg" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-bg-tertiary flex items-center justify-center"><span className="text-sm">🍌</span></div>
+                          )}
+                          <span className="text-text-primary font-mono text-sm">{team.name}</span>
+                        </div>
+                        <span className="text-text-primary font-mono text-sm font-semibold">${(team.price || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Payment method */}
+                  <div className="mb-4">
+                    <label className="block text-text-secondary text-sm mb-3">Payment Method</label>
+                    <div className="grid gap-3 grid-cols-2">
+                      <button
+                        onClick={() => setSweepPaymentMethod('card')}
+                        className={`p-3 rounded-xl border-2 transition-all text-center ${sweepPaymentMethod === 'card' ? 'border-banana bg-banana/10' : 'border-bg-tertiary hover:border-bg-elevated'}`}
+                      >
+                        <span className={`text-sm font-medium ${sweepPaymentMethod === 'card' ? 'text-text-primary' : 'text-text-secondary'}`}>Card</span>
+                      </button>
+                      <button
+                        onClick={() => setSweepPaymentMethod('usdc')}
+                        className={`p-3 rounded-xl border-2 transition-all text-center ${sweepPaymentMethod === 'usdc' ? 'border-banana bg-banana/10' : 'border-bg-tertiary hover:border-bg-elevated'}`}
+                      >
+                        <span className={`text-sm font-medium ${sweepPaymentMethod === 'usdc' ? 'text-text-primary' : 'text-text-secondary'}`}>USDC</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Total */}
+                  <div className="p-4 bg-bg-primary rounded-xl space-y-2 mb-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-secondary">{sweepTeams.length} teams</span>
+                      <span className="text-text-primary font-mono">${sweepTotal.toFixed(2)}</span>
+                    </div>
+                    {sweepPaymentMethod === 'card' && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-secondary">Processing Fee (3%)</span>
+                        <span className="text-text-primary font-mono">${(sweepTotal * 0.03).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm pt-2 border-t border-bg-tertiary font-semibold">
+                      <span className="text-text-primary">Total</span>
+                      <span className="text-text-primary font-mono">
+                        ${sweepPaymentMethod === 'card' ? (sweepTotal * 1.03).toFixed(2) : sweepTotal.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {txError && (
+                    <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
+                      <p className="text-error text-sm">{txError}</p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={executeSweep}
+                    className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
+                  >
+                    Pay ${sweepPaymentMethod === 'card' ? (sweepTotal * 1.03).toFixed(2) : sweepTotal.toFixed(2)}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {sweepStep === 'processing' && (
+              <div className="p-6">
+                <h3 className="text-text-primary font-semibold text-lg mb-6 text-center">Purchasing Teams</h3>
+                <div className="space-y-3">
+                  {sweepTeams.map(team => {
+                    const status = sweepProgress[team.tokenId] || 'pending';
+                    return (
+                      <div key={team.tokenId} className="flex items-center justify-between p-3 bg-bg-primary rounded-xl border border-bg-tertiary">
+                        <div className="flex items-center gap-3">
+                          {status === 'done' ? (
+                            <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+                              <svg className="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                          ) : status === 'failed' ? (
+                            <div className="w-6 h-6 rounded-full bg-error/20 flex items-center justify-center">
+                              <svg className="w-3.5 h-3.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </div>
+                          ) : status === 'processing' ? (
+                            <div className="w-6 h-6 rounded-full border-2 border-banana/30 border-t-banana animate-spin" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full border border-bg-tertiary" />
+                          )}
+                          <span className="text-text-primary font-mono text-sm">{team.name}</span>
+                        </div>
+                        <span className="text-text-primary font-mono text-sm">${(team.price || 0).toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {sweepStep === 'complete' && (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 mx-auto mb-6 bg-success/20 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <h3 className="text-text-primary font-semibold text-lg mb-2">Sweep Complete!</h3>
+                <p className="text-text-secondary text-sm mb-6">
+                  {Object.values(sweepProgress).filter(s => s === 'done').length} of {sweepTeams.length} teams purchased
+                  {Object.values(sweepProgress).some(s => s === 'failed') && (
+                    <span className="text-error"> ({Object.values(sweepProgress).filter(s => s === 'failed').length} failed)</span>
+                  )}
+                </p>
+                <button
+                  onClick={() => {
+                    setShowSweepModal(false);
+                    setSweepMode(false);
+                    setSweepSelected(new Set());
+                  }}
+                  className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
+                >
+                  Done
+                </button>
+              </div>
             )}
           </div>
         </div>
