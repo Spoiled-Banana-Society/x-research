@@ -114,6 +114,7 @@ export default function NftDetailPage() {
 
   // Share state
   const [shareCopied, setShareCopied] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
 
   // Offers data
   const { offers, isLoading: offersLoading, refetch: refetchOffers, bestOffer } = useNftOffers(tokenId);
@@ -138,7 +139,7 @@ export default function NftDetailPage() {
     fetchNft();
   }, [fetchNft]);
 
-  const handleShare = useCallback(async () => {
+  const getShareText = useCallback(() => {
     const url = window.location.href;
     const name = nft?.name || `BBB #${tokenId}`;
     const listing = nft?.listing;
@@ -146,15 +147,22 @@ export default function NftDetailPage() {
       ? Number(listing.price.current.value) / Math.pow(10, listing.price.current.decimals ?? 18)
       : null;
     const text = `Check out ${name}${buyPrice ? ` - $${buyPrice.toFixed(2)}` : ''} on SBS Marketplace`;
-
-    if (navigator.share) {
-      navigator.share({ title: name, text, url }).catch(() => {});
-    } else {
-      await navigator.clipboard.writeText(`${text}\n${url}`);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    }
+    return { text, url };
   }, [nft, tokenId]);
+
+  const handleShareX = useCallback(() => {
+    const { text, url } = getShareText();
+    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+    setShowShareMenu(false);
+  }, [getShareText]);
+
+  const handleCopyLink = useCallback(async () => {
+    const { text, url } = getShareText();
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    setShareCopied(true);
+    setShowShareMenu(false);
+    setTimeout(() => setShareCopied(false), 2000);
+  }, [getShareText]);
 
   // Auto-trigger buy flow when navigated with ?buy=true
   const buyTriggered = React.useRef(false);
@@ -671,20 +679,47 @@ export default function NftDetailPage() {
           {/* Title */}
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-2xl font-bold text-text-primary font-mono">{teamName}</h1>
-            <button
-              onClick={handleShare}
-              className="w-10 h-10 rounded-xl bg-bg-secondary border border-bg-tertiary flex items-center justify-center text-text-secondary hover:text-text-primary hover:border-banana transition-all"
-            >
-              {shareCopied ? (
-                <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path d="M5 13l4 4L19 7"/>
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
+            <div className="relative">
+              <button
+                onClick={() => setShowShareMenu(prev => !prev)}
+                className="w-10 h-10 rounded-xl bg-bg-secondary border border-bg-tertiary flex items-center justify-center text-text-secondary hover:text-text-primary hover:border-banana transition-all"
+              >
+                {shareCopied ? (
+                  <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path d="M5 13l4 4L19 7"/>
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                )}
+              </button>
+              {showShareMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowShareMenu(false)} />
+                  <div className="absolute right-0 top-12 z-50 bg-bg-secondary border border-bg-tertiary rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                    <button
+                      onClick={handleShareX}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      Share on X
+                    </button>
+                    <button
+                      onClick={handleCopyLink}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-primary hover:bg-bg-tertiary transition-colors border-t border-bg-tertiary"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      Copy Link
+                    </button>
+                  </div>
+                </>
               )}
-            </button>
+            </div>
           </div>
           <div className="flex items-center gap-2 text-text-muted text-sm mb-6">
             <span>Token #{tokenId}</span>

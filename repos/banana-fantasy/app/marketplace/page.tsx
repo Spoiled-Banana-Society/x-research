@@ -99,7 +99,6 @@ export default function MarketplacePage() {
   const [txError, setTxError] = useState<string | null>(null);
   const [cancelConfirmTeam, setCancelConfirmTeam] = useState<MarketplaceTeam | null>(null);
   const [cardFlowStep, setCardFlowStep] = useState<'idle' | 'funding' | 'waiting' | 'buying'>('idle');
-  const [shareCopied, setShareCopied] = useState<string | null>(null);
 
   // Sweep state
   const [sweepMode, setSweepMode] = useState(false);
@@ -237,19 +236,12 @@ export default function MarketplacePage() {
   const displayedTokenIds = useMemo(() => deduplicatedTeams.map(t => t.tokenId), [deduplicatedTeams]);
   const lastSales = useLastSales(displayedTokenIds);
 
-  // Share handler
-  const handleShare = useCallback(async (team: { name: string; tokenId: string; price?: number | null }, e?: React.MouseEvent) => {
+  // Share handler — opens X intent directly from card icons
+  const handleShare = useCallback((team: { name: string; tokenId: string; price?: number | null }, e?: React.MouseEvent) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
     const url = `${window.location.origin}/marketplace/${team.tokenId}`;
     const text = `Check out ${team.name}${team.price ? ` - $${team.price.toFixed(2)}` : ''} on SBS Marketplace`;
-
-    if (navigator.share) {
-      navigator.share({ title: team.name, text, url }).catch(() => {});
-    } else {
-      await navigator.clipboard.writeText(`${text}\n${url}`);
-      setShareCopied(team.tokenId);
-      setTimeout(() => setShareCopied(null), 2000);
-    }
+    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
   }, []);
 
   // Sweep helpers
@@ -1038,16 +1030,11 @@ export default function MarketplacePage() {
                       <button
                         onClick={(e) => handleShare(team, e)}
                         className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                        title="Share on X"
                       >
-                        {shareCopied === team.tokenId ? (
-                          <svg className="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path d="M5 13l4 4L19 7"/>
-                          </svg>
-                        ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                          </svg>
-                        )}
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
                       </button>
                       <button
                         onClick={(e) => {
