@@ -8,6 +8,7 @@ import { ReduxProvider } from '@/redux/provider';
 import { Header } from '@/components/layout/Header';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
+import { OnboardingTutorial } from '@/components/onboarding/OnboardingTutorial';
 import { CrispChat } from '@/components/CrispChat';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -26,13 +27,14 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isDraftRoom = pathname === '/draft-room';
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   const notif = useNotificationOptIn();
 
   useEffect(() => {
-    const handleShowTutorial = () => setShowOnboarding(true);
+    const handleShowTutorial = () => setShowTutorial(true);
     window.addEventListener('show-tutorial', handleShowTutorial);
     return () => window.removeEventListener('show-tutorial', handleShowTutorial);
-  }, [setShowOnboarding]);
+  }, []);
 
   useEffect(() => {
     if (!showLoginModal) return;
@@ -41,7 +43,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   }, [showLoginModal, login, setShowLoginModal]);
 
   const handleShowTutorial = () => {
-    setShowOnboarding(true);
+    setShowTutorial(true);
   };
 
   return (
@@ -51,6 +53,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
         <main id="main-content" tabIndex={-1}>{children}</main>
         <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} />
         {showOnboarding && <OnboardingFlow />}
+        {showTutorial && <OnboardingTutorial onComplete={() => setShowTutorial(false)} />}
         <CrispChat />
         <NotificationOptIn
           show={notif.showPrompt}
