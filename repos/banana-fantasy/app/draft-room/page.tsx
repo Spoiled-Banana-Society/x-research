@@ -1611,18 +1611,18 @@ function DraftRoomContent() {
 
       {/* Filling/pre-drafting overlays removed — all status shown inline in unified banner */}
 
-      {/* ==================== UNIFIED BANNER (ALL phases except loading) ==================== */}
-      {engine.draftStatus !== 'completed' && phase !== 'loading' && (
+      {/* ==================== UNIFIED BANNER (ALL phases including loading) ==================== */}
+      {engine.draftStatus !== 'completed' && (
         <>
           {/* Pick Cards Banner */}
-          <div className="fixed top-0 left-0 z-20 w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (draftType === 'jackpot' ? '#ef4444' : draftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
+          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (draftType === 'jackpot' ? '#ef4444' : draftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
             <div
               ref={bannerRef}
               className="w-full flex gap-2 lg:gap-5 overflow-x-auto banner-no-scrollbar"
               style={{ marginTop: '15px' }}
             >
               {/* Engine-powered banner (after data loads) OR pre-engine 10-box banner */}
-              {engineReady ? engine.draftSummary.map((slot) => {
+              {engineReady && engine.draftSummary.length > 0 ? engine.draftSummary.map((slot) => {
                 const isPicked = slot.playerId !== '';
                 const isCurrent = slot.pickNum === engine.currentPickNumber;
                 const isUpcoming = slot.pickNum > engine.currentPickNumber;
