@@ -331,22 +331,13 @@ function DraftRoomContent() {
               generateReelItemsForReel(reelResults[1], 1),
               generateReelItemsForReel(reelResults[2], 2),
             ]);
-            const animOffset = (elapsed - 15) * 1000; // ms into animation
-            if (animOffset < 6000) {
-              // Animation still in progress — resume from offset
-              animationOffsetRef.current = animOffset;
-              setShowSlotMachine(true);
-              setSlotAnimationDone(false);
-              setPhase('spinning');
-            } else {
-              // Animation done — show result with overlay visible
-              setShowSlotMachine(true);
-              setSlotAnimationDone(true);
-              setPhase('result');
-            }
+            // Always show result on re-entry — never resume mid-animation
+            setShowSlotMachine(true);
+            setSlotAnimationDone(true);
+            setPhase('result');
             setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
             setLiveDataReady(true);
-            draftStore.updateDraft(draftId, { phase: animOffset < 6000 ? 'spinning' : 'result', preSpinStartedAt: countdownStart });
+            draftStore.updateDraft(draftId, { phase: 'result', preSpinStartedAt: countdownStart });
           } else {
             // Still in pre-spin countdown — resume with remaining time
             setPhase('pre-spin');
@@ -373,17 +364,10 @@ function DraftRoomContent() {
                 generateReelItemsForReel(reelResults[1], 1),
                 generateReelItemsForReel(reelResults[2], 2),
               ]);
-              const animOffset = (elapsed - 15) * 1000;
-              if (animOffset < 6000) {
-                animationOffsetRef.current = animOffset;
-                setShowSlotMachine(true);
-                setSlotAnimationDone(false);
-                setPhase('spinning');
-              } else {
-                setShowSlotMachine(true);
-                setSlotAnimationDone(true);
-                setPhase('result');
-              }
+              // Always show result on re-entry — never resume mid-animation
+              setShowSlotMachine(true);
+              setSlotAnimationDone(true);
+              setPhase('result');
               setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
             } else {
               setPhase('pre-spin');
@@ -471,16 +455,10 @@ function DraftRoomContent() {
       const animOffset = stored.preSpinStartedAt
         ? Math.max(0, Date.now() - stored.preSpinStartedAt - 15000)
         : 0;
-      if (animOffset < 6000) {
-        animationOffsetRef.current = animOffset;
-        setShowSlotMachine(true);
-        setSlotAnimationDone(false);
-        setPhase('spinning');
-      } else {
-        setShowSlotMachine(true);
-        setSlotAnimationDone(true);
-        setPhase('result');
-      }
+      // Always show result on re-entry — never resume mid-animation
+      setShowSlotMachine(true);
+      setSlotAnimationDone(true);
+      setPhase('result');
     }
 
     // Resume drafting: restore full engine state if we have saved picks
@@ -1142,6 +1120,8 @@ function DraftRoomContent() {
     if (draftId) {
       draftStore.updateDraft(draftId, {
         phase: 'spinning',
+        draftType: selectedResult,
+        type: selectedResult,
         yourPosition: userDraftPosition >= 0 ? userDraftPosition + 1 : undefined,
       });
     }
