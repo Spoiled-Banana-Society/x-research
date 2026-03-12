@@ -816,15 +816,17 @@ export default function DraftingPage() {
                     ) : live.displayPhase === 'randomizing' ? (
                       <div key="randomizing" className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
-                              background: (live.randomizingProgress ?? 0) >= 0.99
-                                ? '#4ade80'
-                                : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                            }}
-                          />
+                          {(() => {
+                            const lock = _barLock.get(draft.id);
+                            const elapsed = lock ? Date.now() - lock.startedAt : 0;
+                            const isDone = (live.randomizingProgress ?? 0) >= 0.99;
+                            return (
+                              <div
+                                className={`h-full rounded-full ${isDone ? 'randomize-bar-done' : 'randomize-bar-anim'}`}
+                                style={isDone ? undefined : { animationDelay: `-${elapsed}ms` }}
+                              />
+                            );
+                          })()}
                         </div>
                         <span className="text-white/40 text-[10px]">Randomizing...</span>
                       </div>

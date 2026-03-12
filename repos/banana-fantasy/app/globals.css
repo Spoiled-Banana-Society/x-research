@@ -310,3 +310,19 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
+
+/* Randomizing bar: pure CSS animation so JS state glitches can't restart it.
+   Use negative animation-delay to resume from correct position on remount. */
+@keyframes randomize-bar {
+  0% { width: 0%; }
+  100% { width: 99%; }
+}
+.randomize-bar-anim {
+  animation: randomize-bar 15s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.randomize-bar-done {
+  width: 99% !important;
+  background: #4ade80 !important;
+  animation: none;
+}
