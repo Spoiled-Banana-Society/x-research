@@ -72,9 +72,15 @@ function formatRelativeTime(timestamp: number): string {
   return `${days} day${days > 1 ? 's' : ''} ago`;
 }
 
-// Module-level bar lock — once randomizing starts, it CANNOT be interrupted
-// Stores its own start timestamp so even if draft state glitches, bar keeps going
-const _barLock = new Map<string, { peak: number; startedAt: number }>();
+// Window-level timer for randomizing bar — survives React re-renders AND module reloads.
+// Once a draft starts randomizing, the timer sticks until the bar finishes.
+function getBarTimers(): Map<string, number> {
+  if (typeof window === 'undefined') return new Map();
+  if (!(window as any).__draftBarTimers) {
+    (window as any).__draftBarTimers = new Map<string, number>();
+  }
+  return (window as any).__draftBarTimers;
+}
 
 export default function DraftingPage() {
   const router = useRouter();
@@ -544,78 +550,62 @@ export default function DraftingPage() {
   };
   const getLiveState = (draft: Draft): LiveState => {
     const now = Date.now();
+    const timers = getBarTimers();
 
-    // BAR LOCK: Once randomizing bar starts, it CANNOT be interrupted by ANY state glitch.
-    // Maintains its own timeline so the bar keeps advancing regardless of draft state.
-    const lock = _barLock.get(draft.id);
-    if (lock && !draft.preSpinStartedAt) {
-      const elapsed = now - lock.startedAt;
-      const t = Math.min(1, elapsed / 15000);
-      const computed = 0.99 * Math.pow(t, 0.6);
-      const newPeak = Math.max(lock.peak, computed);
-      _barLock.set(draft.id, { peak: newPeak, startedAt: lock.startedAt });
-      if (newPeak >= 0.99) {
-        // Bar completed — release lock, let normal flow handle transition
-        _barLock.delete(draft.id);
-      } else {
-        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: newPeak, isFilling: false };
+    // ── RANDOMIZE TIMER ──
+    // Once a draft enters randomizing, the window-level timer locks in the start time.
+    // Progress is derived purely from elapsed time — no state, no peaks, no effects.
+    // The timer only clears when bar finishes (>=15s) or draft transitions to countdown.
+    const timerStart = timers.get(draft.id);
+    if (timerStart && !draft.preSpinStartedAt) {
+      const elapsed = now - timerStart;
+      if (elapsed < 15000) {
+        const t = elapsed / 15000;
+        const progress = 0.99 * Math.pow(t, 0.6);
+        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
       }
+      // 15s passed — done randomizing, clean up
+      timers.delete(draft.id);
     }
-    // Also release lock if preSpinStartedAt was set (legitimate transition)
-    if (lock && draft.preSpinStartedAt) {
-      _barLock.delete(draft.id);
+    if (timerStart && draft.preSpinStartedAt) {
+      timers.delete(draft.id);
     }
 
-    // Countdown takes priority — show it even if server already started picks
-    // (the full 60s countdown must play out before showing "X picks away")
+    // ── COUNTDOWN ──
     if (draft.preSpinStartedAt) {
       const elapsed = (now - draft.preSpinStartedAt) / 1000;
       if (elapsed < 15) {
-        const revealIn = Math.max(0, Math.ceil(15 - elapsed));
-        return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: revealIn, randomizingProgress: null, isFilling: false };
+        return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: Math.max(0, Math.ceil(15 - elapsed)), randomizingProgress: null, isFilling: false };
       } else if (elapsed < 60) {
         const startIn = Math.max(0, Math.ceil(60 - elapsed));
         return { displayPhase: 'draft-starting', playerCount: 10, countdown: startIn > 0 ? startIn : null, randomizingProgress: null, isFilling: false };
       }
-      // Past 60s: fall through to drafting
     }
 
-    // Already drafting (and countdown finished or no countdown) — show picks away
-    // Skip this guard if randomizingStartedAt is set — animation must play first
+    // ── DRAFTING ──
     if (draft.status === 'drafting' && draft.phase === 'drafting' && !draft.randomizingStartedAt) {
       return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
     }
 
-    // Randomizing: 10/10 reached, randomizingStartedAt set, preSpinStartedAt NOT set
+    // ── RANDOMIZING (from draftStore timestamp) ──
     if (draft.randomizingStartedAt && !draft.preSpinStartedAt) {
       const elapsed = now - draft.randomizingStartedAt;
-      // After 15s, force transition to countdown (don't stay stuck on randomizing)
       if (elapsed >= 15000) {
-        _barLock.delete(draft.id); // Done randomizing, release lock
+        // Bar done — show countdown from when bar ended
+        timers.delete(draft.id);
         const effectivePreSpin = draft.randomizingStartedAt + 15000;
-        const countdownElapsed = (now - effectivePreSpin) / 1000;
-        if (countdownElapsed < 15) {
-          return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: Math.max(0, Math.ceil(15 - countdownElapsed)), randomizingProgress: null, isFilling: false };
-        } else if (countdownElapsed < 60) {
-          return { displayPhase: 'draft-starting', playerCount: 10, countdown: Math.max(0, Math.ceil(60 - countdownElapsed)), randomizingProgress: null, isFilling: false };
-        }
+        const cdElapsed = (now - effectivePreSpin) / 1000;
+        if (cdElapsed < 15) return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: Math.max(0, Math.ceil(15 - cdElapsed)), randomizingProgress: null, isFilling: false };
+        if (cdElapsed < 60) return { displayPhase: 'draft-starting', playerCount: 10, countdown: Math.max(0, Math.ceil(60 - cdElapsed)), randomizingProgress: null, isFilling: false };
         return { displayPhase: 'drafting', playerCount: 10, countdown: null, randomizingProgress: null, isFilling: false };
       }
-      const t = Math.min(1, elapsed / 15000);
-      const computed = 0.99 * Math.pow(t, 0.6);
-      // Initialize or update bar lock with peak progress + start timestamp
-      const existing = _barLock.get(draft.id);
-      const peak = Math.max(existing?.peak || 0, computed);
-      _barLock.set(draft.id, { peak, startedAt: existing?.startedAt || draft.randomizingStartedAt });
-      return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: peak, isFilling: false };
+      // Lock in timer if not set — use the draftStore timestamp
+      if (!timers.has(draft.id)) timers.set(draft.id, draft.randomizingStartedAt);
+      const t = elapsed / 15000;
+      return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: 0.99 * Math.pow(t, 0.6), isFilling: false };
     }
 
-    // (preSpinStartedAt countdown is handled above, before the drafting guard)
-
-    // Filling: use the best available count —
-    // For live drafts, draft.players is updated by syncLiveDrafts from the real server.
-    // The simulation provides smooth visual progression between polls.
-    // Use Math.max so the count never goes BACKWARDS.
+    // ── FILLING ──
     if (!draft.preSpinStartedAt && !draft.randomizingStartedAt && (draft.status === 'filling' || draft.phase === 'filling')) {
       let count = draft.players || 1;
       if (draft.fillingStartedAt != null && draft.fillingInitialPlayers != null) {
@@ -623,21 +613,17 @@ export default function DraftingPage() {
         count = Math.max(count, simulated);
       }
       count = Math.min(10, count);
-      // When count reaches 10 but tick effect hasn't set randomizingStartedAt yet,
-      // show randomizing immediately to avoid "10/10" flash
       if (count >= 10) {
-        // Initialize lock if not already set — use now as startedAt since
-        // we don't have randomizingStartedAt yet (tick hasn't fired)
-        if (!_barLock.has(draft.id)) {
-          _barLock.set(draft.id, { peak: 0, startedAt: now });
-        }
-        const lock2 = _barLock.get(draft.id)!;
-        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: lock2.peak, isFilling: false };
+        // Start randomizing immediately (tick will set the real timestamp next frame)
+        if (!timers.has(draft.id)) timers.set(draft.id, now);
+        const tStart = timers.get(draft.id)!;
+        const t = Math.min(1, (now - tStart) / 15000);
+        return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: 0.99 * Math.pow(t, 0.6), isFilling: false };
       }
       return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };
     }
 
-    // Default (drafting phase or unknown) — also handle filling drafts without timestamps
+    // ── DEFAULT ──
     if (draft.status === 'filling') {
       return { displayPhase: 'filling', playerCount: draft.players || 1, countdown: null, randomizingProgress: null, isFilling: true };
     }
@@ -816,17 +802,15 @@ export default function DraftingPage() {
                     ) : live.displayPhase === 'randomizing' ? (
                       <div key="randomizing" className="flex flex-col items-center gap-1">
                         <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          {(() => {
-                            const lock = _barLock.get(draft.id);
-                            const elapsed = lock ? Date.now() - lock.startedAt : 0;
-                            const isDone = (live.randomizingProgress ?? 0) >= 0.99;
-                            return (
-                              <div
-                                className={`h-full rounded-full ${isDone ? 'randomize-bar-done' : 'randomize-bar-anim'}`}
-                                style={isDone ? undefined : { animationDelay: `-${elapsed}ms` }}
-                              />
-                            );
-                          })()}
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.round((live.randomizingProgress ?? 0) * 100)}%`,
+                              background: (live.randomizingProgress ?? 0) >= 0.99
+                                ? '#4ade80'
+                                : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                            }}
+                          />
                         </div>
                         <span className="text-white/40 text-[10px]">Randomizing...</span>
                       </div>
