@@ -29,6 +29,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
     { href: '/exposure', label: 'Exposure', tooltip: 'Player & team exposure', auth: true },
     { href: '/marketplace', label: 'Marketplace', tooltip: 'Buy & sell teams', auth: false },
     { href: '/leaderboard', label: 'Leaderboard', tooltip: 'Top players & teams', auth: false },
+    { href: '/faq', label: 'FAQ', tooltip: 'Frequently asked questions', auth: false },
     { href: '/standings', label: 'Standings', tooltip: 'Check standings', auth: true },
     ...(isAdminWallet ? [{ href: '/admin', label: 'Admin', tooltip: 'Admin dashboard', auth: true }] : []),
   ].filter((item) => !item.auth || isLoading || isLoggedIn);
