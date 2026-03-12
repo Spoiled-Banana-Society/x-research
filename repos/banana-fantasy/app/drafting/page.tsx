@@ -316,18 +316,24 @@ export default function DraftingPage() {
             // 10/10 but draft hasn't started yet
             const patch: Partial<DraftState> = { players: 10 };
 
-            if (info.draftStartTime && !fresh.preSpinStartedAt) {
-              if (fresh.randomizingStartedAt) {
-                // Bar is running — only skip to countdown if 15s elapsed
-                const barStillRunning = (Date.now() - fresh.randomizingStartedAt) < 15000;
-                if (!barStillRunning) {
-                  patch.preSpinStartedAt = info.draftStartTime * 1000 - 60000;
-                  patch.randomizingStartedAt = undefined;
-                  patch.phase = 'pre-spin';
+            if (info.draftStartTime) {
+              const serverPreSpin = info.draftStartTime * 1000 - 60000;
+              if (!fresh.preSpinStartedAt) {
+                if (fresh.randomizingStartedAt) {
+                  // Bar is running — only skip to countdown if 15s elapsed
+                  const barStillRunning = (Date.now() - fresh.randomizingStartedAt) < 15000;
+                  if (!barStillRunning) {
+                    patch.preSpinStartedAt = serverPreSpin;
+                    patch.randomizingStartedAt = undefined;
+                    patch.phase = 'pre-spin';
+                  }
+                } else {
+                  // Bar hasn't started yet — start it now instead of skipping to countdown
+                  patch.randomizingStartedAt = Date.now();
                 }
-              } else {
-                // Bar hasn't started yet — start it now instead of skipping to countdown
-                patch.randomizingStartedAt = Date.now();
+              } else if (Math.abs(fresh.preSpinStartedAt - serverPreSpin) > 2000) {
+                // Tick effect set a local timestamp — correct it to match server
+                patch.preSpinStartedAt = serverPreSpin;
               }
             }
 
