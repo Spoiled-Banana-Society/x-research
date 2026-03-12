@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import { useNftOffers, logActivity, notifySeller, notifyOwnerOfOffer } from '@/hooks/useMarketplace';
+import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
 import type { DraftType, OfferData } from '@/lib/opensea';
@@ -78,6 +79,7 @@ export default function NftDetailPage() {
   const { wallets, ready: walletsReady } = useWallets();
   const { sendTransaction } = useSendTransaction();
   const { fundWallet } = useFundWallet();
+  const { addNotification } = useNotifications();
 
   const selectedWallet = useMemo(() => {
     if (wallets.length === 0) return null;
@@ -202,6 +204,27 @@ export default function NftDetailPage() {
         txHash: txHashResult ? String(txHashResult) : null,
       });
 
+      // Log seller-side activity
+      if (sellerAddr) {
+        logActivity({
+          type: 'sell',
+          walletAddress: sellerAddr,
+          tokenId,
+          teamName: nft.name || `BBB #${tokenId}`,
+          price: buyPrice,
+          counterparty: walletAddress,
+          orderHash: nft.listing?.order_hash || null,
+          txHash: txHashResult ? String(txHashResult) : null,
+        });
+      }
+
+      addNotification({
+        type: 'purchase_complete',
+        title: 'Purchase Complete',
+        message: `You bought ${nft.name || `BBB #${tokenId}`} for $${(buyPrice || 0).toFixed(2)}`,
+        link: `/marketplace/${tokenId}`,
+      });
+
       setTimeout(() => fetchNft(), 2000);
     } catch (err) {
       console.error('[NFT Detail] Buy failed:', err);
@@ -286,6 +309,15 @@ export default function NftDetailPage() {
         });
       }
 
+      logActivity({
+        type: 'offer_made',
+        walletAddress,
+        tokenId,
+        teamName: nft?.name || `BBB #${tokenId}`,
+        price: amount,
+        counterparty: ownerAddr || null,
+      });
+
       setOfferStep('complete');
       refetchOffers();
     } catch (err) {
@@ -293,7 +325,7 @@ export default function NftDetailPage() {
       setOfferError(err instanceof Error ? err.message : 'Failed to create offer');
       setOfferStep('input');
     }
-  }, [walletAddress, selectedWallet, offerAmount, offerExpiration, tokenId, sendTransaction, refetchOffers]);
+  }, [walletAddress, selectedWallet, offerAmount, offerExpiration, tokenId, sendTransaction, refetchOffers, nft]);
 
   const handleAcceptOffer = useCallback(async (offer: OfferData) => {
     if (!walletAddress || !selectedWallet) return;
@@ -397,6 +429,16 @@ export default function NftDetailPage() {
       );
 
       console.log('[NFT Detail] Cancelled offer:', offer.orderHash);
+
+      logActivity({
+        type: 'cancel',
+        walletAddress,
+        tokenId,
+        teamName: nft?.name || `BBB #${tokenId}`,
+        price: offer.amount,
+        orderHash: offer.orderHash || null,
+      });
+
       refetchOffers();
     } catch (err) {
       console.error('[NFT Detail] Cancel offer failed:', err);
@@ -404,7 +446,7 @@ export default function NftDetailPage() {
     } finally {
       setCancellingOfferHash(null);
     }
-  }, [walletAddress, sendTransaction, refetchOffers]);
+  }, [walletAddress, sendTransaction, refetchOffers, tokenId, nft]);
 
   if (isLoading) {
     return (

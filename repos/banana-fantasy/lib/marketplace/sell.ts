@@ -116,29 +116,3 @@ export async function createListing(
   const result = await postRes.json();
   return { orderHash: result.order?.order_hash || '' };
 }
-
-/**
- * Cancel an existing listing on OpenSea.
- * Uses opensea-js for cancellation (it works fine for this).
- */
-export async function cancelListing(
-  orderHash: string,
-  sellerAddress: string,
-  provider: ethers.BrowserProvider,
-): Promise<void> {
-  const { OpenSeaSDK, Chain } = await import('opensea-js');
-  const sdk = new OpenSeaSDK(provider, {
-    chain: Chain.Base,
-    apiKey: OPENSEA_API_KEY,
-  });
-
-  const order = await sdk.api.getOrder({
-    orderHash,
-    side: 'ask',
-  });
-
-  await sdk.cancelOrder({
-    order: order.protocolData,
-    accountAddress: sellerAddress,
-  });
-}

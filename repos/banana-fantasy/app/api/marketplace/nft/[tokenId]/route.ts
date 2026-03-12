@@ -74,26 +74,8 @@ export async function GET(
       // Silent — listing data is optional
     }
 
-    // Fetch owner of this NFT
-    let owner = null;
-    try {
-      const ownerRes = await fetch(
-        `${OPENSEA_API_BASE}/api/v2/chain/${OPENSEA_CHAIN}/contract/${BBB4_CONTRACT}/nfts/${tokenId}`,
-        {
-          headers: {
-            accept: 'application/json',
-            'x-api-key': OPENSEA_API_KEY,
-          },
-        },
-      );
-      if (ownerRes.ok) {
-        const ownerData = await ownerRes.json();
-        const owners = ownerData.nft?.owners ?? [];
-        if (owners.length > 0) {
-          owner = owners[0].address;
-        }
-      }
-    } catch { /* silent */ }
+    // Get owner from the NFT data already fetched above
+    const owner = nft.owners?.[0]?.address ?? null;
 
     // Enrich owner with SBS profile
     let ownerName: string | null = null;

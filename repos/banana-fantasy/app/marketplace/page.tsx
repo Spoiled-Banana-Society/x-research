@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollectionStats, useListings, useMyNfts, useNftOffers, useCollectionNfts, useActivityHistory, useMyNftOffers, logActivity, notifySeller } from '@/hooks/useMarketplace';
+import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
 import type { MarketplaceTeam } from '@/lib/opensea';
@@ -57,7 +58,9 @@ function SellTabOfferBadge({ tokenId }: { tokenId: string }) {
 
 export default function MarketplacePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
+  const { addNotification } = useNotifications();
   const { wallets, ready: walletsReady } = useWallets();
   const { sendTransaction } = useSendTransaction();
   const { fundWallet } = useFundWallet();
@@ -71,6 +74,15 @@ export default function MarketplacePage() {
   }, [walletAddress, wallets]);
 
   const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'activity'>('buy');
+
+  // Handle ?tab= URL parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'sell' || tabParam === 'activity') {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
   const [viewFilter, setViewFilter] = useState<'listed' | 'all' | 'top' | 'jackpot' | 'hof'>('listed');
   const [hofFilter, setHofFilter] = useState(false);
   const [jackpotFilter, setJackpotFilter] = useState(false);
@@ -272,8 +284,30 @@ export default function MarketplacePage() {
       txHash: txHash ? String(txHash) : null,
     });
 
+    // Log seller-side activity
+    if (selectedTeam.ownerAddress) {
+      logActivity({
+        type: 'sell',
+        walletAddress: selectedTeam.ownerAddress,
+        tokenId: selectedTeam.tokenId,
+        teamName: selectedTeam.name,
+        price: selectedTeam.price,
+        counterparty: walletAddress,
+        orderHash: selectedTeam.orderHash || null,
+        txHash: txHash ? String(txHash) : null,
+      });
+    }
+
+    // Add local notification for buyer
+    addNotification({
+      type: 'purchase_complete',
+      title: 'Purchase Complete',
+      message: `You bought ${selectedTeam.name} for $${(selectedTeam.price || 0).toFixed(2)}`,
+      link: `/marketplace/${selectedTeam.tokenId}`,
+    });
+
     return txHash;
-  }, [selectedTeam, walletAddress, sendTransaction]);
+  }, [selectedTeam, walletAddress, sendTransaction, addNotification]);
 
   const handleBuy = useCallback(async () => {
     if (!selectedTeam?.orderHash || !selectedTeam?.protocolAddress || !walletAddress) return;
@@ -301,6 +335,7 @@ export default function MarketplacePage() {
           setShowSuccessModal(true);
           refetchListings();
           refetchMyNfts();
+          refetchActivity();
         }, 1500);
       } catch (err) {
         console.error('[Marketplace] Buy failed:', err);
@@ -356,6 +391,7 @@ export default function MarketplacePage() {
           setShowSuccessModal(true);
           refetchListings();
           refetchMyNfts();
+          refetchActivity();
         }, 1500);
       } catch (err) {
         console.error('[Marketplace] Card buy failed:', err);
@@ -364,7 +400,7 @@ export default function MarketplacePage() {
         setCardFlowStep('idle');
       }
     }
-  }, [selectedTeam, walletAddress, paymentMethod, executeBuy, fundWallet, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, paymentMethod, executeBuy, fundWallet, refetchListings, refetchMyNfts, refetchActivity]);
 
   const handleList = useCallback(async () => {
     if (!selectedTeam || !walletAddress || !listPrice) return;
@@ -431,16 +467,24 @@ export default function MarketplacePage() {
         orderHash: result.orderHash || null,
       });
 
+      addNotification({
+        type: 'listing_created',
+        title: 'Team Listed',
+        message: `${selectedTeam.name} listed for $${parseFloat(listPrice).toFixed(2)}`,
+        link: `/marketplace/${selectedTeam.tokenId}`,
+      });
+
       setShowSellModal(false);
       setSuccessType('list');
       setShowSuccessModal(true);
       refetchListings();
       refetchMyNfts();
+      refetchActivity();
     } catch (err) {
       console.error('[Marketplace] List failed:', err);
       setTxError(err instanceof Error ? err.message : 'Listing failed');
     }
-  }, [selectedTeam, walletAddress, listPrice, selectedWallet, sendTransaction, refetchListings, refetchMyNfts]);
+  }, [selectedTeam, walletAddress, listPrice, selectedWallet, sendTransaction, refetchListings, refetchMyNfts, refetchActivity, addNotification]);
 
   const [cancellingTokenId, setCancellingTokenId] = useState<string | null>(null);
 
@@ -481,6 +525,7 @@ export default function MarketplacePage() {
 
       refetchListings();
       refetchMyNfts();
+      refetchActivity();
     } catch (err) {
       console.error('[Marketplace] Cancel failed:', err);
       setTxError(err instanceof Error ? err.message : 'Failed to cancel listing');
@@ -488,7 +533,7 @@ export default function MarketplacePage() {
       setCancellingTokenId(null);
       setCancelConfirmTeam(null);
     }
-  }, [walletAddress, sendTransaction, refetchListings, refetchMyNfts]);
+  }, [walletAddress, sendTransaction, refetchListings, refetchMyNfts, refetchActivity]);
 
   const handleCancel = useCallback((team: MarketplaceTeam) => {
     setCancelConfirmTeam(team);
