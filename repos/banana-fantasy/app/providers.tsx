@@ -52,7 +52,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
         {!isDraftRoom && <Header onEditProfile={() => setShowEditProfile(true)} onShowTutorial={handleShowTutorial} />}
         <main id="main-content" tabIndex={-1}>{children}</main>
         <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} />
-        {showOnboarding && <OnboardingFlow />}
+        {showOnboarding && <OnboardingTutorial onComplete={() => setShowOnboarding(false)} />}
         {showTutorial && <OnboardingTutorial onComplete={() => setShowTutorial(false)} />}
         <CrispChat />
         <NotificationOptIn
