@@ -1450,10 +1450,13 @@ function DraftRoomContent() {
     return () => clearInterval(ticker);
   }, [isRandomizingFromStore, waitingForServer]);
 
+  // Draft type that's only visible AFTER slot animation finishes — prevents spoiling the result
+  const visibleDraftType = slotAnimationDone || phase === 'drafting' || phase === 'filling' || !showSlotMachine ? draftType : null;
+
   const getBgColor = () => {
-    if ((phase === 'result' || phase === 'drafting') && draftType) {
-      if (draftType === 'jackpot') return 'bg-gradient-to-b from-red-950 to-red-950/50';
-      if (draftType === 'hof') return 'bg-gradient-to-b from-yellow-950 to-yellow-950/50';
+    if ((phase === 'result' || phase === 'drafting') && visibleDraftType) {
+      if (visibleDraftType === 'jackpot') return 'bg-gradient-to-b from-red-950 to-red-950/50';
+      if (visibleDraftType === 'hof') return 'bg-gradient-to-b from-yellow-950 to-yellow-950/50';
     }
     return 'bg-black';
   };
@@ -1525,11 +1528,11 @@ function DraftRoomContent() {
       )}
 
       {/* Pulsing glow */}
-      {pulseGlow && draftType && (draftType === 'jackpot' || draftType === 'hof') && (
+      {pulseGlow && visibleDraftType && (visibleDraftType === 'jackpot' || visibleDraftType === 'hof') && (
         <div
           className="fixed inset-0 z-30 pointer-events-none animate-pulse-glow"
           style={{
-            background: draftType === 'jackpot'
+            background: visibleDraftType === 'jackpot'
               ? 'radial-gradient(circle at center, rgba(239, 68, 68, 0.3) 0%, transparent 70%)'
               : 'radial-gradient(circle at center, rgba(255, 215, 0, 0.3) 0%, transparent 70%)',
           }}
@@ -1537,21 +1540,21 @@ function DraftRoomContent() {
       )}
 
       {/* Text Rain */}
-      {jackpotRain.length > 0 && draftType && (
+      {jackpotRain.length > 0 && visibleDraftType && (
         <div className="fixed inset-0 z-[60] pointer-events-none overflow-hidden">
           {jackpotRain.map((item) => (
             <div
               key={item.id}
-              className={`absolute animate-jackpot-rain font-black italic ${draftType === 'jackpot' ? 'text-red-500' : 'text-yellow-400'}`}
+              className={`absolute animate-jackpot-rain font-black italic ${visibleDraftType === 'jackpot' ? 'text-red-500' : 'text-yellow-400'}`}
               style={{
                 left: `${item.x}%`, fontSize: `${item.size}px`,
                 animationDelay: `${item.delay}s`,
-                textShadow: draftType === 'jackpot'
+                textShadow: visibleDraftType === 'jackpot'
                   ? '0 0 10px rgba(239, 68, 68, 0.8)'
                   : '0 0 10px rgba(250, 204, 21, 0.8)',
               }}
             >
-              {draftType === 'jackpot' ? 'JACKPOT' : 'HOF'}
+              {visibleDraftType === 'jackpot' ? 'JACKPOT' : 'HOF'}
             </div>
           ))}
         </div>
@@ -1562,14 +1565,14 @@ function DraftRoomContent() {
         <div className="h-14 bg-black/30 border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-4">
             <span className="font-bold">{contestName}</span>
-            {draftType && phase !== 'filling' && (
+            {visibleDraftType && phase !== 'filling' && (
               <>
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                  draftType === 'jackpot' ? 'bg-red-500/30 text-red-400' :
-                  draftType === 'hof' ? 'bg-yellow-500/30 text-yellow-400' :
+                  visibleDraftType === 'jackpot' ? 'bg-red-500/30 text-red-400' :
+                  visibleDraftType === 'hof' ? 'bg-yellow-500/30 text-yellow-400' :
                   'bg-purple-500/30 text-purple-400'
-                }`}>{draftType.toUpperCase()}</span>
-                <VerifiedBadge type="draft-type" draftType={draftType} />
+                }`}>{visibleDraftType.toUpperCase()}</span>
+                <VerifiedBadge type="draft-type" draftType={visibleDraftType} />
               </>
             )}
             {phase === 'filling' && (
@@ -1655,7 +1658,7 @@ function DraftRoomContent() {
       {engine.draftStatus !== 'completed' && (
         <>
           {/* Pick Cards Banner */}
-          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (draftType === 'jackpot' ? '#ef4444' : draftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
+          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (visibleDraftType === 'jackpot' ? '#ef4444' : visibleDraftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
             <div
               ref={bannerRef}
               className="w-full flex gap-2 lg:gap-5 overflow-x-auto banner-no-scrollbar"
@@ -1673,8 +1676,8 @@ function DraftRoomContent() {
                 // Border color: user = banana yellow, current = white, others = #444
                 const borderColor = isUserCard ? '#F3E216' : isCurrent ? '#fff' : '#444';
                 // Text color based on league level
-                const textColor = draftType === 'hof' && isUserCard ? '#111'
-                  : draftType === 'jackpot' && isUserCard ? '#222'
+                const textColor = visibleDraftType === 'hof' && isUserCard ? '#111'
+                  : visibleDraftType === 'jackpot' && isUserCard ? '#222'
                   : '#fff';
 
                 const playerData = engine.draftOrder[slot.ownerIndex];
@@ -1698,13 +1701,13 @@ function DraftRoomContent() {
                       borderColor: borderColor,
                       transition: 'all 0.25s ease-in-out',
                       background: isUserCard
-                        ? (draftType === 'hof' ? '#F3E216' : draftType === 'jackpot' ? '#FF474C' : '#222')
+                        ? (visibleDraftType === 'hof' ? '#F3E216' : visibleDraftType === 'jackpot' ? '#FF474C' : '#222')
                         : '#222',
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = '#333'; e.currentTarget.style.borderColor = '#fff'; }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = isUserCard
-                        ? (draftType === 'hof' ? '#F3E216' : draftType === 'jackpot' ? '#FF474C' : '#222')
+                        ? (visibleDraftType === 'hof' ? '#F3E216' : visibleDraftType === 'jackpot' ? '#FF474C' : '#222')
                         : '#222';
                       e.currentTarget.style.borderColor = borderColor;
                     }}
@@ -1727,7 +1730,7 @@ function DraftRoomContent() {
                           fontSize: '18px',
                           margin: '5px auto 0px auto',
                           textAlign: 'center',
-                          color: (phase !== 'drafting' ? mainCountdown : engine.timeRemaining) > 10 ? '#fff' : (draftType === 'jackpot' ? 'yellow' : 'red'),
+                          color: (phase !== 'drafting' ? mainCountdown : engine.timeRemaining) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
                         }}>
                           {formatTime(phase !== 'drafting' ? mainCountdown : engine.timeRemaining)}
                         </div>
@@ -1796,10 +1799,10 @@ function DraftRoomContent() {
                 const showCountdown = !isFilling && i === 0;
                 // User background matches drafting cards (draft-type color when known)
                 const bgColor = isUser && isFilled
-                  ? (draftType === 'hof' ? '#F3E216' : draftType === 'jackpot' ? '#FF474C' : '#222')
+                  ? (visibleDraftType === 'hof' ? '#F3E216' : visibleDraftType === 'jackpot' ? '#FF474C' : '#222')
                   : '#222';
-                const textColor = isUser && draftType === 'hof' ? '#111'
-                  : isUser && draftType === 'jackpot' ? '#222'
+                const textColor = isUser && visibleDraftType === 'hof' ? '#111'
+                  : isUser && visibleDraftType === 'jackpot' ? '#222'
                   : '#fff';
 
                 return (
@@ -1845,7 +1848,7 @@ function DraftRoomContent() {
                       )}
 
                       {/* Display name — same font/size as drafting cards */}
-                      <div className={`lg:mt-1 font-bold text-[11px] lg:text-[14px] font-primary ${isRandomizing && !isUser ? 'animate-pulse' : ''}`} style={{ color: isFilled ? (isUser ? (draftType ? textColor : '#F3E216') : textColor) : '#444' }}>
+                      <div className={`lg:mt-1 font-bold text-[11px] lg:text-[14px] font-primary ${isRandomizing && !isUser ? 'animate-pulse' : ''}`} style={{ color: isFilled ? (isUser ? (visibleDraftType ? textColor : '#F3E216') : textColor) : '#444' }}>
                         {truncatedName}
                       </div>
 
@@ -1922,13 +1925,13 @@ function DraftRoomContent() {
 
             {/* Mute button + league logo row */}
             <div className="flex items-center justify-center py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
-              {draftType === 'hof' && (
+              {visibleDraftType === 'hof' && (
                 <div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/hof-logo.jpg" alt="Hall of Fame" className="w-[50px] mr-2 h-auto" style={{ filter: 'sepia(100%) saturate(400%) brightness(110%) hue-rotate(10deg)' }} />
                 </div>
               )}
-              {draftType === 'jackpot' && (
+              {visibleDraftType === 'jackpot' && (
                 <div style={{ marginRight: '5px' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/jackpot-logo.png" alt="Jackpot" className="w-[100px] mr-2 h-auto" />
