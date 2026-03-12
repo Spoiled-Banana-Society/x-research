@@ -326,18 +326,40 @@ function DraftRoomContent() {
             const selectedResult = (stored?.draftType || 'pro') as DraftType;
             const reelResults: DraftType[] = [selectedResult, selectedResult, selectedResult];
             setDraftType(selectedResult);
-            setAllReelItems([
+            const generatedReels = [
               generateReelItemsForReel(reelResults[0], 0),
               generateReelItemsForReel(reelResults[1], 1),
               generateReelItemsForReel(reelResults[2], 2),
-            ]);
-            // Always show result on re-entry — never resume mid-animation
-            setShowSlotMachine(true);
-            setSlotAnimationDone(true);
-            setPhase('result');
+            ];
+            setAllReelItems(generatedReels);
+            const animOffset = (elapsed - 15) * 1000; // ms into animation
+            if (animOffset < 6000) {
+              // Animation still in progress — resume from exact position
+              const itemHeight = 130;
+              const landingIndex = (generatedReels[0]?.length || 50) - 8;
+              const targetOffset = landingIndex * itemHeight;
+              const reelDurations = [2000, 4000, 6000];
+              const easeOutQuint = (t: number): number => 1 - Math.pow(1 - t, 5);
+              // Pre-set reel positions so there's no flash of [0,0,0] on remount
+              const initOffsets: number[] = [0, 0, 0];
+              for (let i = 0; i < 3; i++) {
+                const p = Math.min(animOffset / reelDurations[i], 1);
+                initOffsets[i] = easeOutQuint(p) * targetOffset;
+              }
+              setReelOffsets(initOffsets);
+              animationOffsetRef.current = animOffset;
+              setShowSlotMachine(true);
+              setSlotAnimationDone(false);
+              setPhase('spinning');
+            } else {
+              // Animation done — show result
+              setShowSlotMachine(true);
+              setSlotAnimationDone(true);
+              setPhase('result');
+            }
             setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
             setLiveDataReady(true);
-            draftStore.updateDraft(draftId, { phase: 'result', preSpinStartedAt: countdownStart });
+            draftStore.updateDraft(draftId, { phase: animOffset < 6000 ? 'spinning' : 'result', preSpinStartedAt: countdownStart });
           } else {
             // Still in pre-spin countdown — resume with remaining time
             setPhase('pre-spin');
@@ -359,15 +381,34 @@ function DraftRoomContent() {
               const selectedResult = (stored.draftType || 'pro') as DraftType;
               const reelResults: DraftType[] = [selectedResult, selectedResult, selectedResult];
               setDraftType(selectedResult);
-              setAllReelItems([
+              const generatedReels2 = [
                 generateReelItemsForReel(reelResults[0], 0),
                 generateReelItemsForReel(reelResults[1], 1),
                 generateReelItemsForReel(reelResults[2], 2),
-              ]);
-              // Always show result on re-entry — never resume mid-animation
-              setShowSlotMachine(true);
-              setSlotAnimationDone(true);
-              setPhase('result');
+              ];
+              setAllReelItems(generatedReels2);
+              const animOffset2 = (elapsed - 15) * 1000;
+              if (animOffset2 < 6000) {
+                const itemHeight = 130;
+                const landingIndex = (generatedReels2[0]?.length || 50) - 8;
+                const targetOffset = landingIndex * itemHeight;
+                const reelDurations = [2000, 4000, 6000];
+                const easeOutQuint = (t: number): number => 1 - Math.pow(1 - t, 5);
+                const initOffsets: number[] = [0, 0, 0];
+                for (let i = 0; i < 3; i++) {
+                  const p = Math.min(animOffset2 / reelDurations[i], 1);
+                  initOffsets[i] = easeOutQuint(p) * targetOffset;
+                }
+                setReelOffsets(initOffsets);
+                animationOffsetRef.current = animOffset2;
+                setShowSlotMachine(true);
+                setSlotAnimationDone(false);
+                setPhase('spinning');
+              } else {
+                setShowSlotMachine(true);
+                setSlotAnimationDone(true);
+                setPhase('result');
+              }
               setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
             } else {
               setPhase('pre-spin');
@@ -447,18 +488,37 @@ function DraftRoomContent() {
       const selectedResult = (stored.draftType || draftType || 'pro') as DraftType;
       const reelResults: DraftType[] = [selectedResult, selectedResult, selectedResult];
       setDraftType(selectedResult);
-      setAllReelItems([
+      const generatedReels3 = [
         generateReelItemsForReel(reelResults[0], 0),
         generateReelItemsForReel(reelResults[1], 1),
         generateReelItemsForReel(reelResults[2], 2),
-      ]);
+      ];
+      setAllReelItems(generatedReels3);
       const animOffset = stored.preSpinStartedAt
         ? Math.max(0, Date.now() - stored.preSpinStartedAt - 15000)
         : 0;
-      // Always show result on re-entry — never resume mid-animation
-      setShowSlotMachine(true);
-      setSlotAnimationDone(true);
-      setPhase('result');
+      if (animOffset < 6000) {
+        // Resume from exact position — pre-set reel offsets to avoid flash
+        const itemHeight = 130;
+        const landingIndex = (generatedReels3[0]?.length || 50) - 8;
+        const targetOffset = landingIndex * itemHeight;
+        const reelDurations = [2000, 4000, 6000];
+        const easeOutQuint = (t: number): number => 1 - Math.pow(1 - t, 5);
+        const initOffsets: number[] = [0, 0, 0];
+        for (let i = 0; i < 3; i++) {
+          const p = Math.min(animOffset / reelDurations[i], 1);
+          initOffsets[i] = easeOutQuint(p) * targetOffset;
+        }
+        setReelOffsets(initOffsets);
+        animationOffsetRef.current = animOffset;
+        setShowSlotMachine(true);
+        setSlotAnimationDone(false);
+        setPhase('spinning');
+      } else {
+        setShowSlotMachine(true);
+        setSlotAnimationDone(true);
+        setPhase('result');
+      }
     }
 
     // Resume drafting: restore full engine state if we have saved picks
