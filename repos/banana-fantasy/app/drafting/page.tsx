@@ -362,8 +362,8 @@ export default function DraftingPage() {
     };
     window.addEventListener('focus', onFocus);
 
-    // Poll every 10 seconds
-    intervalId = setInterval(syncLiveDrafts, 10_000);
+    // Poll every 3 seconds for live draft updates (picks away, timers)
+    intervalId = setInterval(syncLiveDrafts, 3_000);
 
     return () => {
       cancelled = true;
