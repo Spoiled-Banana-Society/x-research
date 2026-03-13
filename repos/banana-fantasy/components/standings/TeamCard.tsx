@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { formatScore, formatRank } from '@/lib/formatters';
-import { POSITION_PILL_STYLES } from '@/lib/draftRoomConstants';
 import type { League } from '@/types';
 
 interface TeamCardProps {
@@ -76,25 +75,10 @@ function getPlaceBadge(place: number) {
   );
 }
 
-function getRosterPreview(roster: League['roster']): string {
-  if (!roster || roster.length === 0) return '';
-  return roster
-    .slice(0, 3)
-    .map((p) => {
-      // teamPosition is e.g. "DAL WR1" — strip trailing digits for the position base
-      const parts = p.teamPosition.split(' ');
-      const team = parts[0] || '';
-      const pos = (parts[1] || '').replace(/[0-9]/g, '');
-      return `${team} ${pos}`;
-    })
-    .join(' \u00B7 ');
-}
-
 export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardProps) {
   const config = typeConfig[league.type] || typeConfig.regular;
   const inTheMoney = league.leagueRank > 0 && league.leagueRank <= 2;
   const isCompleted = league.status === 'completed';
-  const rosterPreview = getRosterPreview(league.roster);
 
   return (
     <button
@@ -174,12 +158,6 @@ export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardPr
             </div>
           </div>
 
-          {/* Mini roster preview */}
-          {rosterPreview && (
-            <p className="mt-2 text-[11px] text-white/30 tracking-wide truncate">
-              {rosterPreview}
-            </p>
-          )}
         </div>
 
         {/* Arrow indicator */}
