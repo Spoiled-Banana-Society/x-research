@@ -128,7 +128,7 @@ export function CompletedDrafts({ drafts, onViewDetails }: CompletedDraftsProps)
                 <div className="flex items-center gap-3 text-sm text-white/50">
                   <span>{formatDate(draft.completedDate)}</span>
                   <span>•</span>
-                  <span>{draft.finalPlace}/{draft.totalPlayers}</span>
+                  <span>{draft.finalPlace > 0 ? `${draft.finalPlace}/${draft.totalPlayers}` : '-'}</span>
                 </div>
               </div>
 

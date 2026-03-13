@@ -278,8 +278,8 @@ export default function StandingsPage() {
             </div>
           )}
 
-          {/* Completed drafts section */}
-          {completedDrafts.length > 0 && (
+          {/* Completed drafts section — hidden when searching */}
+          {!teamSearch && completedDrafts.length > 0 && (
             <section>
               <h2 className="text-lg font-semibold text-white mb-4">Completed Drafts</h2>
               <CompletedDrafts
