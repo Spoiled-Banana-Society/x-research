@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { formatScore } from '@/lib/formatters';
 import { fetchJson } from '@/lib/appApiClient';
 import { useSWRLike } from '@/hooks/useSWRLike';
+import { useLeagueDetail } from '@/hooks/useStandings';
 import type { LeaderboardEntry } from '@/types';
 
 interface LeaderboardViewProps {
@@ -26,6 +27,8 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
   const [level, setLevel] = useState<LevelFilter>('all');
   const [sortField, setSortField] = useState<SortField>('SeasonScore');
   const [page, setPage] = useState(0);
+  const [leagueInput, setLeagueInput] = useState('');
+  const [leagueLookup, setLeagueLookup] = useState<string | null>(null);
 
   const cacheKey = `leaderboard:${gameweek}:${level}:${sortField}`;
   const { data: entries, isValidating } = useSWRLike<LeaderboardEntry[]>(
@@ -45,10 +48,44 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
     return (entries || []).slice(start, start + PAGE_SIZE);
   }, [entries, page]);
 
+  // League lookup — fetch specific league standings
+  const { data: leagueStandings, isValidating: leagueLookupLoading } = useLeagueDetail(leagueLookup, gameweek);
+
+  const leagueEntries = useMemo(() => {
+    return (leagueStandings || []).map((entry: unknown, idx: number) => {
+      if (typeof entry !== 'object' || !entry) {
+        return { rank: idx + 1, displayName: '-', weeklyScore: 0, seasonScore: 0, isCurrentUser: false };
+      }
+      const e = entry as Record<string, unknown>;
+      return {
+        rank: typeof e.rank === 'number' ? e.rank : idx + 1,
+        displayName: String(e.displayName || e.ownerWallet || e.cardId || '-').slice(0, 20),
+        weeklyScore: Number(e.weeklyScore ?? e.weekScore ?? e.scoreWeek ?? 0),
+        seasonScore: Number(e.seasonScore ?? e.scoreSeason ?? 0),
+        isCurrentUser: Boolean(e.isCurrentUser),
+      };
+    });
+  }, [leagueStandings]);
+
   // Reset page when filter changes
   const handleLevelChange = (l: LevelFilter) => {
     setLevel(l);
     setPage(0);
+  };
+
+  const handleLeagueLookup = () => {
+    const num = leagueInput.trim().replace(/^#/, '');
+    if (!num) {
+      setLeagueLookup(null);
+      return;
+    }
+    // Build a league ID from the number — try fast draft format
+    setLeagueLookup(`2025-fast-draft-${num}`);
+  };
+
+  const clearLeagueLookup = () => {
+    setLeagueLookup(null);
+    setLeagueInput('');
   };
 
   return (
@@ -94,6 +131,101 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
           </button>
         </div>
       </div>
+
+      {/* League lookup */}
+      <div className="flex items-center gap-2 mb-5">
+        <div className="relative flex-1 max-w-xs">
+          <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input
+            type="text"
+            value={leagueInput}
+            onChange={(e) => setLeagueInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleLeagueLookup(); }}
+            placeholder="Look up league # (e.g. 42)"
+            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-banana/40 focus:ring-1 focus:ring-banana/20 transition-colors"
+          />
+        </div>
+        <button
+          onClick={handleLeagueLookup}
+          className="text-xs px-4 py-2 rounded-xl bg-banana text-black font-semibold hover:bg-banana-dark transition-colors"
+        >
+          Look Up
+        </button>
+        {leagueLookup && (
+          <button
+            onClick={clearLeagueLookup}
+            className="text-xs px-3 py-2 rounded-xl bg-white/[0.06] text-white/50 hover:text-white/70 transition-colors"
+          >
+            Back to Global
+          </button>
+        )}
+      </div>
+
+      {/* League lookup results */}
+      {leagueLookup && (
+        <div className="mb-6">
+          <h3 className="text-white font-semibold text-sm mb-3">BBB #{leagueInput.trim().replace(/^#/, '')} — League Standings</h3>
+          {leagueLookupLoading && leagueEntries.length === 0 && (
+            <div className="space-y-2">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-12 rounded-lg bg-white/[0.03] animate-pulse" />
+              ))}
+            </div>
+          )}
+          {!leagueLookupLoading && leagueEntries.length === 0 && (
+            <div className="text-center py-8 rounded-xl border border-white/[0.04] bg-white/[0.02]">
+              <p className="text-white/40 text-sm">League not found or no standings yet</p>
+              <p className="text-white/25 text-xs mt-1">Check the league number and try again</p>
+            </div>
+          )}
+          {leagueEntries.length > 0 && (
+            <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+              <div className="grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 bg-white/[0.03] border-b border-white/[0.06]">
+                <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium">#</div>
+                <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium">Player</div>
+                <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Weekly</div>
+                <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Season</div>
+              </div>
+              <div className="divide-y divide-white/[0.04]">
+                {leagueEntries.map((entry, idx) => (
+                  <div
+                    key={idx}
+                    className={`
+                      grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 items-center transition-colors
+                      ${entry.isCurrentUser ? 'bg-banana/[0.08]' : 'hover:bg-white/[0.03]'}
+                    `}
+                  >
+                    <div>
+                      {entry.rank <= 3 ? (
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          entry.rank === 1 ? 'bg-yellow-500 text-black' :
+                          entry.rank === 2 ? 'bg-gray-400 text-black' :
+                          'bg-orange-600 text-white'
+                        }`}>{entry.rank}</span>
+                      ) : (
+                        <span className="text-white/50 text-sm">{entry.rank}</span>
+                      )}
+                    </div>
+                    <div className={`text-sm font-medium truncate ${entry.isCurrentUser ? 'text-banana' : 'text-white/80'}`}>
+                      {entry.displayName}
+                      {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
+                    </div>
+                    <div className="text-right text-white/60 text-sm">{formatScore(entry.weeklyScore)}</div>
+                    <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white'}`}>
+                      {formatScore(entry.seasonScore)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Global leaderboard (hidden when viewing league lookup) */}
+      {leagueLookup ? null : <>
 
       {/* Loading skeleton */}
       {isValidating && (!entries || entries.length === 0) && (
@@ -199,6 +331,8 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
           </button>
         </div>
       )}
+
+      </>}
     </div>
   );
 }

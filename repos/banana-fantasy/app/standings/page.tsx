@@ -26,6 +26,7 @@ export default function StandingsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>(isLoggedIn ? 'myteams' : 'leaderboard');
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [gameweek, setGameweek] = useState<string>(currentGameweek);
+  const [teamSearch, setTeamSearch] = useState('');
 
   // Update gameweek when API returns
   React.useEffect(() => {
@@ -54,6 +55,24 @@ export default function StandingsPage() {
     }
     return opts;
   }, []);
+
+  // Filter leagues by search query (league name, league ID, card ID, roster)
+  const filteredLeagues = useMemo(() => {
+    if (!teamSearch.trim()) return leagues;
+    const q = teamSearch.trim().toLowerCase().replace(/^#/, '');
+    return leagues.filter((league) => {
+      // Match league name (e.g. "BBB #42")
+      if (league.name.toLowerCase().includes(q)) return true;
+      // Match league ID (e.g. "2025-fast-draft-42")
+      if (league.id.toLowerCase().includes(q)) return true;
+      // Match just the number from league name
+      const numMatch = league.name.match(/#(\d+)/);
+      if (numMatch && numMatch[1].includes(q)) return true;
+      // Match roster players (e.g. "KC QB")
+      if (league.roster.some(p => p.teamPosition.toLowerCase().includes(q) || p.slot.toLowerCase().includes(q))) return true;
+      return false;
+    });
+  }, [leagues, teamSearch]);
 
   const handleSelectLeague = (league: League) => {
     setSelectedLeague(selectedLeague?.id === league.id ? null : league);
@@ -139,6 +158,32 @@ export default function StandingsPage() {
             </div>
           )}
 
+          {/* Search bar */}
+          {leagues.length > 0 && (
+            <div className="relative mb-5">
+              <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              <input
+                type="text"
+                value={teamSearch}
+                onChange={(e) => setTeamSearch(e.target.value)}
+                placeholder="Search by league #, pass #, or roster (e.g. KC QB)"
+                className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-9 pr-9 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-banana/40 focus:ring-1 focus:ring-banana/20 transition-colors"
+              />
+              {teamSearch && (
+                <button
+                  onClick={() => setTeamSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Loading skeleton */}
           {leaguesQuery.isValidating && leagues.length === 0 && (
             <div className="space-y-3 mb-8">
@@ -151,14 +196,21 @@ export default function StandingsPage() {
           {/* Team cards */}
           {leagues.length > 0 && (
             <div className="space-y-3 mb-6">
-              {leagues.map((league) => (
-                <TeamCard
-                  key={league.id}
-                  league={league}
-                  isSelected={selectedLeague?.id === league.id}
-                  onSelect={handleSelectLeague}
-                />
-              ))}
+              {filteredLeagues.length > 0 ? (
+                filteredLeagues.map((league) => (
+                  <TeamCard
+                    key={league.id}
+                    league={league}
+                    isSelected={selectedLeague?.id === league.id}
+                    onSelect={handleSelectLeague}
+                  />
+                ))
+              ) : (
+                <div className="text-center py-8 rounded-xl border border-white/[0.04] bg-white/[0.02]">
+                  <p className="text-white/40 text-sm">No teams match &ldquo;{teamSearch}&rdquo;</p>
+                  <button onClick={() => setTeamSearch('')} className="text-banana text-xs mt-1 hover:underline">Clear search</button>
+                </div>
+              )}
             </div>
           )}
 
