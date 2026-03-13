@@ -1474,10 +1474,6 @@ function DraftRoomContent() {
   const visibleDraftType = slotAnimationDone || phase === 'drafting' || phase === 'filling' || !showSlotMachine ? draftType : null;
 
   const getBgColor = () => {
-    if ((phase === 'result' || phase === 'drafting') && visibleDraftType) {
-      if (visibleDraftType === 'jackpot') return 'bg-gradient-to-b from-red-950 to-red-950/50';
-      if (visibleDraftType === 'hof') return 'bg-gradient-to-b from-yellow-950 to-yellow-950/50';
-    }
     return 'bg-black';
   };
 
@@ -1678,7 +1674,7 @@ function DraftRoomContent() {
       {engine.draftStatus !== 'completed' && (
         <>
           {/* Pick Cards Banner */}
-          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (visibleDraftType === 'jackpot' ? '#ef4444' : visibleDraftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
+          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: '#000' }}>
             <div
               ref={bannerRef}
               className="w-full flex gap-2 lg:gap-5 overflow-x-auto banner-no-scrollbar"
