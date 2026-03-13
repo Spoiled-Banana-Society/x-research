@@ -47,8 +47,13 @@ function DraftRoomContent() {
   const isLiveMode = modeParam === 'live' && !!walletParam;
 
   const { user } = useAuth();
-  const { playSpinningSound, playReelStop, playCountdownTick, playWinSound } = useDraftAudio();
+  const { playSpinningSound, playReelStop, playCountdownTick, playWinSound, cleanup: cleanupAudio } = useDraftAudio();
   const { triggerOptIn } = useNotifOptIn();
+
+  // Cleanup audio on unmount — stops all scheduled sounds when leaving the page
+  useEffect(() => {
+    return () => cleanupAudio();
+  }, [cleanupAudio]);
 
   // Fallback: when server APIs can't provide player data, switch to local mode
   // so bots auto-play, local timer ticks, and ALL_POSITIONS provides 224 NFL players
@@ -352,7 +357,11 @@ function DraftRoomContent() {
               setSlotAnimationDone(false);
               setPhase('spinning');
             } else {
-              // Animation done — show result
+              // Animation done — show result with reels at final position
+              const itemHeight = 130;
+              const landingIndex = (generatedReels[0]?.length || 50) - 8;
+              const finalOffset = landingIndex * itemHeight;
+              setReelOffsets([finalOffset, finalOffset, finalOffset]);
               setShowSlotMachine(true);
               setSlotAnimationDone(true);
               setPhase('result');
@@ -405,6 +414,11 @@ function DraftRoomContent() {
                 setSlotAnimationDone(false);
                 setPhase('spinning');
               } else {
+                // Animation done — set reels to final position
+                const itemHeight2 = 130;
+                const landingIndex2 = (generatedReels2[0]?.length || 50) - 8;
+                const finalOffset2 = landingIndex2 * itemHeight2;
+                setReelOffsets([finalOffset2, finalOffset2, finalOffset2]);
                 setShowSlotMachine(true);
                 setSlotAnimationDone(true);
                 setPhase('result');
@@ -515,6 +529,11 @@ function DraftRoomContent() {
         setSlotAnimationDone(false);
         setPhase('spinning');
       } else {
+        // Animation done — set reels to final position
+        const itemHeight3 = 130;
+        const landingIndex3 = (generatedReels3[0]?.length || 50) - 8;
+        const finalOffset3 = landingIndex3 * itemHeight3;
+        setReelOffsets([finalOffset3, finalOffset3, finalOffset3]);
         setShowSlotMachine(true);
         setSlotAnimationDone(true);
         setPhase('result');
@@ -1383,10 +1402,11 @@ function DraftRoomContent() {
       }
     };
 
+    const isResuming = offset > 0;
     const startTimeout = setTimeout(() => {
-      playSpinningSound();
+      if (!isResuming) playSpinningSound(); // Don't replay spinning sound on re-entry
       animationId = requestAnimationFrame(animate);
-    }, 200);
+    }, isResuming ? 0 : 200); // No delay on resume — start immediately
 
     return () => {
       clearTimeout(startTimeout);
