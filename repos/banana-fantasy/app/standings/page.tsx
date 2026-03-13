@@ -27,6 +27,8 @@ export default function StandingsPage() {
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [gameweek, setGameweek] = useState<string>(currentGameweek);
   const [teamSearch, setTeamSearch] = useState('');
+  const [teamsPage, setTeamsPage] = useState(0);
+  const TEAMS_PER_PAGE = 20;
 
   // Update gameweek when API returns
   React.useEffect(() => {
@@ -73,6 +75,16 @@ export default function StandingsPage() {
       return false;
     });
   }, [leagues, teamSearch]);
+
+  // Paginate filtered leagues
+  const totalTeamPages = Math.ceil(filteredLeagues.length / TEAMS_PER_PAGE);
+  const paginatedLeagues = useMemo(() => {
+    const start = teamsPage * TEAMS_PER_PAGE;
+    return filteredLeagues.slice(start, start + TEAMS_PER_PAGE);
+  }, [filteredLeagues, teamsPage]);
+
+  // Reset page when search changes
+  React.useEffect(() => { setTeamsPage(0); }, [teamSearch]);
 
   const handleSelectLeague = (league: League) => {
     setSelectedLeague(selectedLeague?.id === league.id ? null : league);
@@ -197,14 +209,44 @@ export default function StandingsPage() {
           {leagues.length > 0 && (
             <div className="space-y-3 mb-6">
               {filteredLeagues.length > 0 ? (
-                filteredLeagues.map((league) => (
-                  <TeamCard
-                    key={league.id}
-                    league={league}
-                    isSelected={selectedLeague?.id === league.id}
-                    onSelect={handleSelectLeague}
-                  />
-                ))
+                <>
+                  {/* Show count when filtered or paginated */}
+                  {(teamSearch || filteredLeagues.length > TEAMS_PER_PAGE) && (
+                    <p className="text-white/30 text-xs px-1 mb-2">
+                      Showing {teamsPage * TEAMS_PER_PAGE + 1}-{Math.min((teamsPage + 1) * TEAMS_PER_PAGE, filteredLeagues.length)} of {filteredLeagues.length} teams
+                    </p>
+                  )}
+                  {paginatedLeagues.map((league) => (
+                    <TeamCard
+                      key={league.id}
+                      league={league}
+                      isSelected={selectedLeague?.id === league.id}
+                      onSelect={handleSelectLeague}
+                    />
+                  ))}
+                  {/* Pagination */}
+                  {totalTeamPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 pt-2">
+                      <button
+                        onClick={() => setTeamsPage(Math.max(0, teamsPage - 1))}
+                        disabled={teamsPage === 0}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-white/50 hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-white/40 text-xs">
+                        {teamsPage + 1} / {totalTeamPages}
+                      </span>
+                      <button
+                        onClick={() => setTeamsPage(Math.min(totalTeamPages - 1, teamsPage + 1))}
+                        disabled={teamsPage >= totalTeamPages - 1}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-white/50 hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-8 rounded-xl border border-white/[0.04] bg-white/[0.02]">
                   <p className="text-white/40 text-sm">No teams match &ldquo;{teamSearch}&rdquo;</p>
