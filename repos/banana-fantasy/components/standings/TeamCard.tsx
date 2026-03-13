@@ -17,37 +17,33 @@ const typeConfig = {
     label: 'Jackpot',
     color: 'bg-jackpot',
     text: 'text-jackpot',
-    border: 'border-red-500/30',
-    gradient: 'bg-gradient-to-r from-red-500/[0.08] to-transparent',
-    hoverGradient: 'hover:from-red-500/[0.12]',
-    accentBar: 'bg-gradient-to-b from-jackpot to-red-700',
+    border: 'border-red-500/40',
+    bg: 'bg-gradient-to-r from-red-500/15 via-red-500/5 to-transparent',
+    accentBar: 'bg-gradient-to-b from-red-400 to-red-600',
   },
   hof: {
     label: 'HOF',
     color: 'bg-hof',
     text: 'text-hof',
-    border: 'border-[#FFD700]/30',
-    gradient: 'bg-gradient-to-r from-[#FFD700]/[0.08] to-transparent',
-    hoverGradient: 'hover:from-[#FFD700]/[0.12]',
-    accentBar: 'bg-gradient-to-b from-hof to-yellow-700',
+    border: 'border-[#D4AF37]/40',
+    bg: 'bg-gradient-to-r from-[#D4AF37]/15 via-[#D4AF37]/5 to-transparent',
+    accentBar: 'bg-gradient-to-b from-[#D4AF37] to-yellow-700',
   },
   pro: {
     label: 'Pro',
     color: 'bg-pro',
     text: 'text-pro',
-    border: 'border-purple-500/20',
-    gradient: 'bg-gradient-to-r from-purple-500/[0.05] to-transparent',
-    hoverGradient: 'hover:from-purple-500/[0.08]',
-    accentBar: 'bg-gradient-to-b from-pro to-purple-700',
+    border: 'border-purple-500/25',
+    bg: 'bg-white/[0.02]',
+    accentBar: 'bg-gradient-to-b from-purple-400 to-purple-700',
   },
   regular: {
     label: 'Pro',
     color: 'bg-pro',
     text: 'text-pro',
-    border: 'border-purple-500/20',
-    gradient: 'bg-gradient-to-r from-purple-500/[0.05] to-transparent',
-    hoverGradient: 'hover:from-purple-500/[0.08]',
-    accentBar: 'bg-gradient-to-b from-pro to-purple-700',
+    border: 'border-purple-500/25',
+    bg: 'bg-white/[0.02]',
+    accentBar: 'bg-gradient-to-b from-purple-400 to-purple-700',
   },
 };
 
@@ -108,7 +104,7 @@ export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardPr
         ${isCompleted ? 'opacity-80' : ''}
         ${isSelected
           ? 'border-banana/50 bg-banana/[0.06] ring-1 ring-banana/20'
-          : `${config.border} ${config.gradient} ${config.hoverGradient}`
+          : `${config.border} ${config.bg} hover:brightness-125`
         }
       `}
       style={{ animationDelay: `${index * 50}ms` }}
@@ -116,7 +112,7 @@ export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardPr
       <div className="flex items-stretch">
         {/* Left accent bar — green if in the money, otherwise type gradient */}
         <div
-          className={`w-1 flex-shrink-0 ${
+          className={`w-1.5 flex-shrink-0 rounded-l-2xl ${
             inTheMoney
               ? 'bg-gradient-to-b from-green-400 to-green-600'
               : config.accentBar
