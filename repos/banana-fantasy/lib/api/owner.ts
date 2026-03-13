@@ -154,9 +154,16 @@ export function mapDraftTokenToLeague(token: ApiDraftToken): League {
   const seasonScore = token.seasonScore ? Number(token.seasonScore) : 0;
   const weeklyScore = token.weekScore ? Number(token.weekScore) : 0;
 
+  // Derive league name from league ID (e.g. "2025-fast-draft-1201" → "BBB #1201")
+  // The backend displayName field has a bug where multiple leagues get the same name,
+  // so we use the league ID number as the source of truth.
+  const leagueId = token.leagueId || token.cardId;
+  const leagueNum = leagueId.match(/(\d+)$/)?.[1];
+  const name = leagueNum ? `BBB #${leagueNum}` : (token.leagueDisplayName || `League ${leagueId}`);
+
   return {
-    id: token.leagueId || token.cardId,
-    name: token.leagueDisplayName || `League ${token.leagueId || token.cardId}`,
+    id: leagueId,
+    name,
     contestId: '',
     type: contestType,
     leagueRank: Number.isFinite(leagueRank) ? leagueRank : 0,

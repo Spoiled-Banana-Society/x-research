@@ -36,18 +36,12 @@ export function TeamCard({ league, isSelected, onSelect }: TeamCardProps) {
         <div className={`w-1 ${config.color} flex-shrink-0`} />
 
         <div className="flex-1 px-4 py-4 sm:px-5">
-          {/* Top row: league name + type badge + draft ID */}
+          {/* Top row: league name + type badge */}
           <div className="flex items-center gap-2 mb-3">
             <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${config.color}/20 ${config.text}`}>
               {config.label}
             </span>
             <h3 className="text-white font-medium text-sm sm:text-base truncate">{league.name}</h3>
-            {/* Show draft # from league ID to differentiate when display names collide */}
-            {league.id && league.id !== league.name && (
-              <span className="text-white/20 text-xs flex-shrink-0">
-                Draft {league.id.match(/(\d+)$/)?.[1] || league.id}
-              </span>
-            )}
           </div>
 
           {/* Stats row */}
