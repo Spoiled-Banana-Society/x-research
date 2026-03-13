@@ -114,6 +114,8 @@ export interface RosterPlayer {
   weeklyPoints: number;
   seasonPoints: number;
   projection?: number;
+  isInLineup?: boolean;
+  playerName?: string;
 }
 
 export interface LeaderboardEntry {

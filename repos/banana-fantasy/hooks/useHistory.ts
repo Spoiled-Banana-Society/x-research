@@ -20,7 +20,7 @@ function mapTokenToCompletedDraft(t: ApiDraftToken): CompletedDraft {
       ...players.slice(0, 1).map((p) => ({
         position: pos,
         team: p.team ?? '',
-        points: 0,
+        points: typeof (p as any).scoreSeason === 'number' ? (p as any).scoreSeason : 0,
       })),
     );
   }

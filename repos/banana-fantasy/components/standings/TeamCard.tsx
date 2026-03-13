@@ -2,63 +2,188 @@
 
 import React from 'react';
 import { formatScore, formatRank } from '@/lib/formatters';
+import { POSITION_PILL_STYLES } from '@/lib/draftRoomConstants';
 import type { League } from '@/types';
 
 interface TeamCardProps {
   league: League;
   isSelected: boolean;
   onSelect: (league: League) => void;
+  index?: number;
 }
 
 const typeConfig = {
-  jackpot: { label: 'Jackpot', color: 'bg-jackpot', text: 'text-jackpot', border: 'border-jackpot/40', glow: 'from-jackpot/10' },
-  hof: { label: 'HOF', color: 'bg-hof', text: 'text-hof', border: 'border-hof/40', glow: 'from-hof/10' },
-  pro: { label: 'Pro', color: 'bg-pro', text: 'text-pro', border: 'border-pro/40', glow: 'from-pro/10' },
-  regular: { label: 'Pro', color: 'bg-pro', text: 'text-pro', border: 'border-pro/40', glow: 'from-pro/10' },
+  jackpot: {
+    label: 'Jackpot',
+    color: 'bg-jackpot',
+    text: 'text-jackpot',
+    border: 'border-red-500/30',
+    gradient: 'bg-gradient-to-r from-red-500/[0.08] to-transparent',
+    hoverGradient: 'hover:from-red-500/[0.12]',
+    accentBar: 'bg-gradient-to-b from-jackpot to-red-700',
+  },
+  hof: {
+    label: 'HOF',
+    color: 'bg-hof',
+    text: 'text-hof',
+    border: 'border-[#FFD700]/30',
+    gradient: 'bg-gradient-to-r from-[#FFD700]/[0.08] to-transparent',
+    hoverGradient: 'hover:from-[#FFD700]/[0.12]',
+    accentBar: 'bg-gradient-to-b from-hof to-yellow-700',
+  },
+  pro: {
+    label: 'Pro',
+    color: 'bg-pro',
+    text: 'text-pro',
+    border: 'border-purple-500/20',
+    gradient: 'bg-gradient-to-r from-purple-500/[0.05] to-transparent',
+    hoverGradient: 'hover:from-purple-500/[0.08]',
+    accentBar: 'bg-gradient-to-b from-pro to-purple-700',
+  },
+  regular: {
+    label: 'Pro',
+    color: 'bg-pro',
+    text: 'text-pro',
+    border: 'border-purple-500/20',
+    gradient: 'bg-gradient-to-r from-purple-500/[0.05] to-transparent',
+    hoverGradient: 'hover:from-purple-500/[0.08]',
+    accentBar: 'bg-gradient-to-b from-pro to-purple-700',
+  },
 };
 
-export function TeamCard({ league, isSelected, onSelect }: TeamCardProps) {
+function getPlaceBadge(place: number) {
+  if (place === 1) {
+    return (
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-500/30 flex-shrink-0">
+        <span className="text-xs font-bold text-black">1</span>
+      </div>
+    );
+  }
+  if (place === 2) {
+    return (
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center shadow-lg shadow-gray-400/30 flex-shrink-0">
+        <span className="text-xs font-bold text-black">2</span>
+      </div>
+    );
+  }
+  if (place === 3) {
+    return (
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-orange-700 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
+        <span className="text-xs font-bold text-white">3</span>
+      </div>
+    );
+  }
+  return (
+    <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+      <span className="text-xs font-medium text-white/60">{place}</span>
+    </div>
+  );
+}
+
+function getRosterPreview(roster: League['roster']): string {
+  if (!roster || roster.length === 0) return '';
+  return roster
+    .slice(0, 3)
+    .map((p) => {
+      // teamPosition is e.g. "DAL WR1" — strip trailing digits for the position base
+      const parts = p.teamPosition.split(' ');
+      const team = parts[0] || '';
+      const pos = (parts[1] || '').replace(/[0-9]/g, '');
+      return `${team} ${pos}`;
+    })
+    .join(' \u00B7 ');
+}
+
+export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardProps) {
   const config = typeConfig[league.type] || typeConfig.regular;
+  const inTheMoney = league.leagueRank > 0 && league.leagueRank <= 2;
+  const isCompleted = league.status === 'completed';
+  const rosterPreview = getRosterPreview(league.roster);
 
   return (
     <button
       onClick={() => onSelect(league)}
       className={`
-        w-full text-left rounded-2xl overflow-hidden border transition-all duration-200
+        animate-card-enter w-full text-left rounded-2xl overflow-hidden border transition-all duration-200
+        ${isCompleted ? 'opacity-80' : ''}
         ${isSelected
           ? 'border-banana/50 bg-banana/[0.06] ring-1 ring-banana/20'
-          : `${config.border} bg-white/[0.02] hover:bg-white/[0.04]`
+          : `${config.border} ${config.gradient} ${config.hoverGradient}`
         }
       `}
+      style={{ animationDelay: `${index * 50}ms` }}
     >
       <div className="flex items-stretch">
-        {/* Type accent bar */}
-        <div className={`w-1 ${config.color} flex-shrink-0`} />
+        {/* Left accent bar — green if in the money, otherwise type gradient */}
+        <div
+          className={`w-1 flex-shrink-0 ${
+            inTheMoney
+              ? 'bg-gradient-to-b from-green-400 to-green-600'
+              : config.accentBar
+          }`}
+        />
 
-        <div className="flex-1 px-4 py-4 sm:px-5">
-          {/* Top row: league name + type badge */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${config.color}/20 ${config.text}`}>
+        <div className="flex-1 px-4 py-4 sm:px-5 min-w-0">
+          {/* Top row: rank badge + league name + type pill + prize + completed badge */}
+          <div className="flex items-center gap-2.5 mb-3">
+            {/* Rank badge */}
+            {league.leagueRank > 0 && getPlaceBadge(league.leagueRank)}
+
+            {/* League name */}
+            <h3 className="text-white font-medium text-sm sm:text-base truncate">
+              {league.name}
+            </h3>
+
+            {/* Type pill */}
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${config.color}/20 ${config.text}`}
+            >
               {config.label}
             </span>
-            <h3 className="text-white font-medium text-sm sm:text-base truncate">{league.name}</h3>
+
+            {/* Prize pill */}
+            {league.prizeIndicator != null && league.prizeIndicator > 0 && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 flex-shrink-0">
+                ${league.prizeIndicator}
+              </span>
+            )}
+
+            {/* Completed badge */}
+            {isCompleted && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-white/50 flex-shrink-0">
+                Completed
+              </span>
+            )}
           </div>
 
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-0.5">Rank</p>
-              <p className="text-white font-bold text-lg">{league.leagueRank > 0 ? formatRank(league.leagueRank) : '-'}</p>
+              <p className="text-white font-bold text-lg">
+                {league.leagueRank > 0 ? formatRank(league.leagueRank) : '-'}
+              </p>
             </div>
             <div>
               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-0.5">Weekly</p>
-              <p className="text-white/80 font-semibold text-lg">{formatScore(league.weeklyScore)}</p>
+              <p className="text-white/80 font-semibold text-lg">
+                {formatScore(league.weeklyScore)}
+              </p>
             </div>
             <div>
               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-0.5">Season</p>
-              <p className="text-banana font-bold text-lg">{formatScore(league.seasonScore)}</p>
+              <p className="text-banana font-bold text-lg">
+                {formatScore(league.seasonScore)}
+              </p>
             </div>
           </div>
+
+          {/* Mini roster preview */}
+          {rosterPreview && (
+            <p className="mt-2 text-[11px] text-white/30 tracking-wide truncate">
+              {rosterPreview}
+            </p>
+          )}
         </div>
 
         {/* Arrow indicator */}
@@ -73,7 +198,9 @@ export function TeamCard({ league, isSelected, onSelect }: TeamCardProps) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={`transition-transform duration-200 ${isSelected ? 'text-banana rotate-90' : 'text-white/20'}`}
+            className={`transition-transform duration-200 ${
+              isSelected ? 'text-banana rotate-90' : 'text-white/20'
+            }`}
           >
             <polyline points="9 18 15 12 9 6" />
           </svg>

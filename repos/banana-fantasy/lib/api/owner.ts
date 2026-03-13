@@ -124,9 +124,10 @@ function mapRosterToUiRoster(roster?: ApiDraftToken['roster']): RosterPlayer[] {
       out.push({
         slot,
         teamPosition: `${p.team} ${p.position}`,
-        weeklyPoints: 0,
-        seasonPoints: 0,
-        projection: undefined,
+        weeklyPoints: typeof (p as any).scoreWeek === 'number' ? (p as any).scoreWeek : 0,
+        seasonPoints: typeof (p as any).scoreSeason === 'number' ? (p as any).scoreSeason : 0,
+        isInLineup: Boolean((p as any).isUsedInCardScore),
+        playerName: p.displayName || undefined,
       });
     });
   };

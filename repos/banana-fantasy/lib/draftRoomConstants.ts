@@ -172,6 +172,15 @@ export const DRAFT_TYPES = {
 export const TOTAL_ROUNDS = 15;
 export const TOTAL_PICKS = TOTAL_ROUNDS * 10; // 150
 
+// ==================== POSITION PILL STYLES ====================
+export const POSITION_PILL_STYLES: Record<string, string> = {
+  QB: 'bg-[#FF474C]/20 text-[#FF474C]',
+  RB: 'bg-[#3c9120]/20 text-[#3c9120]',
+  WR: 'bg-[#cb6ce6]/20 text-[#cb6ce6]',
+  TE: 'bg-[#326cf8]/20 text-[#326cf8]',
+  DST: 'bg-[#DF893E]/20 text-[#DF893E]',
+};
+
 // ==================== TAILWIND-COMPATIBLE POSITION COLORS ====================
 export function getPositionColor(pos: string) {
   const base = pos.replace(/[0-9]/g, '');
