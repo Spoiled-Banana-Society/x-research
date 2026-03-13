@@ -298,6 +298,38 @@ export interface FAQItem {
   };
 }
 
+// Standings types (real API)
+export interface StandingsTeam {
+  cardId: string;
+  leagueId: string;
+  leagueName: string;
+  level: 'Pro' | 'HOF' | 'Jackpot';
+  leagueRank: number;
+  weeklyRank: number;
+  weeklyScore: number;
+  seasonScore: number;
+  status: 'active' | 'playoffs' | 'eliminated' | 'completed';
+  roster: StandingsRosterPlayer[];
+}
+
+export interface StandingsRosterPlayer {
+  position: string;
+  teamPosition: string;
+  weeklyPoints: number;
+  seasonPoints: number;
+  isActiveForWeek: boolean;
+}
+
+export interface LeagueStanding {
+  rank: number;
+  cardId: string;
+  ownerWallet: string;
+  displayName: string;
+  weeklyScore: number;
+  seasonScore: number;
+  isCurrentUser: boolean;
+}
+
 // --- New API types (temporary Next.js backend) ---
 
 // Purchases / Payments

@@ -1,93 +1,57 @@
 'use client';
 
 import React from 'react';
-import { Card } from '../ui/Card';
-import { League } from '@/types';
+import type { League } from '@/types';
 
 interface DraftBoardViewProps {
   league: League;
 }
 
-// Mock draft board data
-const mockDraftBoard = [
-  { round: 1, picks: ['KC QB', 'BUF QB', 'SF RB', 'MIA WR', 'MIN WR', 'BAL RB', 'CIN WR', 'PHI RB', 'DAL WR', 'DET RB'] },
-  { round: 2, picks: ['DET RB', 'DAL WR', 'PHI RB', 'CIN WR', 'BAL RB', 'MIN WR', 'MIA WR', 'SF RB', 'BUF QB', 'KC TE'] },
-  { round: 3, picks: ['KC TE', 'SF TE', 'DET TE', 'GB WR', 'LAC WR', 'SEA WR', 'ARI WR', 'NYJ RB', 'CHI WR', 'TB WR'] },
-  { round: 4, picks: ['TB WR', 'CHI WR', 'NYJ RB', 'ARI WR', 'SEA WR', 'LAC WR', 'GB WR', 'DET TE', 'SF TE', 'DAL DEF'] },
-  { round: 5, picks: ['DAL DEF', 'CLE DEF', 'SF DEF', 'BAL K', 'SF K', 'DAL K', 'MIA K', 'KC DEF', 'BUF DEF', 'PIT K'] },
-];
-
 export function DraftBoardView({ league }: DraftBoardViewProps) {
-  // Determine which picks belong to the user (simplified - in real app would use actual draft data)
-  const userPicks = [2, 9]; // User drafted from positions 3 and 10 (0-indexed as 2 and 9)
+  // Build draft board from roster data — each roster player was drafted
+  // For now, show the roster as a draft recap since full draft board data
+  // would need a separate API call
+  const rosterPicks = league.roster.map((p, idx) => ({
+    round: Math.floor(idx / 1) + 1,
+    pick: p.teamPosition,
+    slot: p.slot,
+  }));
+
+  if (rosterPicks.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-white/40 text-sm">Draft board not available</p>
+        <p className="text-white/25 text-xs mt-1">Draft data will appear after the draft completes</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* League Info Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-text-primary">{league.name}</h3>
-          <p className="text-text-secondary">Draft Board • {league.draftDate}</p>
-        </div>
+    <div>
+      <p className="text-white/30 text-xs uppercase tracking-wider mb-3">Your Draft Picks</p>
+
+      <div className="space-y-1">
+        {rosterPicks.map((pick, idx) => (
+          <div
+            key={idx}
+            className="grid grid-cols-[40px_60px_1fr] gap-2 px-3 py-2.5 rounded-lg bg-banana/[0.04] items-center"
+          >
+            {/* Round */}
+            <span className="text-white/40 text-xs font-medium">R{pick.round}</span>
+
+            {/* Position */}
+            <span className="text-banana/70 text-xs font-semibold">{pick.slot}</span>
+
+            {/* Pick */}
+            <span className="text-banana font-medium text-sm">{pick.pick}</span>
+          </div>
+        ))}
       </div>
 
-      {/* Draft Board */}
-      <Card className="p-0 overflow-x-auto">
-        <table className="w-full min-w-[800px]">
-          <thead>
-            <tr className="bg-bg-tertiary border-b border-bg-elevated">
-              <th className="px-4 py-3 text-left text-sm font-medium text-text-muted uppercase tracking-wider">
-                Round
-              </th>
-              {Array.from({ length: 10 }, (_, i) => (
-                <th
-                  key={i}
-                  className="px-3 py-3 text-center text-sm font-medium text-text-muted uppercase tracking-wider"
-                >
-                  Pick {i + 1}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-bg-tertiary">
-            {mockDraftBoard.map((round) => (
-              <tr key={round.round} className="hover:bg-bg-tertiary/30 transition-colors">
-                <td className="px-4 py-3">
-                  <span className="font-medium text-text-primary">R{round.round}</span>
-                </td>
-                {round.picks.map((pick, pickIndex) => {
-                  const isUserPick = userPicks.includes(pickIndex);
-                  return (
-                    <td
-                      key={pickIndex}
-                      className={`
-                        px-3 py-3 text-center text-sm
-                        ${isUserPick ? 'bg-banana/20' : ''}
-                      `}
-                    >
-                      <span
-                        className={`
-                          inline-block px-2 py-1 rounded
-                          ${isUserPick ? 'bg-banana text-bg-primary font-semibold' : 'text-text-secondary'}
-                        `}
-                      >
-                        {pick}
-                      </span>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
       {/* Legend */}
-      <div className="flex items-center gap-4 text-sm text-text-muted">
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-4 bg-banana/20 rounded" />
-          <span>Your picks</span>
-        </div>
+      <div className="flex items-center gap-2 mt-4 text-xs text-white/30">
+        <span className="w-3 h-3 rounded bg-banana/20" />
+        <span>Your picks</span>
       </div>
     </div>
   );

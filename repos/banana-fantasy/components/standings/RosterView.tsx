@@ -1,106 +1,80 @@
 'use client';
 
 import React from 'react';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import { League } from '@/types';
+import { formatScore } from '@/lib/formatters';
+import type { League } from '@/types';
 
 interface RosterViewProps {
   league: League;
 }
 
+const positionColors: Record<string, string> = {
+  QB: 'bg-red-500/20 text-red-400',
+  RB: 'bg-blue-500/20 text-blue-400',
+  WR: 'bg-green-500/20 text-green-400',
+  TE: 'bg-orange-500/20 text-orange-400',
+  DST: 'bg-purple-500/20 text-purple-400',
+  K: 'bg-cyan-500/20 text-cyan-400',
+};
+
+function getPositionColor(slot: string): string {
+  const base = slot.replace(/\d+/g, '').toUpperCase();
+  return positionColors[base] || 'bg-white/10 text-white/60';
+}
+
 export function RosterView({ league }: RosterViewProps) {
+  const totalWeekly = league.roster.reduce((sum, p) => sum + p.weeklyPoints, 0);
+  const totalSeason = league.roster.reduce((sum, p) => sum + p.seasonPoints, 0);
+
   return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      {/* Team Card */}
-      <Card className="p-0 overflow-hidden">
-        <div className="bg-gradient-to-br from-banana/20 to-bg-tertiary p-6">
-          <div className="flex items-start justify-between mb-4">
+    <div>
+      {/* Table header */}
+      <div className="grid grid-cols-[60px_1fr_80px_80px] sm:grid-cols-[70px_1fr_100px_100px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30 font-medium">
+        <div>Pos</div>
+        <div>Player</div>
+        <div className="text-right">Weekly</div>
+        <div className="text-right">Season</div>
+      </div>
+
+      {/* Roster rows */}
+      <div className="space-y-1">
+        {league.roster.map((player, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-[60px_1fr_80px_80px] sm:grid-cols-[70px_1fr_100px_100px] gap-2 px-3 py-2.5 rounded-lg hover:bg-white/[0.03] transition-colors items-center"
+          >
+            {/* Position pill */}
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                {league.type === 'jackpot' && <Badge type="jackpot">Jackpot</Badge>}
-                {league.type === 'hof' && <Badge type="hof">HOF</Badge>}
-              </div>
-              <h3 className="text-xl font-bold text-text-primary">{league.name}</h3>
-              <p className="text-text-muted text-sm">Drafted: {league.draftDate}</p>
+              <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${getPositionColor(player.slot)}`}>
+                {player.slot}
+              </span>
             </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold text-banana">{league.seasonScore}</p>
-              <p className="text-text-muted text-sm">Season Score</p>
-            </div>
-          </div>
 
-          {/* Stats Row */}
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-bg-elevated">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-text-primary">#{league.leagueRank}</p>
-              <p className="text-text-muted text-xs">League Rank</p>
+            {/* Team position */}
+            <div className="text-white/80 text-sm font-medium truncate">
+              {player.teamPosition}
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-text-primary">#{league.weeklyRank.toLocaleString()}</p>
-              <p className="text-text-muted text-xs">Weekly Rank</p>
+
+            {/* Weekly points */}
+            <div className="text-right text-white/60 text-sm">
+              {formatScore(player.weeklyPoints)}
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-text-primary">{league.weeklyScore}</p>
-              <p className="text-text-muted text-xs">Weekly Score</p>
+
+            {/* Season points */}
+            <div className="text-right text-banana font-semibold text-sm">
+              {formatScore(player.seasonPoints)}
             </div>
           </div>
-        </div>
-      </Card>
+        ))}
+      </div>
 
-      {/* Roster Table */}
-      <Card className="p-0">
-        <div className="px-4 py-3 bg-bg-tertiary border-b border-bg-elevated">
-          <h4 className="font-semibold text-text-primary">Roster</h4>
-        </div>
-        <div className="divide-y divide-bg-tertiary">
-          {league.roster.map((player, index) => (
-            <div
-              key={index}
-              className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-bg-tertiary/30 transition-colors"
-            >
-              {/* Position Slot */}
-              <div className="col-span-2">
-                <span className="text-text-muted text-sm font-medium">{player.slot}</span>
-              </div>
-
-              {/* Team Position */}
-              <div className="col-span-4">
-                <span className="text-text-primary font-medium">{player.teamPosition}</span>
-              </div>
-
-              {/* Weekly Points */}
-              <div className="col-span-3 text-right">
-                <span className="text-text-secondary">{player.weeklyPoints.toFixed(1)}</span>
-                <span className="text-text-muted text-xs ml-1">wk</span>
-              </div>
-
-              {/* Season Points */}
-              <div className="col-span-3 text-right">
-                <span className="text-banana font-medium">{player.seasonPoints.toFixed(1)}</span>
-                <span className="text-text-muted text-xs ml-1">szn</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Total Row */}
-        <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-bg-tertiary border-t border-bg-elevated">
-          <div className="col-span-6">
-            <span className="font-semibold text-text-primary">Total</span>
-          </div>
-          <div className="col-span-3 text-right">
-            <span className="font-semibold text-text-primary">
-              {league.roster.reduce((sum, p) => sum + p.weeklyPoints, 0).toFixed(1)}
-            </span>
-          </div>
-          <div className="col-span-3 text-right">
-            <span className="font-bold text-banana">
-              {league.roster.reduce((sum, p) => sum + p.seasonPoints, 0).toFixed(1)}
-            </span>
-          </div>
-        </div>
-      </Card>
+      {/* Total row */}
+      <div className="grid grid-cols-[60px_1fr_80px_80px] sm:grid-cols-[70px_1fr_100px_100px] gap-2 px-3 py-3 mt-2 border-t border-white/[0.06]">
+        <div />
+        <div className="text-white font-semibold text-sm">Total</div>
+        <div className="text-right text-white font-semibold text-sm">{formatScore(totalWeekly)}</div>
+        <div className="text-right text-banana font-bold text-sm">{formatScore(totalSeason)}</div>
+      </div>
     </div>
   );
 }
