@@ -1,7 +1,7 @@
 import { type Abi, type Address, createPublicClient, defineChain, http } from 'viem';
 
 export const BASE_CHAIN_ID = 8453;
-export const BASE_RPC_URL = 'https://mainnet.base.org';
+export const BASE_RPC_URL = process.env.NEXT_PUBLIC_ALCHEMY_BASE_RPC_URL || 'https://mainnet.base.org';
 
 export const BASE = defineChain({
   id: BASE_CHAIN_ID,
