@@ -342,7 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const readBalances = () => {
       // Batch both reads in one fetch using JSON-RPC batch
-      fetch('https://mainnet.base.org', {
+      fetch(process.env.NEXT_PUBLIC_ALCHEMY_BASE_RPC_URL || 'https://mainnet.base.org', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([

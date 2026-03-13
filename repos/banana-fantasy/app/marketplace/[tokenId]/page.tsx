@@ -360,7 +360,7 @@ export default function NftDetailPage() {
 
       // Check current allowance
       const checkData = iface.encodeFunctionData('allowance', [walletAddress, OPENSEA_CONDUIT]);
-      const checkRes = await fetch('https://mainnet.base.org', {
+      const checkRes = await fetch(process.env.NEXT_PUBLIC_ALCHEMY_BASE_RPC_URL || 'https://mainnet.base.org', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -447,7 +447,7 @@ export default function NftDetailPage() {
       ]);
 
       const checkData = iface.encodeFunctionData('isApprovedForAll', [walletAddress, OPENSEA_CONDUIT]);
-      const checkRes = await fetch('https://mainnet.base.org', {
+      const checkRes = await fetch(process.env.NEXT_PUBLIC_ALCHEMY_BASE_RPC_URL || 'https://mainnet.base.org', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

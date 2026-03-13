@@ -51,7 +51,7 @@ export async function checkUsdcBalance(
   const balanceOfSig = '0x70a08231';
   const paddedAddr = buyerAddress.slice(2).toLowerCase().padStart(64, '0');
 
-  const res = await fetch('https://mainnet.base.org', {
+  const res = await fetch(process.env.NEXT_PUBLIC_ALCHEMY_BASE_RPC_URL || 'https://mainnet.base.org', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
