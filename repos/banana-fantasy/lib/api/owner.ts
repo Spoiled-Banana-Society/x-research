@@ -149,7 +149,7 @@ function mapRosterToUiRoster(roster?: ApiDraftToken['roster']): RosterPlayer[] {
  */
 export function mapDraftTokenToLeague(token: ApiDraftToken): League {
   const contestType =
-    token.level === 'Jackpot' ? 'jackpot' : token.level === 'Hall of Fame' ? 'hof' : 'regular';
+    token.level === 'Jackpot' ? 'jackpot' : token.level === 'Hall of Fame' ? 'hof' : 'pro';
 
   const leagueRank = token.rank ? Number.parseInt(token.rank, 10) : 0;
   const seasonScore = token.seasonScore ? Number(token.seasonScore) : 0;
