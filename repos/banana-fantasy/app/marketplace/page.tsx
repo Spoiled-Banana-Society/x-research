@@ -204,8 +204,10 @@ export default function MarketplacePage() {
         if (!matchesTokenId && !matchesName) return false;
       } else {
         const upper = q.toUpperCase().replace(/\s+/g, '');
-        const hasMatch = team.roster.some(slot => slot.toUpperCase().replace(/\s+/g, '').includes(upper));
-        if (!hasMatch) return false;
+        // Search team name (league name), roster players, and owner
+        const matchesName = team.name.toUpperCase().replace(/\s+/g, '').includes(upper);
+        const hasRosterMatch = team.roster.some(slot => slot.toUpperCase().replace(/\s+/g, '').includes(upper));
+        if (!matchesName && !hasRosterMatch) return false;
       }
     }
     return true;
@@ -899,7 +901,7 @@ export default function MarketplacePage() {
                       }
                     }
                   }}
-                  placeholder="Search by team # or roster (Enter to look up any team)"
+                  placeholder="Search by team #, league name, or roster"
                   className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-72"
                 />
                 {rosterFilter && (
@@ -1082,8 +1084,20 @@ export default function MarketplacePage() {
                   {/* Content */}
                   <div className="p-5">
                     <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-text-primary font-mono">{team.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-text-primary font-mono truncate">{team.name}</h3>
+                          {team.rank > 0 && (
+                            <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              team.rank === 1 ? 'bg-yellow-500/20 text-yellow-400' :
+                              team.rank === 2 ? 'bg-gray-400/20 text-gray-300' :
+                              team.rank === 3 ? 'bg-orange-500/20 text-orange-400' :
+                              'bg-white/10 text-white/50'
+                            }`}>
+                              #{team.rank}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {team.ownerPfp ? (
                             <Image src={team.ownerPfp} alt="" width={20} height={20} className="rounded-full" />
@@ -1098,24 +1112,28 @@ export default function MarketplacePage() {
                     </div>
 
                     {/* Stats */}
-                    {(team.points > 0 || team.weeklyAvg > 0 || team.playoffOdds > 0) && (
-                      <div className="grid grid-cols-3 gap-3 p-3 bg-bg-primary rounded-xl mb-4">
+                    {(team.points > 0 || team.weeklyAvg > 0 || team.rank > 0) && (
+                      <div className={`grid ${team.rank > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-3 p-3 bg-bg-primary rounded-xl mb-4`}>
+                        {team.rank > 0 && (
+                          <div className="text-center">
+                            <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Rank</p>
+                            <p className={`font-mono text-sm font-semibold ${
+                              team.rank <= 3 ? 'text-banana' : 'text-text-primary'
+                            }`}>
+                              {team.rank}/{10}
+                            </p>
+                          </div>
+                        )}
                         <div className="text-center">
-                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Points</p>
+                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Season</p>
                           <p className="font-mono text-sm font-semibold text-text-primary">
-                            {team.points.toLocaleString()}
+                            {team.points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                         <div className="text-center">
-                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Wk Avg</p>
+                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Weekly</p>
                           <p className="font-mono text-sm font-semibold text-success">
-                            {team.weeklyAvg}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Playoffs</p>
-                          <p className={`font-mono text-sm font-semibold ${team.playoffOdds >= 50 ? 'text-success' : 'text-warning'}`}>
-                            {team.playoffOdds}%
+                            {team.weeklyAvg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       </div>

@@ -168,7 +168,7 @@ export default function StandingsPage() {
                 type="text"
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
-                placeholder="Search by league #, pass #, or roster (e.g. KC QB)"
+                placeholder="Search by league # or roster (e.g. 42, KC QB)"
                 className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-9 pr-9 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-banana/40 focus:ring-1 focus:ring-banana/20 transition-colors"
               />
               {teamSearch && (
