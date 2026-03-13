@@ -204,9 +204,12 @@ export function generateReelItemsForReel(resultType: DraftType, reelIndex: numbe
     else items.push('pro');
   }
   const landingIndex = totalItems - 8;
-  items[landingIndex] = resultType;
-  if (reelIndex === 2 && resultType === 'pro') {
-    items[landingIndex - 1] = 'jackpot';
+  if (resultType === 'pro') {
+    // Pro = no 3-of-a-kind match. Show a mixed combo so it doesn't look like a win.
+    const proLandings: DraftType[] = ['pro', 'jackpot', 'hof'];
+    items[landingIndex] = proLandings[reelIndex];
+  } else {
+    items[landingIndex] = resultType;
   }
   return items;
 }
