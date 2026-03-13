@@ -1746,9 +1746,9 @@ function DraftRoomContent() {
                           fontSize: '18px',
                           margin: '5px auto 0px auto',
                           textAlign: 'center',
-                          color: (phase !== 'drafting' ? mainCountdown : engine.timeRemaining) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
+                          color: (phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? engine.timeRemaining : mainCountdown) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
                         }}>
-                          {formatTime(phase !== 'drafting' ? mainCountdown : engine.timeRemaining)}
+                          {formatTime(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? engine.timeRemaining : mainCountdown)}
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15, marginTop: 5, paddingBottom: 3 }}>
@@ -1779,7 +1779,7 @@ function DraftRoomContent() {
                       {isCurrent && (
                         <div style={{ borderBottomWidth: 5, borderBottomStyle: 'solid', borderBottomColor: '#fff', width: '100%', minHeight: '54px' }}>
                           <p className="font-primary text-[15px] font-bold italic text-center pt-2" style={{ color: textColor }}>
-                            {phase !== 'drafting' ? 'Starting soon!' : 'Picking...'}
+                            {phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? 'Picking...' : 'Starting soon!'}
                           </p>
                         </div>
                       )}
