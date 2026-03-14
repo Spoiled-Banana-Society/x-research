@@ -862,6 +862,23 @@ NEXT_PUBLIC_MEASUREMENT_ID=
 - **Status**: Geared for last week of previous season (some empty states)
 - **Layout**: Leaderboard-focused with table view for player cards and scores
 
+## URGENT: Backend Fix Needed (Boris — Do This First)
+> **From Richard's session:** The Go API has a bug where slow draft `pickLength` is 8 minutes instead of 8 hours. A frontend workaround is deployed but the backend needs the real fix. Boris has gcloud installed — Richard doesn't.
+
+**Fix:** In `/Users/borisvagner/sbs-drafts-api-main/models/draft-state.go` line 33, change:
+```go
+pickLength = 60 * 8    // BUG: 480 seconds = 8 minutes
+```
+to:
+```go
+pickLength = 3600 * 8  // FIX: 28800 seconds = 8 hours
+```
+
+**Then deploy:**
+```bash
+gcloud run deploy sbs-drafts-api-staging --source /Users/borisvagner/sbs-drafts-api-main --region us-central1 --project sbs-staging-env
+```
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
