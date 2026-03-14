@@ -135,12 +135,5 @@ export function useDraftAudio() {
     } catch {}
   }, [initAudio]);
 
-  const cleanup = useCallback(() => {
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-  }, []);
-
-  return { playSpinningSound, playReelStop, playCountdownTick, playWinSound, cleanup };
+  return { playSpinningSound, playReelStop, playCountdownTick, playWinSound };
 }

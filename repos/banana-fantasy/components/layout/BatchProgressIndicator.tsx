@@ -13,6 +13,7 @@ export function BatchProgressIndicator() {
   const { current, total, jackpotRemaining, hofRemaining } = data;
   const jackpotHit = jackpotRemaining <= 0;
   const allHofHit = hofRemaining <= 0;
+  const draftsLeft = total - current;
 
   return (
     <Tooltip
@@ -21,7 +22,7 @@ export function BatchProgressIndicator() {
           <p className="font-semibold text-text-primary">Draft {current} of {total}</p>
           {!jackpotHit && (
             <p className="text-red-400 text-xs">
-              Jackpot must hit in next {jackpotRemaining} draft{jackpotRemaining !== 1 ? 's' : ''}!
+              Jackpot must hit in next {draftsLeft} draft{draftsLeft !== 1 ? 's' : ''}!
             </p>
           )}
           {jackpotHit && (
