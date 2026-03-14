@@ -674,6 +674,23 @@ function DraftRoomContent() {
     },
   });
 
+  // ==================== Cross-tab heartbeat: signal to other tabs that draft-room ====================
+  // has an active WS for this draft. The drafting page checks this to avoid opening
+  // a duplicate keepalive WS (dual connections confuse the Go server).
+  useEffect(() => {
+    if (!isLiveMode || !draftId) return;
+    const key = `draft-room-ws:${draftId}`;
+    // Write heartbeat immediately and every 3s
+    localStorage.setItem(key, String(Date.now()));
+    const interval = setInterval(() => {
+      localStorage.setItem(key, String(Date.now()));
+    }, 3_000);
+    return () => {
+      clearInterval(interval);
+      localStorage.removeItem(key);
+    };
+  }, [isLiveMode, draftId]);
+
   // ==================== LIVE MODE: Load initial state from REST API ====================
   // Gated by liveDataReady — runs when entering pre-spin (60s before draft starts)
   useEffect(() => {
