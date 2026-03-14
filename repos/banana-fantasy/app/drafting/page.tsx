@@ -369,8 +369,8 @@ export default function DraftingPage() {
     };
     window.addEventListener('focus', onFocus);
 
-    // Poll every 10 seconds
-    intervalId = setInterval(syncLiveDrafts, 10_000);
+    // Poll every 3 seconds for live draft updates (picks away, timers)
+    intervalId = setInterval(syncLiveDrafts, 3_000);
 
     return () => {
       cancelled = true;
@@ -527,7 +527,7 @@ export default function DraftingPage() {
           if (preSpinElapsed >= 15) {
             // Determine type (same logic as draft room slot machine)
             const roll = Math.random() * 100;
-            const revealedType = roll < 33 ? 'jackpot' : roll < 66 ? 'hof' : 'pro'; // 33% each for testing
+            const revealedType = roll < 1 ? 'jackpot' : roll < 6 ? 'hof' : 'pro';
             draftStore.updateDraft(d.id, {
               type: revealedType,
               draftType: revealedType,

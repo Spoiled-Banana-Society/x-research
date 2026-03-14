@@ -112,16 +112,14 @@ export function SlotMachineReveal({ onComplete, contestName }: SlotMachineReveal
     stoppedReelsRef.current = [false, false, false];
     setReelOffset(0);
 
-    // TEST MODE: Higher odds to see logos (change back later)
-    // Real odds: Jackpot 1%, HOF 5%, Pro 94%
     const random = Math.random() * 100;
     let resultType: typeof TYPES.jackpot | typeof TYPES.pro;
     let resultItem: SlotItem;
 
-    if (random < 33) {
+    if (random < 1) {
       resultType = TYPES.jackpot;
       resultItem = 'jackpot';
-    } else if (random < 66) {
+    } else if (random < 6) {
       resultType = TYPES.hof;
       resultItem = 'hof';
     } else {

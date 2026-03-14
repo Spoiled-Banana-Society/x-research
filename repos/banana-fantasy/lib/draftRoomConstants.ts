@@ -204,18 +204,17 @@ export function generateReelItemsForReel(resultType: DraftType, reelIndex: numbe
     else items.push('pro');
   }
   const landingIndex = totalItems - 8;
-  items[landingIndex] = resultType;
-  if (reelIndex === 2 && resultType === 'pro') {
-    items[landingIndex - 1] = 'jackpot';
+  if (resultType === 'pro') {
+    // Pro = no 3-of-a-kind match. Show a mixed combo so it doesn't look like a win.
+    const proLandings: DraftType[] = ['pro', 'jackpot', 'hof'];
+    items[landingIndex] = proLandings[reelIndex];
+  } else {
+    items[landingIndex] = resultType;
   }
   return items;
 }
 
 export function generateReelResults(): DraftType[] {
-  // TEST MODE: Force jackpot for testing - change back to random later
-  return ['jackpot', 'jackpot', 'jackpot'];
-
-  /* REAL ODDS - uncomment for production:
   const results: DraftType[] = [];
   for (let i = 0; i < 3; i++) {
     const rand = Math.random();
@@ -223,12 +222,12 @@ export function generateReelResults(): DraftType[] {
     else if (rand < 0.06) results.push('hof');
     else results.push('pro');
   }
+  // Ensure at least one non-pro symbol for visual interest
   if (results.every(r => r === 'pro')) {
     const randomIndex = Math.floor(Math.random() * 3);
-    (results as DraftType[])[randomIndex] = Math.random() < 0.33 ? 'jackpot' : 'hof';
+    results[randomIndex] = Math.random() < 0.17 ? 'jackpot' : 'hof';
   }
   return results;
-  */
 }
 
 // ==================== DRAFT PICK INTERFACE ====================

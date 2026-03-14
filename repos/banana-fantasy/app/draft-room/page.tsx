@@ -47,8 +47,13 @@ function DraftRoomContent() {
   const isLiveMode = modeParam === 'live' && !!walletParam;
 
   const { user } = useAuth();
-  const { playSpinningSound, playReelStop, playCountdownTick, playWinSound } = useDraftAudio();
+  const { playSpinningSound, playReelStop, playCountdownTick, playWinSound, cleanup: cleanupAudio } = useDraftAudio();
   const { triggerOptIn } = useNotifOptIn();
+
+  // Cleanup audio on unmount — stops all scheduled sounds when leaving the page
+  useEffect(() => {
+    return () => cleanupAudio();
+  }, [cleanupAudio]);
 
   // Fallback: when server APIs can't provide player data, switch to local mode
   // so bots auto-play, local timer ticks, and ALL_POSITIONS provides 224 NFL players
@@ -194,7 +199,7 @@ function DraftRoomContent() {
   });
   const [draftType, setDraftType] = useState<DraftType | null>(() => {
     if (stored?.draftType) return stored.draftType;
-    return 'pro'; // TESTING: force pro
+    return null;
   });
 
   // ==================== SLOT MACHINE STATE ====================
@@ -352,7 +357,11 @@ function DraftRoomContent() {
               setSlotAnimationDone(false);
               setPhase('spinning');
             } else {
-              // Animation done — show result
+              // Animation done — show result with reels at final position
+              const itemHeight = 130;
+              const landingIndex = (generatedReels[0]?.length || 50) - 8;
+              const finalOffset = landingIndex * itemHeight;
+              setReelOffsets([finalOffset, finalOffset, finalOffset]);
               setShowSlotMachine(true);
               setSlotAnimationDone(true);
               setPhase('result');
@@ -405,6 +414,11 @@ function DraftRoomContent() {
                 setSlotAnimationDone(false);
                 setPhase('spinning');
               } else {
+                // Animation done — set reels to final position
+                const itemHeight2 = 130;
+                const landingIndex2 = (generatedReels2[0]?.length || 50) - 8;
+                const finalOffset2 = landingIndex2 * itemHeight2;
+                setReelOffsets([finalOffset2, finalOffset2, finalOffset2]);
                 setShowSlotMachine(true);
                 setSlotAnimationDone(true);
                 setPhase('result');
@@ -515,6 +529,11 @@ function DraftRoomContent() {
         setSlotAnimationDone(false);
         setPhase('spinning');
       } else {
+        // Animation done — set reels to final position
+        const itemHeight3 = 130;
+        const landingIndex3 = (generatedReels3[0]?.length || 50) - 8;
+        const finalOffset3 = landingIndex3 * itemHeight3;
+        setReelOffsets([finalOffset3, finalOffset3, finalOffset3]);
         setShowSlotMachine(true);
         setSlotAnimationDone(true);
         setPhase('result');
@@ -1383,10 +1402,11 @@ function DraftRoomContent() {
       }
     };
 
+    const isResuming = offset > 0;
     const startTimeout = setTimeout(() => {
-      playSpinningSound();
+      if (!isResuming) playSpinningSound(); // Don't replay spinning sound on re-entry
       animationId = requestAnimationFrame(animate);
-    }, 200);
+    }, isResuming ? 0 : 200); // No delay on resume — start immediately
 
     return () => {
       clearTimeout(startTimeout);
@@ -1454,10 +1474,6 @@ function DraftRoomContent() {
   const visibleDraftType = slotAnimationDone || phase === 'drafting' || phase === 'filling' || !showSlotMachine ? draftType : null;
 
   const getBgColor = () => {
-    if ((phase === 'result' || phase === 'drafting') && visibleDraftType) {
-      if (visibleDraftType === 'jackpot') return 'bg-gradient-to-b from-red-950 to-red-950/50';
-      if (visibleDraftType === 'hof') return 'bg-gradient-to-b from-yellow-950 to-yellow-950/50';
-    }
     return 'bg-black';
   };
 
@@ -1658,7 +1674,7 @@ function DraftRoomContent() {
       {engine.draftStatus !== 'completed' && (
         <>
           {/* Pick Cards Banner */}
-          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: (phase === 'result' || phase === 'drafting') ? (visibleDraftType === 'jackpot' ? '#ef4444' : visibleDraftType === 'hof' ? '#B8960C' : '#000') : '#000' }}>
+          <div className="fixed top-0 left-0 z-[55] w-full overflow-hidden font-primary" style={{ backgroundColor: '#000' }}>
             <div
               ref={bannerRef}
               className="w-full flex gap-2 lg:gap-5 overflow-x-auto banner-no-scrollbar"
@@ -1730,9 +1746,9 @@ function DraftRoomContent() {
                           fontSize: '18px',
                           margin: '5px auto 0px auto',
                           textAlign: 'center',
-                          color: (phase !== 'drafting' ? mainCountdown : engine.timeRemaining) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
+                          color: (phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? engine.timeRemaining : mainCountdown) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
                         }}>
-                          {formatTime(phase !== 'drafting' ? mainCountdown : engine.timeRemaining)}
+                          {formatTime(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? engine.timeRemaining : mainCountdown)}
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15, marginTop: 5, paddingBottom: 3 }}>
@@ -1763,7 +1779,7 @@ function DraftRoomContent() {
                       {isCurrent && (
                         <div style={{ borderBottomWidth: 5, borderBottomStyle: 'solid', borderBottomColor: '#fff', width: '100%', minHeight: '54px' }}>
                           <p className="font-primary text-[15px] font-bold italic text-center pt-2" style={{ color: textColor }}>
-                            {phase !== 'drafting' ? 'Starting soon!' : 'Picking...'}
+                            {phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? 'Picking...' : 'Starting soon!'}
                           </p>
                         </div>
                       )}
