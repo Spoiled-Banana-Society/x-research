@@ -597,9 +597,14 @@ function DraftRoomContent() {
         pendingWsMessagesRef.current.push({ type: 'timer_update', payload });
         return;
       }
-      // Match production: let all timer_update through, no blocking.
-      // The display logic uses mainCountdown (from draftStartTime) during
-      // pre-spin/spinning/result phases regardless of engine.draftPhase.
+      // Backend bug: slow draft pickLength is 480s (8 min) instead of 28800s (8 hr).
+      // Adjust endOfTurnTimestamp so the countdown shows the correct 8-hour window.
+      if (speedParam === 'slow' && payload.startOfTurnTimestamp && payload.endOfTurnTimestamp) {
+        const serverPickLen = payload.endOfTurnTimestamp - payload.startOfTurnTimestamp;
+        if (serverPickLen < 3600) {
+          payload = { ...payload, endOfTurnTimestamp: payload.startOfTurnTimestamp + 28800 };
+        }
+      }
       engine.handleTimerUpdate(payload);
       lastWsUpdateRef.current = Date.now();
     },
@@ -745,11 +750,17 @@ function DraftRoomContent() {
         }
 
         // Server has real player data — initialize engine in live mode
+        // Backend bug: Go API sets pickLength = 60*8 = 480 (8 min) for slow drafts,
+        // but slow drafts should be 8 hours (3600*8 = 28800). Override on frontend.
+        const correctedPickLength = speedParam === 'slow' && draftInfo.pickLength < 3600
+          ? 28800
+          : draftInfo.pickLength;
+
         const serverDraftInfo = {
           draftId: draftInfo.draftId,
           displayName: draftInfo.displayName,
           draftStartTime: draftInfo.draftStartTime,
-          pickLength: draftInfo.pickLength,
+          pickLength: correctedPickLength,
           currentDrafter: draftInfo.currentDrafter,
           pickNumber: draftInfo.pickNumber,
           roundNum: draftInfo.roundNum,
