@@ -241,6 +241,14 @@ export default function DraftingPage() {
 
       for (const draft of liveDraftsToSync) {
         if (cancelled) return;
+
+        // Skip drafts actively managed by the draft-room tab.
+        // Both pages writing to draftStore simultaneously causes state conflicts and freezes.
+        const heartbeat = localStorage.getItem(`draft-room-ws:${draft.id}`);
+        if (heartbeat && Date.now() - Number(heartbeat) < 10_000) {
+          continue;
+        }
+
         try {
           const info = await draftApi.getDraftInfo(draft.id);
           if (cancelled) return;
