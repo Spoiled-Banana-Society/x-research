@@ -450,8 +450,15 @@ export default function DraftingPage() {
             const draftId = draft.id;
 
             if (type === 'timer_update' && payload) {
-              // Update pick end timestamp for timer countdown
-              const endTs = payload.endOfTurnTimestamp;
+              // Backend bug: slow draft pickLength is 480s (8 min) instead of 28800s (8 hr).
+              // Adjust endOfTurnTimestamp for slow drafts so the countdown shows 8 hours.
+              let endTs = payload.endOfTurnTimestamp;
+              if (draft.draftSpeed === 'slow' && payload.startOfTurnTimestamp && endTs) {
+                const serverPickLen = endTs - payload.startOfTurnTimestamp;
+                if (serverPickLen < 3600) {
+                  endTs = payload.startOfTurnTimestamp + 28800;
+                }
+              }
               const currentDrafter = (payload.currentDrafter || '').toLowerCase();
               const isUserTurn = wallet === currentDrafter;
               draftStore.updateDraft(draftId, {
