@@ -465,8 +465,7 @@ The draft room accepts these URL params:
 - Guaranteed distribution box at bottom
 
 ## Testing Notes
-- Draft type odds are set to 33% each for testing (see PackReveal.tsx)
-- Change back to real odds (1%/5%/94%) before production
+- Draft type odds are **1% JP / 5% HOF / 94% Pro** (production-correct, fixed 2026-03-13)
 - Test draft reveal: Go to /drafting → click Enter on 10/10 draft → hold pack
 
 ## API Integration Notes (For Future)
