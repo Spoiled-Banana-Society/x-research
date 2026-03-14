@@ -405,9 +405,12 @@ export default function DraftingPage() {
       const activeIds = new Set(draftingDrafts.map(d => d.id));
       const conns = wsConnectionsRef.current;
 
-      // Close connections for drafts no longer in drafting phase
+      // Close connections for drafts no longer in drafting phase or
+      // where the draft-room tab now has its own active WS connection
       conns.forEach((ws, id) => {
-        if (!activeIds.has(id)) {
+        const heartbeat = localStorage.getItem(`draft-room-ws:${id}`);
+        const draftRoomActive = heartbeat && Date.now() - Number(heartbeat) < 10_000;
+        if (!activeIds.has(id) || draftRoomActive) {
           ws.close();
           conns.delete(id);
         }
@@ -416,6 +419,13 @@ export default function DraftingPage() {
       // Open connections for drafts that need them
       for (const draft of draftingDrafts) {
         if (conns.has(draft.id)) continue; // already connected
+
+        // Skip if the draft-room tab already has an active WS for this draft.
+        // Dual connections confuse the Go server and cause freezes/glitches.
+        const heartbeat = localStorage.getItem(`draft-room-ws:${draft.id}`);
+        if (heartbeat && Date.now() - Number(heartbeat) < 10_000) {
+          continue; // draft-room has it covered
+        }
 
         const url = `${serverUrl}/ws?address=${encodeURIComponent(wallet)}&draftName=${encodeURIComponent(draft.id)}`;
         const ws = new WebSocket(url);
