@@ -1313,39 +1313,35 @@ function DraftRoomContent() {
     return () => clearInterval(interval);
   }, [screenShake]);
 
-  // Persistent subtle effects during drafting phase for HOF/Jackpot
+  // Trigger celebration effects when entering 'result' phase with HOF/Jackpot
+  // This handles both live animation completion AND late re-entry
   useEffect(() => {
-    if (phase !== 'drafting') return;
+    if (phase !== 'result') return;
     if (draftType !== 'jackpot' && draftType !== 'hof') return;
+    // If screenShake is already on, the live animation already triggered these
+    if (screenShake) return;
 
-    // Enable subtle pulse glow
+    // Start celebration effects (same as spinning animation completion)
+    setScreenShake(true);
     setPulseGlow(true);
 
-    // Periodic subtle word rain (fewer words, less frequent)
-    const rainInterval = setInterval(() => {
-      setJackpotRain(Array.from({ length: 8 }, (_, i) => ({
-        id: Date.now() + i,
-        x: Math.random() * 100,
-        delay: Math.random() * 3,
-        size: 12 + Math.random() * 14,
-      })));
-    }, 6000);
+    const colors = draftType === 'jackpot'
+      ? ['#ef4444', '#f97316', '#fbbf24', '#ffffff', '#ff6b6b', '#ffd93d']
+      : ['#FFD700', '#FFA500', '#ffffff', '#fbbf24', '#ffe066', '#ffb347'];
 
-    // Trigger first rain after a short delay
-    const firstRain = setTimeout(() => {
-      setJackpotRain(Array.from({ length: 8 }, (_, i) => ({
-        id: Date.now() + i,
-        x: Math.random() * 100,
-        delay: Math.random() * 3,
-        size: 12 + Math.random() * 14,
-      })));
-    }, 500);
+    setConfetti(Array.from({ length: 150 }, (_, i) => ({
+      id: i, x: Math.random() * 100,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      delay: Math.random() * 0.3,
+    })));
+    setTimeout(() => setConfetti([]), 6000);
 
-    return () => {
-      clearInterval(rainInterval);
-      clearTimeout(firstRain);
-    };
-  }, [phase, draftType]);
+    setJackpotRain(Array.from({ length: 35 }, (_, i) => ({
+      id: i, x: Math.random() * 100,
+      delay: Math.random() * 2.5,
+      size: 16 + Math.random() * 24,
+    })));
+  }, [phase, draftType, screenShake]);
 
   // ==================== SPINNING ANIMATION ====================
   useEffect(() => {
@@ -1508,9 +1504,6 @@ function DraftRoomContent() {
   const visibleDraftType = slotAnimationDone || phase === 'drafting' || phase === 'filling' || !showSlotMachine ? draftType : null;
 
   const getBgColor = () => {
-    // During drafting phase, tint background for HOF/Jackpot
-    if (phase === 'drafting' && visibleDraftType === 'jackpot') return 'bg-[#0a0000]';
-    if (phase === 'drafting' && visibleDraftType === 'hof') return 'bg-[#0a0800]';
     return 'bg-black';
   };
 
@@ -1586,8 +1579,8 @@ function DraftRoomContent() {
           className="fixed inset-0 z-30 pointer-events-none animate-pulse-glow"
           style={{
             background: visibleDraftType === 'jackpot'
-              ? `radial-gradient(circle at center, rgba(239, 68, 68, ${phase === 'drafting' ? '0.12' : '0.3'}) 0%, transparent 70%)`
-              : `radial-gradient(circle at center, rgba(255, 215, 0, ${phase === 'drafting' ? '0.12' : '0.3'}) 0%, transparent 70%)`,
+              ? 'radial-gradient(circle at center, rgba(239, 68, 68, 0.3) 0%, transparent 70%)'
+              : 'radial-gradient(circle at center, rgba(255, 215, 0, 0.3) 0%, transparent 70%)',
           }}
         />
       )}
