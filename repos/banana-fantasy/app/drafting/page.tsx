@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePromos } from '@/hooks/usePromos';
@@ -10,7 +10,7 @@ import { PromoModal } from '@/components/modals/PromoModal';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { Promo } from '@/types';
-import { isStagingMode } from '@/lib/staging';
+import { isStagingMode, getDraftServerUrl } from '@/lib/staging';
 import { useActiveDrafts } from '@/hooks/useActiveDrafts';
 import * as draftStore from '@/lib/draftStore';
 import type { DraftState } from '@/lib/draftStore';
@@ -377,6 +377,132 @@ export default function DraftingPage() {
       window.removeEventListener('focus', onFocus);
       if (focusTimeout) clearTimeout(focusTimeout);
       if (intervalId) clearInterval(intervalId);
+    };
+  }, [isLive, user?.walletAddress]);
+
+  // WebSocket keepalive: maintain a WS connection to each draft in 'drafting' phase
+  // so the Go server keeps processing bot picks and timer expiry.
+  // Without this, the server freezes picks when no one is connected via WebSocket.
+  const wsConnectionsRef = useRef<Map<string, WebSocket>>(new Map());
+
+  useEffect(() => {
+    if (!isLive || !user?.walletAddress) return;
+
+    const wallet = user.walletAddress.trim().toLowerCase();
+    const serverUrl = getDraftServerUrl() || 'wss://sbs-drafts-server-staging-652484219017.us-central1.run.app';
+
+    // Check every 3s which drafts need WebSocket connections
+    const syncConnections = () => {
+      const allDrafts = draftStore.getActiveDrafts();
+      const draftingDrafts = allDrafts.filter(
+        d => d.liveWalletAddress && d.phase === 'drafting' && d.status === 'drafting',
+      );
+
+      const activeIds = new Set(draftingDrafts.map(d => d.id));
+      const conns = wsConnectionsRef.current;
+
+      // Close connections for drafts no longer in drafting phase
+      conns.forEach((ws, id) => {
+        if (!activeIds.has(id)) {
+          ws.close();
+          conns.delete(id);
+        }
+      });
+
+      // Open connections for drafts that need them
+      for (const draft of draftingDrafts) {
+        if (conns.has(draft.id)) continue; // already connected
+
+        const url = `${serverUrl}/ws?address=${encodeURIComponent(wallet)}&draftName=${encodeURIComponent(draft.id)}`;
+        const ws = new WebSocket(url);
+        conns.set(draft.id, ws);
+
+        // Keepalive ping every 30s
+        let pingInterval: ReturnType<typeof setInterval> | null = null;
+
+        ws.onopen = () => {
+          console.log(`[Drafting WS] connected to ${draft.id}`);
+          pingInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping', payload: {} }));
+            }
+          }, 30_000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const { type, payload } = data;
+            const draftId = draft.id;
+
+            if (type === 'timer_update' && payload) {
+              // Update pick end timestamp for timer countdown
+              const endTs = payload.endOfTurnTimestamp;
+              const currentDrafter = (payload.currentDrafter || '').toLowerCase();
+              const isUserTurn = wallet === currentDrafter;
+              draftStore.updateDraft(draftId, {
+                pickEndTimestamp: endTs,
+                isYourTurn: isUserTurn,
+                timeRemaining: endTs ? Math.max(0, Math.ceil(endTs - Date.now() / 1000)) : undefined,
+              });
+            }
+
+            if (type === 'draft_info_update' && payload) {
+              // Compute picks away from server data
+              const info = payload;
+              const currentDrafter = (info.currentDrafter || '').toLowerCase();
+              const isUserTurn = wallet === currentDrafter;
+              const userIndex = (info.draftOrder || []).findIndex(
+                (entry: { ownerId: string }) => entry.ownerId.toLowerCase() === wallet,
+              );
+
+              let turnsUntilUserPick = 0;
+              if (!isUserTurn && userIndex >= 0) {
+                const totalPicks = (info.draftOrder?.length || 10) * 15;
+                for (let i = 1; i <= totalPicks - info.pickNumber + 1; i++) {
+                  if (getSnakeDrafterIndex(info.pickNumber + i) === userIndex) {
+                    turnsUntilUserPick = i;
+                    break;
+                  }
+                }
+              }
+
+              draftStore.updateDraft(draftId, {
+                currentPick: turnsUntilUserPick,
+                isYourTurn: isUserTurn,
+                enginePickNumber: info.pickNumber,
+              });
+            }
+
+            if (type === 'draft_complete') {
+              draftStore.removeDraft(draftId);
+              ws.close();
+              conns.delete(draftId);
+            }
+          } catch {
+            // Ignore non-JSON messages
+          }
+        };
+
+        ws.onclose = () => {
+          if (pingInterval) clearInterval(pingInterval);
+          conns.delete(draft.id);
+        };
+
+        ws.onerror = () => {
+          // onclose will fire after error
+        };
+      }
+    };
+
+    syncConnections();
+    const interval = setInterval(syncConnections, 3_000);
+
+    return () => {
+      clearInterval(interval);
+      const conns = wsConnectionsRef.current;
+      conns.forEach((ws) => ws.close());
+      conns.clear();
     };
   }, [isLive, user?.walletAddress]);
 
