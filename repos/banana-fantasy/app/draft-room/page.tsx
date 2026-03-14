@@ -1313,6 +1313,40 @@ function DraftRoomContent() {
     return () => clearInterval(interval);
   }, [screenShake]);
 
+  // Persistent subtle effects during drafting phase for HOF/Jackpot
+  useEffect(() => {
+    if (phase !== 'drafting') return;
+    if (draftType !== 'jackpot' && draftType !== 'hof') return;
+
+    // Enable subtle pulse glow
+    setPulseGlow(true);
+
+    // Periodic subtle word rain (fewer words, less frequent)
+    const rainInterval = setInterval(() => {
+      setJackpotRain(Array.from({ length: 8 }, (_, i) => ({
+        id: Date.now() + i,
+        x: Math.random() * 100,
+        delay: Math.random() * 3,
+        size: 12 + Math.random() * 14,
+      })));
+    }, 6000);
+
+    // Trigger first rain after a short delay
+    const firstRain = setTimeout(() => {
+      setJackpotRain(Array.from({ length: 8 }, (_, i) => ({
+        id: Date.now() + i,
+        x: Math.random() * 100,
+        delay: Math.random() * 3,
+        size: 12 + Math.random() * 14,
+      })));
+    }, 500);
+
+    return () => {
+      clearInterval(rainInterval);
+      clearTimeout(firstRain);
+    };
+  }, [phase, draftType]);
+
   // ==================== SPINNING ANIMATION ====================
   useEffect(() => {
     if (phase !== 'spinning') return;
@@ -1474,6 +1508,9 @@ function DraftRoomContent() {
   const visibleDraftType = slotAnimationDone || phase === 'drafting' || phase === 'filling' || !showSlotMachine ? draftType : null;
 
   const getBgColor = () => {
+    // During drafting phase, tint background for HOF/Jackpot
+    if (phase === 'drafting' && visibleDraftType === 'jackpot') return 'bg-[#0a0000]';
+    if (phase === 'drafting' && visibleDraftType === 'hof') return 'bg-[#0a0800]';
     return 'bg-black';
   };
 
@@ -1549,8 +1586,8 @@ function DraftRoomContent() {
           className="fixed inset-0 z-30 pointer-events-none animate-pulse-glow"
           style={{
             background: visibleDraftType === 'jackpot'
-              ? 'radial-gradient(circle at center, rgba(239, 68, 68, 0.3) 0%, transparent 70%)'
-              : 'radial-gradient(circle at center, rgba(255, 215, 0, 0.3) 0%, transparent 70%)',
+              ? `radial-gradient(circle at center, rgba(239, 68, 68, ${phase === 'drafting' ? '0.12' : '0.3'}) 0%, transparent 70%)`
+              : `radial-gradient(circle at center, rgba(255, 215, 0, ${phase === 'drafting' ? '0.12' : '0.3'}) 0%, transparent 70%)`,
           }}
         />
       )}
