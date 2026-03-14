@@ -209,6 +209,13 @@ export default function DraftingPage() {
           maxPlayers: 10,
           lastUpdated: Date.now(),
         }));
+        // Ensure API drafts are in draftStore with liveWalletAddress so
+        // the 3s poll can sync picks-away and timer data from the server
+        for (const d of mapped) {
+          if (!draftStore.getDraft(d.id)) {
+            draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
+          }
+        }
         setLiveDrafts(mapped);
       } catch (err) {
         console.error('[Drafting] Failed to load live drafts:', err);
