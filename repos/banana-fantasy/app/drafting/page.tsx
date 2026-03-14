@@ -265,6 +265,10 @@ export default function DraftingPage() {
             } else {
               const nowMs = Date.now();
 
+              // REST API never returns currentPickEndTime — preserve the value
+              // set by WebSocket timer_update events so the countdown doesn't reset
+              const effectivePickEnd = pickEndTimestamp || fresh.pickEndTimestamp;
+
               // Check if the animation timeline is still playing.
               // Full timeline from randomizingStartedAt: 15s bar + 60s countdown = 75s.
               // From preSpinStartedAt: 60s countdown.
@@ -284,9 +288,9 @@ export default function DraftingPage() {
                 draftStore.updateDraft(draft.id, {
                   currentPick: turnsUntilUserPick,
                   isYourTurn: isUserTurn,
-                  pickEndTimestamp,
-                  timeRemaining: isUserTurn && pickEndTimestamp
-                    ? Math.max(0, Math.ceil(pickEndTimestamp - nowMs / 1000))
+                  pickEndTimestamp: effectivePickEnd,
+                  timeRemaining: isUserTurn && effectivePickEnd
+                    ? Math.max(0, Math.ceil(effectivePickEnd - nowMs / 1000))
                     : undefined,
                 });
               } else if (!fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
@@ -296,9 +300,9 @@ export default function DraftingPage() {
                   randomizingStartedAt: nowMs,
                   currentPick: turnsUntilUserPick,
                   isYourTurn: isUserTurn,
-                  pickEndTimestamp,
-                  timeRemaining: isUserTurn && pickEndTimestamp
-                    ? Math.max(0, Math.ceil(pickEndTimestamp - nowMs / 1000))
+                  pickEndTimestamp: effectivePickEnd,
+                  timeRemaining: isUserTurn && effectivePickEnd
+                    ? Math.max(0, Math.ceil(effectivePickEnd - nowMs / 1000))
                     : undefined,
                 });
               } else {
@@ -312,9 +316,9 @@ export default function DraftingPage() {
                   randomizingStartedAt: undefined,
                   currentPick: turnsUntilUserPick,
                   isYourTurn: isUserTurn,
-                  pickEndTimestamp,
-                  timeRemaining: isUserTurn && pickEndTimestamp
-                    ? Math.max(0, Math.ceil(pickEndTimestamp - nowMs / 1000))
+                  pickEndTimestamp: effectivePickEnd,
+                  timeRemaining: isUserTurn && effectivePickEnd
+                    ? Math.max(0, Math.ceil(effectivePickEnd - nowMs / 1000))
                     : undefined,
                 });
               }
