@@ -207,6 +207,13 @@ function DraftRoomContent() {
   const [reelOffsets, setReelOffsets] = useState([0, 0, 0]);
   const [showSlotMachine, setShowSlotMachine] = useState(false);
   const [slotAnimationDone, setSlotAnimationDone] = useState(false);
+  // Helper: only show slot if it wasn't already dismissed in this draft
+  const showSlotIfNotDismissed = (dId?: string) => {
+    const id = dId || draftIdRef.current;
+    const s = id ? draftStore.getDraft(id) : undefined;
+    if (s?.slotDismissed) return;
+    setShowSlotMachine(true);
+  };
   const [showFlash, setShowFlash] = useState(false);
   const [screenShake, setScreenShake] = useState(false);
   const [confetti, setConfetti] = useState<Array<{ id: number; x: number; color: string; delay: number }>>([]);
@@ -353,7 +360,7 @@ function DraftRoomContent() {
               }
               setReelOffsets(initOffsets);
               animationOffsetRef.current = animOffset;
-              setShowSlotMachine(true);
+              showSlotIfNotDismissed();
               setSlotAnimationDone(false);
               setPhase('spinning');
             } else {
@@ -362,7 +369,7 @@ function DraftRoomContent() {
               const landingIndex = (generatedReels[0]?.length || 50) - 8;
               const finalOffset = landingIndex * itemHeight;
               setReelOffsets([finalOffset, finalOffset, finalOffset]);
-              setShowSlotMachine(true);
+              showSlotIfNotDismissed();
               setSlotAnimationDone(true);
               setPhase('result');
             }
@@ -410,7 +417,7 @@ function DraftRoomContent() {
                 }
                 setReelOffsets(initOffsets);
                 animationOffsetRef.current = animOffset2;
-                setShowSlotMachine(true);
+                showSlotIfNotDismissed();
                 setSlotAnimationDone(false);
                 setPhase('spinning');
               } else {
@@ -419,7 +426,7 @@ function DraftRoomContent() {
                 const landingIndex2 = (generatedReels2[0]?.length || 50) - 8;
                 const finalOffset2 = landingIndex2 * itemHeight2;
                 setReelOffsets([finalOffset2, finalOffset2, finalOffset2]);
-                setShowSlotMachine(true);
+                showSlotIfNotDismissed();
                 setSlotAnimationDone(true);
                 setPhase('result');
               }
@@ -525,7 +532,7 @@ function DraftRoomContent() {
         }
         setReelOffsets(initOffsets);
         animationOffsetRef.current = animOffset;
-        setShowSlotMachine(true);
+        showSlotIfNotDismissed();
         setSlotAnimationDone(false);
         setPhase('spinning');
       } else {
@@ -534,7 +541,7 @@ function DraftRoomContent() {
         const landingIndex3 = (generatedReels3[0]?.length || 50) - 8;
         const finalOffset3 = landingIndex3 * itemHeight3;
         setReelOffsets([finalOffset3, finalOffset3, finalOffset3]);
-        setShowSlotMachine(true);
+        showSlotIfNotDismissed();
         setSlotAnimationDone(true);
         setPhase('result');
       }
@@ -1367,8 +1374,11 @@ function DraftRoomContent() {
   // overwrites the local engine state with real server data when it succeeds.
 
   useEffect(() => {
-    if (mainCountdown <= 15 && showSlotMachine && slotAnimationDone) setShowSlotMachine(false);
-  }, [mainCountdown, showSlotMachine, slotAnimationDone]);
+    if (mainCountdown <= 15 && showSlotMachine && slotAnimationDone) {
+      setShowSlotMachine(false);
+      if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
+    }
+  }, [mainCountdown, showSlotMachine, slotAnimationDone, draftId]);
 
   useEffect(() => {
     if (mainCountdown <= 15 && screenShake) setScreenShake(false);
@@ -2222,7 +2232,11 @@ function DraftRoomContent() {
           mainCountdown={mainCountdown}
           slotAnimationDone={slotAnimationDone}
           formatTime={formatTime}
-          onClose={() => slotAnimationDone && setShowSlotMachine(false)}
+          onClose={() => {
+            if (!slotAnimationDone) return;
+            setShowSlotMachine(false);
+            if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
+          }}
         />
       )}
 
