@@ -879,6 +879,16 @@ pickLength = 3600 * 8  // FIX: 28800 seconds = 8 hours
 gcloud run deploy sbs-drafts-api-staging --source /Users/borisvagner/sbs-drafts-api-main --region us-central1 --project sbs-staging-env
 ```
 
+## ALSO URGENT: Staging Bots Pick Too Slowly (Boris)
+> **From Richard's session:** Staging bots (filled via `/staging/fill-bots`) wait for the FULL timer to expire before auto-picking — 30 seconds per bot pick for fast drafts, 8 hours for slow drafts. This makes testing painfully slow. Bots should auto-pick immediately (or within 1-2 seconds) when it's their turn, not run down the entire clock.
+
+**Where to look:** The Go WebSocket server handles timer expiry and auto-pick logic. Check `SBS-Football-Drafts-main/websockets/timer.go` — bots likely go through the same `StartDraftTimerForCurrentPick` flow as real players. Need a check: if the current drafter is a bot wallet, skip the timer and pick immediately.
+
+**Deploy:**
+```bash
+gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Football-Drafts-main --region us-central1 --project sbs-staging-env --port 8000 --timeout 3600 --min-instances 1 --vpc-connector staging-connector --allow-unauthenticated
+```
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
