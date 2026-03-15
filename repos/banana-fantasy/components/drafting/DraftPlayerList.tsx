@@ -11,6 +11,7 @@ interface DraftPlayerListProps {
   onAddToQueue: (player: PlayerData) => void;
   onRemoveFromQueue: (playerId: string) => void;
   isInQueue: (playerId: string) => boolean;
+  onSortChange?: (sort: 'adp' | 'rank') => void;
 }
 
 type PositionFilter = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'DST';
@@ -23,9 +24,14 @@ export function DraftPlayerList({
   onAddToQueue,
   onRemoveFromQueue,
   isInQueue,
+  onSortChange,
 }: DraftPlayerListProps) {
   const [filter, setFilter] = useState<PositionFilter>('ALL');
-  const [sortField, setSortField] = useState<SortField>('adp');
+  const [sortField, setSortFieldRaw] = useState<SortField>('adp');
+  const setSortField = (field: SortField) => {
+    setSortFieldRaw(field);
+    onSortChange?.(field);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);

@@ -555,6 +555,8 @@ function DraftRoomContent() {
 
   // ==================== LIVE MODE: WebSocket + pick handler ====================
   const handleLiveDraft = useCallback((playerId: string) => {
+    // Mark as manual pick (resets consecutive timeout counter for airplane mode)
+    engine.markManualPick();
     if (!isLiveMode) {
       engine.draftPlayer(playerId);
       return;
@@ -565,7 +567,7 @@ function DraftRoomContent() {
       ws.sendPick(pickPayload);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, engine.draftPlayer]);
+  }, [isLiveMode, engine.draftPlayer, engine.markManualPick]);
 
   const handleLiveQueueSync = useCallback((queue: typeof engine.queuedPlayers) => {
     if (!isLiveMode || !draftId || !walletParam) return;
@@ -678,6 +680,27 @@ function DraftRoomContent() {
       console.log('[WS] Disconnected from draft server');
     },
   });
+
+  // ==================== AIRPLANE MODE: Instant auto-pick when enabled ====================
+  useEffect(() => {
+    if (!engine.airplaneMode || !engine.isUserTurn || phase !== 'drafting' || engine.draftStatus !== 'active') return;
+
+    // Small delay to let state settle after turn change
+    const timeoutId = setTimeout(() => {
+      const pickId = engine.getAutoPickPlayer();
+      if (!pickId) return;
+      console.log('[Airplane] Auto-picking immediately:', pickId);
+      if (isLiveMode) {
+        const payload = engine.draftPlayer(pickId);
+        if (payload) ws.sendPick(payload);
+      } else {
+        engine.draftPlayer(pickId);
+      }
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.airplaneMode, engine.isUserTurn, phase, engine.draftStatus]);
 
   // ==================== Cross-tab heartbeat: signal to other tabs that draft-room ====================
   // has an active WS for this draft. The drafting page checks this to avoid opening
@@ -1992,15 +2015,23 @@ function DraftRoomContent() {
                 </span>
               ) : (phase === 'spinning' || phase === 'result') ? (
                 <span className="text-white/70">Draft starting in {formatTime(mainCountdown)}</span>
+              ) : phase === 'drafting' && engine.isUserTurn && engine.airplaneMode ? (
+                <span className="flex items-center justify-center gap-2">
+                  ✈️ Auto-picking...
+                </span>
               ) : phase === 'drafting' && engine.isUserTurn ? (
                 'Your turn to draft!'
+              ) : phase === 'drafting' && engine.airplaneMode && engine.turnsUntilUserPick > 0 ? (
+                <span className="flex items-center justify-center gap-2">
+                  ✈️ Auto-pick ON · {engine.turnsUntilUserPick} turn(s) away
+                </span>
               ) : phase === 'drafting' && engine.turnsUntilUserPick > 0 ? (
                 `${engine.turnsUntilUserPick} turn(s) until your pick!`
               ) : null}
             </div>
 
-            {/* Mute button + league logo row */}
-            <div className="flex items-center justify-center py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
+            {/* Mute button + airplane mode + league logo row */}
+            <div className="flex items-center justify-center gap-2 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
               {visibleDraftType === 'hof' && (
                 <div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2016,11 +2047,29 @@ function DraftRoomContent() {
               <div>
                 <button
                   onClick={() => setIsMuted(!isMuted)}
-                  className="text-[12px] text-right cursor-pointer flex items-center justify-end border border-gray-500 px-1 mr-2 font-primary"
+                  className="text-[12px] text-right cursor-pointer flex items-center justify-end border border-gray-500 px-1 font-primary"
                 >
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
+              {/* Airplane mode toggle — visible during drafting phase */}
+              {(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting')) && engine.draftStatus !== 'completed' && (
+                <button
+                  onClick={() => engine.toggleAirplaneMode()}
+                  title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
+                  className="cursor-pointer flex items-center justify-center transition-all"
+                  style={{
+                    fontSize: '18px',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    border: engine.airplaneMode ? '1px solid #fbbf24' : '1px solid #6b7280',
+                    background: engine.airplaneMode ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
+                    boxShadow: engine.airplaneMode ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none',
+                  }}
+                >
+                  <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -2063,6 +2112,7 @@ function DraftRoomContent() {
                   }
                 }}
                 isInQueue={(playerId) => engine.isInQueue(playerId)}
+                onSortChange={(sort) => engine.setAutoPickSortPreference(sort)}
               />
             )}
             {activeTab === 'queue' && (
