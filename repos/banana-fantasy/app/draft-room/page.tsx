@@ -199,7 +199,7 @@ function DraftRoomContent() {
   });
   const [draftType, setDraftType] = useState<DraftType | null>(() => {
     if (stored?.draftType) return stored.draftType;
-    return 'pro'; // TESTING: force pro
+    return null;
   });
 
   // ==================== SLOT MACHINE STATE ====================

@@ -117,7 +117,7 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 ## Testing
 - **Chrome extension: ONLY use the "claude code chrome" profile.** NEVER use any other Chrome profile — safety boundary.
-- Draft type odds are **33% each for testing** — change back to 1%/5%/94% before prod
+- Draft type odds are **1% JP / 5% HOF / 94% Pro** (production-correct)
 - `isStagingMode()` always returns true
 
 ## Shared Workspace Repo

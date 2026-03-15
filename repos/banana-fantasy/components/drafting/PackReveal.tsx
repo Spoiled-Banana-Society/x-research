@@ -55,12 +55,10 @@ export function PackReveal({ onComplete, contestName }: PackRevealProps) {
 
   // Determine result on component mount
   useEffect(() => {
-    // TEST MODE: Higher odds to see logos (change back later)
-    // Real odds: Jackpot 1%, HOF 5%, Pro 94%
     const random = Math.random() * 100;
-    if (random < 33) {
+    if (random < 1) {
       setResult(TYPES.jackpot);
-    } else if (random < 66) {
+    } else if (random < 6) {
       setResult(TYPES.hof);
     } else {
       setResult(TYPES.pro);
