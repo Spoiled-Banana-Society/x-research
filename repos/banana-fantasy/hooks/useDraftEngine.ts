@@ -186,6 +186,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   const [preTimeRemaining, setPreTimeRemaining] = useState(0);
   const [currentDrafterAddress, setCurrentDrafterAddress] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
+  const walletAddressRef = useRef(''); // Ref mirror for stable callbacks (handleNewPick)
   const [finalCard, setFinalCard] = useState<{ cardId: string; imageUrl: string } | null>(null);
   const [endOfTurnTimestamp, setEndOfTurnTimestamp] = useState(0);
   // Phase tracking — matches old useDraftRoom.ts "phase" concept:
@@ -309,6 +310,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     userWallet: string,
   ) => {
     setWalletAddress(userWallet.toLowerCase());
+    walletAddressRef.current = userWallet.toLowerCase();
 
     // Build draft order from server draftOrder
     const order: DraftPlayer[] = draftInfo.draftOrder.map((u, idx) => ({
@@ -495,14 +497,17 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     setQueuedPlayers(prev => prev.filter(p => p.playerId !== pickData.playerId));
 
     // Track consecutive auto-picks for airplane mode (live mode)
-    if (pickData.ownerAddress.toLowerCase() === walletAddress.toLowerCase() && walletAddress !== '') {
+    // Uses walletAddressRef (not walletAddress state) so this callback stays stable with [] deps
+    const wallet = walletAddressRef.current;
+    if (wallet && pickData.ownerAddress.toLowerCase() === wallet) {
       if (userPickedManuallyRef.current) {
         // User picked manually — reset counter
         consecutiveTimeoutsRef.current = 0;
       } else {
         // Server auto-picked (timer expired) — increment counter
         consecutiveTimeoutsRef.current += 1;
-        if (consecutiveTimeoutsRef.current >= 2 && !airplaneMode) {
+        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
+        if (consecutiveTimeoutsRef.current >= 2) {
           console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
           setAirplaneMode(true);
         }
@@ -515,7 +520,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     if (pickData.pickNum >= TOTAL_PICKS) {
       setDraftStatus('completed');
     }
-  }, [walletAddress, airplaneMode]);
+  }, []);
 
   const handleDraftInfoUpdate = useCallback((payload: ServerDraftInfoPayload) => {
     // Guard: never go backwards — stale/duplicate server messages can send lower pickNumber
@@ -854,6 +859,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
 
     // Airplane mode
     airplaneMode,
+    setAirplaneMode,
     toggleAirplaneMode,
     autoPickSortPreference,
     setAutoPickSortPreference,

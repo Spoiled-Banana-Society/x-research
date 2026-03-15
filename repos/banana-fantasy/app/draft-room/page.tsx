@@ -550,6 +550,11 @@ function DraftRoomContent() {
         }
       }
     }
+
+    // Restore airplane mode
+    if (stored.airplaneMode) {
+      engine.setAirplaneMode(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -832,6 +837,13 @@ function DraftRoomContent() {
 
         liveInitializedRef.current = true;
         setEngineReady(true);
+
+        // Restore airplane mode from stored state
+        const storedDraft = draftId ? draftStore.getDraft(draftId) : undefined;
+        if (storedDraft?.airplaneMode) {
+          engine.setAirplaneMode(true);
+        }
+
         console.log('[Draft Room] Engine ready — draft data loaded successfully');
 
         // Replay any WS messages that arrived during REST loading.
@@ -942,8 +954,9 @@ function DraftRoomContent() {
       enginePicks: engine.picks,
       enginePickNumber: engine.currentPickNumber,
       engineQueue: engine.queuedPlayers,
+      airplaneMode: engine.airplaneMode,
     });
-  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
+  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers, engine.airplaneMode]);
 
   // Write 6: Draft completes — remove from active drafts
   useEffect(() => {
@@ -2052,9 +2065,8 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Airplane mode toggle — visible during drafting phase */}
-              {(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting')) && engine.draftStatus !== 'completed' && (
-                <button
+              {/* Airplane mode toggle — always visible (like mute button) */}
+              <button
                   onClick={() => engine.toggleAirplaneMode()}
                   title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
                   className="cursor-pointer flex items-center justify-center transition-all"
@@ -2069,7 +2081,6 @@ function DraftRoomContent() {
                 >
                   <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
                 </button>
-              )}
             </div>
           </div>
 
