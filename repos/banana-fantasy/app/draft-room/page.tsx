@@ -1619,8 +1619,10 @@ function DraftRoomContent() {
     };
   };
 
-  // Roster view switch
-  const handleViewRoster = (_playerName: string) => {
+  // Roster view switch — clicking a player card shows their roster
+  const [rosterViewPlayer, setRosterViewPlayer] = useState<string | undefined>(undefined);
+  const handleViewRoster = (playerName: string) => {
+    setRosterViewPlayer(playerName);
     setActiveTab('roster');
   };
 
@@ -2196,6 +2198,7 @@ function DraftRoomContent() {
                 rosters={engine.rosters}
                 picks={engine.picks}
                 userDraftPosition={engine.userDraftPosition}
+                initialPlayer={rosterViewPlayer}
               />
             )}
             {activeTab === 'chat' && (
