@@ -193,6 +193,15 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   // 'live' = draft is active, picks are happening (server sends timer_update)
   const [draftPhase, setDraftPhase] = useState<'countdown' | 'live'>('countdown');
 
+  // ==================== AIRPLANE MODE STATE ====================
+  // When user lets timer expire 2 picks in a row, airplane mode auto-enables.
+  // While active, auto-picks immediately when it's the user's turn.
+  const [airplaneMode, setAirplaneMode] = useState(false);
+  const [autoPickSortPreference, setAutoPickSortPreference] = useState<'adp' | 'rank'>('adp');
+  const consecutiveTimeoutsRef = useRef(0);
+  // Tracks whether the user manually picked during their current turn (for live mode detection)
+  const userPickedManuallyRef = useRef(false);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const botTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessingRef = useRef(false);
@@ -485,11 +494,28 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     // Remove from queue if queued
     setQueuedPlayers(prev => prev.filter(p => p.playerId !== pickData.playerId));
 
+    // Track consecutive auto-picks for airplane mode (live mode)
+    if (pickData.ownerAddress.toLowerCase() === walletAddress.toLowerCase() && walletAddress !== '') {
+      if (userPickedManuallyRef.current) {
+        // User picked manually — reset counter
+        consecutiveTimeoutsRef.current = 0;
+      } else {
+        // Server auto-picked (timer expired) — increment counter
+        consecutiveTimeoutsRef.current += 1;
+        if (consecutiveTimeoutsRef.current >= 2 && !airplaneMode) {
+          console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
+          setAirplaneMode(true);
+        }
+      }
+      // Reset for next turn
+      userPickedManuallyRef.current = false;
+    }
+
     // Check completion
     if (pickData.pickNum >= TOTAL_PICKS) {
       setDraftStatus('completed');
     }
-  }, []);
+  }, [walletAddress, airplaneMode]);
 
   const handleDraftInfoUpdate = useCallback((payload: ServerDraftInfoPayload) => {
     // Guard: never go backwards — stale/duplicate server messages can send lower pickNumber
@@ -604,14 +630,14 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     return null;
   }, [mode, draftStatus, currentPickNumber, availablePlayers, draftOrder, currentDrafterIndex, currentRound, walletAddress, endOfTurnTimestamp]);
 
-  // ==================== AUTO-PICK AI (LOCAL MODE ONLY) ====================
-  const autoPickForPlayer = useCallback((playerRoster: PositionRoster, queue: PlayerData[], available: PlayerData[], round: number): string => {
+  // ==================== AUTO-PICK AI ====================
+  const autoPickForPlayer = useCallback((playerRoster: PositionRoster, queue: PlayerData[], available: PlayerData[], round: number, sortBy: 'adp' | 'rank' = 'adp'): string => {
     if (queue.length > 0) {
       const queuePick = queue.find(q => available.some(a => a.playerId === q.playerId));
       if (queuePick) return queuePick.playerId;
     }
     if (round < 12) {
-      const sorted = [...available].sort((a, b) => a.adp - b.adp);
+      const sorted = [...available].sort((a, b) => sortBy === 'adp' ? a.adp - b.adp : a.rank - b.rank);
       if (sorted.length > 0) return sorted[0].playerId;
     }
     const needOrder: (keyof PositionRoster)[] = ['RB', 'WR', 'QB', 'TE', 'DST'];
@@ -621,8 +647,34 @@ export function useDraftEngine(mode: DraftMode = 'local') {
         if (match) return match.playerId;
       }
     }
-    const sorted = [...available].sort((a, b) => a.adp - b.adp);
+    const sorted = [...available].sort((a, b) => sortBy === 'adp' ? a.adp - b.adp : a.rank - b.rank);
     return sorted[0]?.playerId || '';
+  }, []);
+
+  // ==================== AIRPLANE MODE FUNCTIONS ====================
+
+  /** Returns the playerId that auto-pick would select right now */
+  const getAutoPickPlayer = useCallback((): string => {
+    const rosterKey = mode === 'live' ? walletAddress : (currentDrafter?.name || '');
+    const roster = rosters[rosterKey] || createEmptyRoster();
+    return autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference);
+  }, [mode, walletAddress, currentDrafter, rosters, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference, autoPickForPlayer]);
+
+  /** Called by the page when user manually picks a player */
+  const markManualPick = useCallback(() => {
+    consecutiveTimeoutsRef.current = 0;
+    userPickedManuallyRef.current = true;
+  }, []);
+
+  /** Toggle airplane mode on/off. Turning off resets the consecutive timeout counter. */
+  const toggleAirplaneMode = useCallback(() => {
+    setAirplaneMode(prev => {
+      if (prev) {
+        // Turning OFF — reset counter so it doesn't immediately re-enable
+        consecutiveTimeoutsRef.current = 0;
+      }
+      return !prev;
+    });
   }, []);
 
   // ==================== QUEUE MANAGEMENT ====================
@@ -716,12 +768,19 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     if (mode === 'live') return; // Server handles auto-pick in live mode
     if (!isUserTurn || timeRemaining > 0 || draftStatus !== 'active') return;
 
+    // Track consecutive timeouts for airplane mode
+    consecutiveTimeoutsRef.current += 1;
+    if (consecutiveTimeoutsRef.current >= 2 && !airplaneMode) {
+      console.log('[Airplane] 2 consecutive timeouts — enabling airplane mode');
+      setAirplaneMode(true);
+    }
+
     const roster = rosters[currentDrafter?.name || ''] || createEmptyRoster();
-    const pickId = autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound);
+    const pickId = autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference);
     if (pickId) {
       draftPlayer(pickId);
     }
-  }, [mode, isUserTurn, timeRemaining, draftStatus, rosters, currentDrafter, queuedPlayers, availablePlayers, currentRound, autoPickForPlayer, draftPlayer]);
+  }, [mode, isUserTurn, timeRemaining, draftStatus, rosters, currentDrafter, queuedPlayers, availablePlayers, currentRound, autoPickForPlayer, autoPickSortPreference, draftPlayer, airplaneMode]);
 
   // ==================== LOCAL MODE BOT AUTO-PICK ====================
   useEffect(() => {
@@ -792,5 +851,14 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     refreshAvailablePlayers,
     refreshSummaryPicks,
     isInQueue,
+
+    // Airplane mode
+    airplaneMode,
+    toggleAirplaneMode,
+    autoPickSortPreference,
+    setAutoPickSortPreference,
+    markManualPick,
+    getAutoPickPlayer,
+    consecutiveTimeouts: consecutiveTimeoutsRef.current,
   };
 }
