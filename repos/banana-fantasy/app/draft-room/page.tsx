@@ -1531,18 +1531,40 @@ function DraftRoomContent() {
   // ==================== FREEZE DETECTION (matches old system) ====================
   // Increased threshold to 30s to avoid triggering unnecessary reconnects that cause
   // state oscillation when Cloud Run has multiple instances.
+  // ==================== WS WATCHDOG: Detect stale connections & recover ====================
+  // Runs every 5 seconds during ANY live phase (filling, countdown, drafting).
+  // If no WS message received in 15s, force reconnect + re-fetch draft state.
+  // This catches: silent disconnects, half-open TCP, server crashes, network hiccups.
   useEffect(() => {
-    // Only check for freezes when draft is actively picking (not during countdown or pre-draft)
-    if (!isLiveMode || phase !== 'drafting' || engine.draftStatus === 'completed' || engine.draftPhase === 'countdown') return;
-    const check = setTimeout(() => {
-      if (Date.now() - lastWsUpdateRef.current > 30_000) {
-        console.log('[Freeze] No timer update in 30s, forcing reconnect');
+    if (!isLiveMode || !draftId || engine.draftStatus === 'completed') return;
+
+    const STALE_THRESHOLD = 15_000; // 15 seconds without any WS message = stale
+    const CHECK_INTERVAL = 5_000;   // Check every 5 seconds
+
+    const interval = setInterval(() => {
+      const lastMsg = ws.lastMessageRef.current;
+      const elapsed = Date.now() - lastMsg;
+
+      if (elapsed > STALE_THRESHOLD) {
+        console.warn(`[Watchdog] No WS message in ${Math.round(elapsed / 1000)}s — forcing reconnect`);
         ws.forceReconnect();
+
+        // Also re-fetch draft state via REST to catch any missed picks
+        if (liveInitializedRef.current) {
+          draftApi.getDraftSummary(draftId).then(summary => {
+            const summaryArr = Array.isArray(summary) ? summary : (summary as any).summary || [];
+            if (summaryArr.length > 0) {
+              engine.refreshSummaryPicks(summaryArr);
+              console.log(`[Watchdog] Re-synced ${summaryArr.filter((s: any) => s.playerInfo?.playerId).length} picks from REST`);
+            }
+          }).catch(() => {});
+        }
       }
-    }, 10_000);
-    return () => clearTimeout(check);
+    }, CHECK_INTERVAL);
+
+    return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, phase, engine.draftStatus, engine.draftPhase, engine.timeRemaining]);
+  }, [isLiveMode, draftId, engine.draftStatus]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
