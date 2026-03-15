@@ -2052,9 +2052,8 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Airplane mode toggle — visible during drafting phase */}
-              {(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting')) && engine.draftStatus !== 'completed' && (
-                <button
+              {/* Airplane mode toggle — always visible (like mute button) */}
+              <button
                   onClick={() => engine.toggleAirplaneMode()}
                   title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
                   className="cursor-pointer flex items-center justify-center transition-all"
@@ -2069,7 +2068,6 @@ function DraftRoomContent() {
                 >
                   <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
                 </button>
-              )}
             </div>
           </div>
 
