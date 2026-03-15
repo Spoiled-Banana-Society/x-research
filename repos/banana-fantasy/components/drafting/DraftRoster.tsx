@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { POSITION_COLORS, ALL_POSITIONS } from '@/lib/draftRoomConstants';
 import type { PositionRoster, DraftPick } from '@/lib/draftRoomConstants';
 import type { DraftPlayer } from '@/hooks/useDraftEngine';
@@ -10,14 +10,20 @@ interface DraftRosterProps {
   rosters: Record<string, PositionRoster>;
   picks: DraftPick[];
   userDraftPosition: number;
+  initialPlayer?: string; // Pre-select a specific player's roster
 }
 
 const POSITION_KEYS: (keyof PositionRoster)[] = ['QB', 'RB', 'WR', 'TE', 'DST'];
 
-export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition }: DraftRosterProps) {
+export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, initialPlayer }: DraftRosterProps) {
   const [selectedPlayer, setSelectedPlayer] = useState(
-    draftOrder[userDraftPosition]?.name || draftOrder[0]?.name || ''
+    initialPlayer || draftOrder[userDraftPosition]?.name || draftOrder[0]?.name || ''
   );
+
+  // When a different player card is clicked, update selection
+  useEffect(() => {
+    if (initialPlayer) setSelectedPlayer(initialPlayer);
+  }, [initialPlayer]);
 
   const roster = rosters[selectedPlayer];
 

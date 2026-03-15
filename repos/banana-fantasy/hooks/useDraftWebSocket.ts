@@ -91,6 +91,7 @@ export interface UseDraftWebSocketReturn {
   sendQueueUpdate: (queue: PlayerStateInfo[]) => void;
   forceReconnect: () => void;
   disconnect: () => void;
+  lastMessageRef: React.MutableRefObject<number>;
 }
 
 // ==================== CONSTANTS ====================
@@ -127,6 +128,7 @@ export function useDraftWebSocket(options: UseDraftWebSocketOptions): UseDraftWe
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const intentionalCloseRef = useRef(false);
   const mountedRef = useRef(true);
+  const lastMessageRef = useRef(Date.now());
 
   // Store callbacks in refs so the WebSocket message handler always sees latest
   const callbacksRef = useRef(options);
@@ -197,6 +199,9 @@ export function useDraftWebSocket(options: UseDraftWebSocketOptions): UseDraftWe
         const data = JSON.parse(event.data);
         const { type, payload } = data;
         const cbs = callbacksRef.current;
+
+        // Track last message time for stale connection detection
+        lastMessageRef.current = Date.now();
 
         // Log all non-timer messages (timer is too frequent)
         if (type !== 'timer_update') {
@@ -330,5 +335,6 @@ export function useDraftWebSocket(options: UseDraftWebSocketOptions): UseDraftWe
     sendQueueUpdate,
     forceReconnect,
     disconnect,
+    lastMessageRef,
   };
 }
