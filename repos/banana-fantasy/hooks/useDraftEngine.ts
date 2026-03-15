@@ -859,6 +859,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
 
     // Airplane mode
     airplaneMode,
+    setAirplaneMode,
     toggleAirplaneMode,
     autoPickSortPreference,
     setAutoPickSortPreference,

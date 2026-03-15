@@ -550,6 +550,11 @@ function DraftRoomContent() {
         }
       }
     }
+
+    // Restore airplane mode
+    if (stored.airplaneMode) {
+      engine.setAirplaneMode(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -832,6 +837,13 @@ function DraftRoomContent() {
 
         liveInitializedRef.current = true;
         setEngineReady(true);
+
+        // Restore airplane mode from stored state
+        const storedDraft = draftId ? draftStore.getDraft(draftId) : undefined;
+        if (storedDraft?.airplaneMode) {
+          engine.setAirplaneMode(true);
+        }
+
         console.log('[Draft Room] Engine ready — draft data loaded successfully');
 
         // Replay any WS messages that arrived during REST loading.
