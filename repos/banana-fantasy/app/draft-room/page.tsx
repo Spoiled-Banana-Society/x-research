@@ -942,8 +942,9 @@ function DraftRoomContent() {
       enginePicks: engine.picks,
       enginePickNumber: engine.currentPickNumber,
       engineQueue: engine.queuedPlayers,
+      airplaneMode: engine.airplaneMode,
     });
-  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
+  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers, engine.airplaneMode]);
 
   // Write 6: Draft completes — remove from active drafts
   useEffect(() => {

@@ -35,6 +35,9 @@ export interface DraftState {
   liveWalletAddress?: string;    // Wallet address for API calls
   pickEndTimestamp?: number;     // Absolute Unix seconds — when current pick expires
 
+  // Airplane mode (auto-pick enabled)
+  airplaneMode?: boolean;
+
   // Engine state for resuming mid-draft
   enginePicks?: Array<{
     pickNumber: number; round: number; pickInRound: number;
