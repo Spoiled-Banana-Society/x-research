@@ -954,9 +954,20 @@ function DraftRoomContent() {
       enginePicks: engine.picks,
       enginePickNumber: engine.currentPickNumber,
       engineQueue: engine.queuedPlayers,
-      airplaneMode: engine.airplaneMode,
     });
-  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers, engine.airplaneMode]);
+  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
+
+  // Persist airplane mode separately — skips initial render so we don't
+  // overwrite the stored value with `false` before the restore code reads it.
+  const airplaneSyncedRef = useRef(false);
+  useEffect(() => {
+    if (!draftId) return;
+    if (!airplaneSyncedRef.current) {
+      airplaneSyncedRef.current = true;
+      return;
+    }
+    draftStore.updateDraft(draftId, { airplaneMode: engine.airplaneMode });
+  }, [draftId, engine.airplaneMode]);
 
   // Write 6: Draft completes — remove from active drafts
   useEffect(() => {
