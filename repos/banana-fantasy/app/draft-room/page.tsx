@@ -558,10 +558,6 @@ function DraftRoomContent() {
       }
     }
 
-    // Restore airplane mode
-    if (stored.airplaneMode) {
-      engine.setAirplaneMode(true);
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -844,12 +840,7 @@ function DraftRoomContent() {
 
         liveInitializedRef.current = true;
         setEngineReady(true);
-
-        // Restore airplane mode from stored state
-        const storedDraft = draftId ? draftStore.getDraft(draftId) : undefined;
-        if (storedDraft?.airplaneMode) {
-          engine.setAirplaneMode(true);
-        }
+        // Airplane mode restored by dedicated effect (covers all phases)
 
         console.log('[Draft Room] Engine ready — draft data loaded successfully');
 
@@ -975,6 +966,18 @@ function DraftRoomContent() {
     }
     draftStore.updateDraft(draftId, { airplaneMode: engine.airplaneMode });
   }, [draftId, engine.airplaneMode]);
+
+  // Restore airplane mode from localStorage on mount — works for ALL phases
+  // (filling, pre-spin, spinning, result, drafting). Fires once when draftId is available.
+  useEffect(() => {
+    const id = draftId || urlDraftId;
+    if (!id) return;
+    const stored = draftStore.getDraft(id);
+    if (stored?.airplaneMode) {
+      engine.setAirplaneMode(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
 
   // Write 6: Draft completes — remove from active drafts
   useEffect(() => {
