@@ -961,48 +961,26 @@ function DraftRoomContent() {
   }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
 
   // ==================== DIRECT LOCALSTORAGE PERSISTENCE ====================
-  // These bypass draftStore to avoid phase-gating issues. Work during ALL phases.
-  const airplaneKey = `airplane:${draftId || urlDraftId}`;
-  const queueKey = `queue:${draftId || urlDraftId}`;
+  // No effects for save — effects race with React Strict Mode and async state.
+  // Save: directly in event handlers (synchronous, no race conditions).
+  // Restore: from useState initializers or a single mount effect for engine state.
 
-  // Restore airplane mode on mount (read directly, no draftStore dependency)
+  // Helper: get the draft localStorage key prefix
+  const getPersistId = () => draftId || urlDraftId;
+
+  // Restore airplane mode on mount — engine state can only be set via setter
   useEffect(() => {
-    const id = draftId || urlDraftId;
+    const id = getPersistId();
     if (!id) return;
-    const key = `airplane:${id}`;
-    if (localStorage.getItem(key) === '1') {
+    if (localStorage.getItem(`airplane:${id}`) === '1') {
       engine.setAirplaneMode(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
-  // Save airplane mode when it changes
-  useEffect(() => {
-    const id = draftId || urlDraftId;
-    if (!id) return;
-    const key = `airplane:${id}`;
-    localStorage.setItem(key, engine.airplaneMode ? '1' : '0');
-    // Also keep draftStore in sync for the drafting page ✈️ indicator
-    draftStore.updateDraft(id, { airplaneMode: engine.airplaneMode });
-  }, [engine.airplaneMode, draftId, urlDraftId]);
-
-  // Save mute when it changes
-  useEffect(() => {
-    const id = draftId || urlDraftId;
-    if (!id) return;
-    localStorage.setItem(`mute:${id}`, isMuted ? '1' : '0');
-  }, [isMuted, draftId, urlDraftId]);
-
-  // Save queue during ALL phases (main sync only saves during drafting)
-  useEffect(() => {
-    const id = draftId || urlDraftId;
-    if (!id || engine.queuedPlayers.length === 0) return;
-    localStorage.setItem(`queue:${id}`, JSON.stringify(engine.queuedPlayers));
-  }, [engine.queuedPlayers, draftId, urlDraftId]);
-
   // Restore queue on mount
   useEffect(() => {
-    const id = draftId || urlDraftId;
+    const id = getPersistId();
     if (!id) return;
     try {
       const raw = localStorage.getItem(`queue:${id}`);
@@ -1015,6 +993,48 @@ function DraftRoomContent() {
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
+
+  // Wrapper: toggle airplane and save to localStorage in one shot
+  const handleToggleAirplane = useCallback(() => {
+    engine.toggleAirplaneMode();
+    const id = getPersistId();
+    if (!id) return;
+    // toggleAirplaneMode flips the current value, so save the OPPOSITE of current
+    const newValue = !engine.airplaneMode;
+    localStorage.setItem(`airplane:${id}`, newValue ? '1' : '0');
+    draftStore.updateDraft(id, { airplaneMode: newValue });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.airplaneMode, engine.toggleAirplaneMode, draftId, urlDraftId]);
+
+  // Wrapper: toggle mute and save to localStorage in one shot
+  const handleToggleMute = useCallback(() => {
+    const newValue = !isMuted;
+    setIsMuted(newValue);
+    const id = getPersistId();
+    if (id) localStorage.setItem(`mute:${id}`, newValue ? '1' : '0');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMuted, draftId, urlDraftId]);
+
+  // Save queue whenever it changes (no race condition — queue starts empty, restore adds items)
+  useEffect(() => {
+    const id = getPersistId();
+    if (!id) return;
+    if (engine.queuedPlayers.length > 0) {
+      localStorage.setItem(`queue:${id}`, JSON.stringify(engine.queuedPlayers));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.queuedPlayers, draftId]);
+
+  // Also save airplane when auto-enabled (2 consecutive timeouts)
+  // This watches engine.airplaneMode but only saves when it turns ON (not off)
+  useEffect(() => {
+    if (!engine.airplaneMode) return;
+    const id = getPersistId();
+    if (!id) return;
+    localStorage.setItem(`airplane:${id}`, '1');
+    draftStore.updateDraft(id, { airplaneMode: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.airplaneMode, draftId]);
 
   // Write 6: Draft completes — remove from active drafts + cleanup direct localStorage keys
   useEffect(() => {
@@ -2147,7 +2167,7 @@ function DraftRoomContent() {
               )}
               <div>
                 <button
-                  onClick={() => setIsMuted(!isMuted)}
+                  onClick={handleToggleMute}
                   className="text-[12px] text-right cursor-pointer flex items-center justify-end border border-gray-500 px-1 font-primary"
                 >
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
@@ -2155,7 +2175,7 @@ function DraftRoomContent() {
               </div>
               {/* Airplane mode toggle — always visible */}
               <button
-                  onClick={() => engine.toggleAirplaneMode()}
+                  onClick={handleToggleAirplane}
                   title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
                   className="cursor-pointer flex items-center justify-center transition-all"
                   style={{
