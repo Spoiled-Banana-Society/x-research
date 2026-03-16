@@ -2113,22 +2113,24 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Airplane mode toggle — always visible (like mute button) */}
-              <button
-                  onClick={() => engine.toggleAirplaneMode()}
-                  title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
-                  className="cursor-pointer flex items-center justify-center transition-all"
-                  style={{
-                    fontSize: '18px',
-                    padding: '2px 8px',
-                    borderRadius: '6px',
-                    border: engine.airplaneMode ? '1px solid #fbbf24' : '1px solid #6b7280',
-                    background: engine.airplaneMode ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
-                    boxShadow: engine.airplaneMode ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none',
-                  }}
-                >
-                  <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
-                </button>
+              {/* Airplane mode toggle — only visible once drafting starts */}
+              {phase === 'drafting' && engine.draftStatus !== 'completed' && (
+                <button
+                    onClick={() => engine.toggleAirplaneMode()}
+                    title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
+                    className="cursor-pointer flex items-center justify-center transition-all"
+                    style={{
+                      fontSize: '18px',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      border: engine.airplaneMode ? '1px solid #fbbf24' : '1px solid #6b7280',
+                      background: engine.airplaneMode ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
+                      boxShadow: engine.airplaneMode ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none',
+                    }}
+                  >
+                    <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
+                  </button>
+              )}
             </div>
           </div>
 
