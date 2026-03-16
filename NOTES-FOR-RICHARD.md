@@ -49,3 +49,48 @@ Boris's account (@BorisVagner) already had Twitter linked via Privy, so the veri
 
 ## Firestore Collections
 - `v2_twitter_links` — documents keyed by Twitter ID, contains `{ twitterId, twitterHandle, walletAddress, linkedAt, newUserPromoClaimed }`
+
+---
+
+# Notes for Richard — March 16, 2026
+
+## Guaranteed Draft Type Distribution — Backend Already Built
+
+Richard, your CLAUDE.md note says the backend needs to be built for guaranteed distribution — **it's already done.** Boris's side already built this in `sbs-drafts-api-main`. Here's what exists:
+
+### What's already working on the backend:
+
+**1. Batch tracker** (`models/leagues.go`):
+- `DraftLeagueTracker` in Firestore doc `drafts/draftTracker` tracks everything
+- `GenerateNewBatch()` shuffles 1 Jackpot + 5 HOF positions within each 100-draft batch
+- Auto-resets when `FilledLeaguesCount > BatchStart + 99`
+
+**2. Draft type assignment is automatic** (`models/draft-state.go`, `CreateLeagueDraftStateUponFilling()`):
+- When a draft fills (10/10), it checks `FilledLeaguesCount` against `HofLeagueIds` and `JackpotLeagueIds`
+- If it matches a HOF position → sets `league.Level = "Hall of Fame"` and upgrades all cards
+- If it matches a Jackpot position → sets `league.Level = "Jackpot"` and upgrades all cards
+- Otherwise it's Pro (default)
+- No new `draftType` field needed — it's `league.Level` on the league document in Firestore
+
+**3. Batch progress endpoint already exists**:
+- `GET /league/batchProgress` → returns:
+```json
+{
+  "current": 80,
+  "total": 100,
+  "jackpotRemaining": 1,
+  "hofRemaining": 2,
+  "batchStart": 1,
+  "filledLeaguesCount": 80
+}
+```
+
+### What you need to do on the frontend:
+- **Replace `batchManager.claimNextType()` (localStorage)** → it's not needed. The backend assigns the type automatically when the draft fills. The type comes back on the league document's `Level` field.
+- **Replace `batchManager.getBatchProgress()` (localStorage)** → call `GET /league/batchProgress` from the staging API (`sbs-drafts-api-staging-652484219017.us-central1.run.app`).
+- **You can remove `lib/batchManager.ts` entirely** — all that logic lives on the backend already.
+
+### Staging API base URL:
+```
+https://sbs-drafts-api-staging-652484219017.us-central1.run.app
+```
