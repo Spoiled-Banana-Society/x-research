@@ -243,7 +243,12 @@ function DraftRoomContent() {
 
   // ==================== DRAFTING UI STATE ====================
   const [activeTab, setActiveTab] = useState<DraftTab>('draft');
-  const [isMuted, setIsMuted] = useState(false);
+  // Mute — restore from localStorage immediately
+  const muteKey = `mute:${urlDraftId || ''}`;
+  const [isMuted, setIsMuted] = useState(() => {
+    if (typeof window === 'undefined' || !urlDraftId) return false;
+    return localStorage.getItem(muteKey) === '1';
+  });
   const bannerRef = useRef<HTMLDivElement>(null);
 
   // ==================== TIMESTAMP REFS ====================
@@ -955,34 +960,69 @@ function DraftRoomContent() {
     });
   }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
 
-  // Persist airplane mode separately — skips initial render so we don't
-  // overwrite the stored value with `false` before the restore code reads it.
-  const airplaneSyncedRef = useRef(false);
-  useEffect(() => {
-    if (!draftId) return;
-    if (!airplaneSyncedRef.current) {
-      airplaneSyncedRef.current = true;
-      return;
-    }
-    draftStore.updateDraft(draftId, { airplaneMode: engine.airplaneMode });
-  }, [draftId, engine.airplaneMode]);
+  // ==================== DIRECT LOCALSTORAGE PERSISTENCE ====================
+  // These bypass draftStore to avoid phase-gating issues. Work during ALL phases.
+  const airplaneKey = `airplane:${draftId || urlDraftId}`;
+  const queueKey = `queue:${draftId || urlDraftId}`;
 
-  // Restore airplane mode from localStorage on mount — works for ALL phases
-  // (filling, pre-spin, spinning, result, drafting). Fires once when draftId is available.
+  // Restore airplane mode on mount (read directly, no draftStore dependency)
   useEffect(() => {
     const id = draftId || urlDraftId;
     if (!id) return;
-    const stored = draftStore.getDraft(id);
-    if (stored?.airplaneMode) {
+    const key = `airplane:${id}`;
+    if (localStorage.getItem(key) === '1') {
       engine.setAirplaneMode(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
-  // Write 6: Draft completes — remove from active drafts
+  // Save airplane mode when it changes
+  useEffect(() => {
+    const id = draftId || urlDraftId;
+    if (!id) return;
+    const key = `airplane:${id}`;
+    localStorage.setItem(key, engine.airplaneMode ? '1' : '0');
+    // Also keep draftStore in sync for the drafting page ✈️ indicator
+    draftStore.updateDraft(id, { airplaneMode: engine.airplaneMode });
+  }, [engine.airplaneMode, draftId, urlDraftId]);
+
+  // Save mute when it changes
+  useEffect(() => {
+    const id = draftId || urlDraftId;
+    if (!id) return;
+    localStorage.setItem(`mute:${id}`, isMuted ? '1' : '0');
+  }, [isMuted, draftId, urlDraftId]);
+
+  // Save queue during ALL phases (main sync only saves during drafting)
+  useEffect(() => {
+    const id = draftId || urlDraftId;
+    if (!id || engine.queuedPlayers.length === 0) return;
+    localStorage.setItem(`queue:${id}`, JSON.stringify(engine.queuedPlayers));
+  }, [engine.queuedPlayers, draftId, urlDraftId]);
+
+  // Restore queue on mount
+  useEffect(() => {
+    const id = draftId || urlDraftId;
+    if (!id) return;
+    try {
+      const raw = localStorage.getItem(`queue:${id}`);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (Array.isArray(saved) && saved.length > 0 && engine.queuedPlayers.length === 0) {
+          engine.reorderQueue(saved);
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
+
+  // Write 6: Draft completes — remove from active drafts + cleanup direct localStorage keys
   useEffect(() => {
     if (engine.draftStatus === 'completed' && draftId) {
       draftStore.removeDraft(draftId);
+      localStorage.removeItem(`airplane:${draftId}`);
+      localStorage.removeItem(`mute:${draftId}`);
+      localStorage.removeItem(`queue:${draftId}`);
     }
   }, [engine.draftStatus, draftId]);
 
@@ -2113,24 +2153,22 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Airplane mode toggle — only visible once drafting starts */}
-              {phase === 'drafting' && engine.draftStatus !== 'completed' && (
-                <button
-                    onClick={() => engine.toggleAirplaneMode()}
-                    title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
-                    className="cursor-pointer flex items-center justify-center transition-all"
-                    style={{
-                      fontSize: '18px',
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      border: engine.airplaneMode ? '1px solid #fbbf24' : '1px solid #6b7280',
-                      background: engine.airplaneMode ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
-                      boxShadow: engine.airplaneMode ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none',
-                    }}
-                  >
-                    <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
-                  </button>
-              )}
+              {/* Airplane mode toggle — always visible */}
+              <button
+                  onClick={() => engine.toggleAirplaneMode()}
+                  title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
+                  className="cursor-pointer flex items-center justify-center transition-all"
+                  style={{
+                    fontSize: '18px',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    border: engine.airplaneMode ? '1px solid #fbbf24' : '1px solid #6b7280',
+                    background: engine.airplaneMode ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
+                    boxShadow: engine.airplaneMode ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none',
+                  }}
+                >
+                  <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
+                </button>
             </div>
           </div>
 
