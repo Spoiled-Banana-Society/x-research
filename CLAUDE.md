@@ -889,6 +889,20 @@ gcloud run deploy sbs-drafts-api-staging --source /Users/borisvagner/sbs-drafts-
 gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Football-Drafts-main --region us-central1 --project sbs-staging-env --port 8000 --timeout 3600 --min-instances 1 --vpc-connector staging-connector --allow-unauthenticated
 ```
 
+## Backend Needed: Guaranteed Draft Type Distribution (Boris)
+> **From Richard's session:** The frontend now has a working guaranteed distribution system (1 Jackpot, 5 HOF, 94 Pro per 100 drafts) using `lib/batchManager.ts` in localStorage. It works for testing but is per-browser — not shared across users. The backend needs to own this.
+
+**What the backend needs:**
+1. A batch tracker: shuffled sequence of 100 types, shared counter
+2. When a draft fills (10/10), atomically claim the next type from the batch
+3. Return the assigned type in the `GET /draft/{draftId}/state/info` response (new field: `draftType`)
+4. `GET /league/batchProgress` endpoint should return real data: `{ current, total, jackpotRemaining, hofRemaining }`
+5. When batch hits 100, auto-reset with a fresh shuffled sequence
+
+**Frontend is ready to swap:** Replace `batchManager.claimNextType()` and `batchManager.getBatchProgress()` with API calls. The UI (slot machine, header indicator, drafting page type display) all work already.
+
+**Where to build it:** Likely in `sbs-drafts-api-main` — the leagues/draft-state models. Store batch state in Redis or Firestore for atomicity.
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
