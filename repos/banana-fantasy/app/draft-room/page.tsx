@@ -30,6 +30,7 @@ import type { DraftType, RoomPhase } from '@/lib/draftRoomConstants';
 import { useNotifOptIn } from '@/app/providers';
 import * as draftStore from '@/lib/draftStore';
 import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
+import * as batchManager from '@/lib/batchManager';
 
 function DraftRoomContent() {
   const searchParams = useSearchParams();
@@ -1296,18 +1297,24 @@ function DraftRoomContent() {
     const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
     setMainCountdown(remaining);
 
+    // Claim draft type from guaranteed distribution batch
+    // (checks history first to prevent double-claiming on re-entry)
+    const id = draftId || urlDraftId;
+    const claimedType = id
+      ? (batchManager.getClaimedType(id) || batchManager.claimNextType(id))
+      : 'pro';
+    setDraftType(claimedType);
+
     if (isLiveMode) setLiveDataReady(true);
     if (draftId) {
-      // Type is decided NOW — store it so the drafting page knows it
-      // regardless of whether the user stays for the slot animation
       draftStore.updateDraft(draftId, {
         phase: 'pre-spin',
         preSpinStartedAt: countdownStart,
-        randomizingStartedAt: undefined,  // Clear — no longer randomizing
+        randomizingStartedAt: undefined,
         draftOrder: order,
         userDraftPosition: userPos,
-        type: draftType,
-        draftType: draftType,
+        type: claimedType,
+        draftType: claimedType,
       });
     }
     console.log('[Draft Room] Transitioned to pre-spin phase');

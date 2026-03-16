@@ -1,46 +1,39 @@
-import { useState, useEffect } from 'react';
-import { getBatchProgress, type BatchProgress } from '@/lib/api/leagues';
+import { useState, useEffect, useCallback } from 'react';
+import * as batchManager from '@/lib/batchManager';
+
+export interface BatchProgress {
+  current: number;
+  total: number;
+  jackpotRemaining: number;
+  hofRemaining: number;
+}
 
 interface UseBatchProgressReturn {
   data: BatchProgress | null;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => void;
 }
 
 export function useBatchProgress(): UseBatchProgressReturn {
   const [data, setData] = useState<BatchProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error] = useState<Error | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchBatchProgress() {
-      try {
-        const result = await getBatchProgress();
-        if (!cancelled) {
-          setData(result);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err : new Error('Unknown error'));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    fetchBatchProgress();
-
-    // Poll every 30 seconds for live updates
-    const interval = setInterval(fetchBatchProgress, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+  const refresh = useCallback(() => {
+    try {
+      const progress = batchManager.getBatchProgress();
+      setData(progress);
+    } catch {}
+    setIsLoading(false);
   }, []);
 
-  return { data, isLoading, error };
+  useEffect(() => {
+    refresh();
+    // Poll every 5 seconds for updates (other tabs may claim types)
+    const interval = setInterval(refresh, 5_000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  return { data, isLoading, error, refresh };
 }
