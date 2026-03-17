@@ -198,16 +198,7 @@ export default function DraftingPage() {
         const tokens: ApiDraftToken[] = Array.isArray(raw) ? raw : [];
         // Only show tokens that are actively in a league (have a leagueId).
         // Available/unused tokens have empty leagueId and should not appear as drafts.
-        const activeTokens = tokens.filter((t) => {
-          if (!t.leagueId || hiddenDraftIds.has(t.leagueId) || hiddenDraftIds.has(t.cardId)) return false;
-          // Completed drafts have a full 15-player roster — don't show as active
-          if (t.roster) {
-            const rosterCount = (t.roster.QB?.length || 0) + (t.roster.RB?.length || 0)
-              + (t.roster.WR?.length || 0) + (t.roster.TE?.length || 0) + (t.roster.DST?.length || 0);
-            if (rosterCount >= 15) return false;
-          }
-          return true;
-        });
+        const activeTokens = tokens.filter((t) => !!t.leagueId && !hiddenDraftIds.has(t.leagueId) && !hiddenDraftIds.has(t.cardId));
         const mapped: Draft[] = activeTokens.map((t) => ({
           id: t.leagueId || t.cardId,
           contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
@@ -275,7 +266,7 @@ export default function DraftingPage() {
               computeTurnsFromServer(info, draft.liveWalletAddress!);
 
             const totalPicks = (info.draftOrder?.length || 10) * 15;
-            const isCompleted = info.pickNumber >= totalPicks;
+            const isCompleted = info.pickNumber > totalPicks;
 
             if (isCompleted) {
               draftStore.removeDraft(draft.id);
@@ -553,7 +544,7 @@ export default function DraftingPage() {
     const localIds = new Set(localDrafts.map(d => d.id));
     const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
     const all = [...localDrafts, ...apiOnly];
-    return all.filter(d => !hiddenDraftIds.has(d.id) && d.status !== 'completed');
+    return all.filter(d => !hiddenDraftIds.has(d.id));
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds]);
 
   // Sort drafts: Your turn > In progress (by picks away) > Filling (oldest first, newest at bottom)

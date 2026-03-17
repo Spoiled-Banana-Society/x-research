@@ -30,7 +30,6 @@ import type { DraftType, RoomPhase } from '@/lib/draftRoomConstants';
 import { useNotifOptIn } from '@/app/providers';
 import * as draftStore from '@/lib/draftStore';
 import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
-import { getDraftTokenLevel } from '@/lib/api/leagues';
 
 function DraftRoomContent() {
   const searchParams = useSearchParams();
@@ -50,6 +49,14 @@ function DraftRoomContent() {
   const { user } = useAuth();
   const { playSpinningSound, playReelStop, playCountdownTick, playWinSound, cleanup: cleanupAudio } = useDraftAudio();
   const { triggerOptIn } = useNotifOptIn();
+
+  // Helper: get display name for a draft participant (not memoized — reads user live)
+  const getParticipantName = (ownerId: string, isSelf: boolean): string => {
+    if (isSelf && user?.username && !user.username.startsWith('0x')) return user.username;
+    if (isSelf) return 'You';
+    if (ownerId.length > 12) return `${ownerId.slice(0, 6)}...${ownerId.slice(-4)}`;
+    return ownerId;
+  };
 
   // Cleanup audio on unmount — stops all scheduled sounds when leaving the page
   useEffect(() => {
@@ -208,13 +215,6 @@ function DraftRoomContent() {
   const [reelOffsets, setReelOffsets] = useState([0, 0, 0]);
   const [showSlotMachine, setShowSlotMachine] = useState(false);
   const [slotAnimationDone, setSlotAnimationDone] = useState(false);
-  // Helper: only show slot if it wasn't already dismissed in this draft
-  const showSlotIfNotDismissed = (dId?: string) => {
-    const id = dId || draftIdRef.current;
-    const s = id ? draftStore.getDraft(id) : undefined;
-    if (s?.slotDismissed) return;
-    setShowSlotMachine(true);
-  };
   const [showFlash, setShowFlash] = useState(false);
   const [screenShake, setScreenShake] = useState(false);
   const [confetti, setConfetti] = useState<Array<{ id: number; x: number; color: string; delay: number }>>([]);
@@ -244,12 +244,7 @@ function DraftRoomContent() {
 
   // ==================== DRAFTING UI STATE ====================
   const [activeTab, setActiveTab] = useState<DraftTab>('draft');
-  // Mute — restore from localStorage immediately
-  const muteKey = `mute:${urlDraftId || ''}`;
-  const [isMuted, setIsMuted] = useState(() => {
-    if (typeof window === 'undefined' || !urlDraftId) return false;
-    return localStorage.getItem(muteKey) === '1';
-  });
+  const [isMuted, setIsMuted] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
 
   // ==================== TIMESTAMP REFS ====================
@@ -283,15 +278,16 @@ function DraftRoomContent() {
           console.log(`[Draft Room] Server shows draft at pick ${info.pickNumber} — jumping to drafting`);
 
           // Build draft order from server data
-          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
-            id: String(idx + 1),
-            name: u.ownerId,
-            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
-              ? 'You'
-              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
-            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
-            avatar: '🍌',
-          }));
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => {
+            const isUser = u.ownerId.toLowerCase() === walletParam.toLowerCase();
+            return {
+              id: String(idx + 1),
+              name: u.ownerId,
+              displayName: u.ownerId,
+              isYou: isUser,
+              avatar: '🍌',
+            };
+          });
           setDraftOrder(realOrder);
           const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
           if (userPos >= 0) setUserDraftPosition(userPos);
@@ -312,15 +308,16 @@ function DraftRoomContent() {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
 
-          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
-            id: String(idx + 1),
-            name: u.ownerId,
-            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
-              ? 'You'
-              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
-            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
-            avatar: '🍌',
-          }));
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => {
+            const isUser = u.ownerId.toLowerCase() === walletParam.toLowerCase();
+            return {
+              id: String(idx + 1),
+              name: u.ownerId,
+              displayName: u.ownerId,
+              isYou: isUser,
+              avatar: '🍌',
+            };
+          });
           setDraftOrder(realOrder);
           const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
           if (userPos >= 0) setUserDraftPosition(userPos);
@@ -564,6 +561,10 @@ function DraftRoomContent() {
       }
     }
 
+    // Restore airplane mode
+    if (stored.airplaneMode) {
+      engine.setAirplaneMode(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -649,7 +650,7 @@ function DraftRoomContent() {
           return {
             id: String(idx + 1),
             name: entry.ownerId,
-            displayName: isUser ? 'You' : entry.ownerId.slice(0, 6) + '...' + entry.ownerId.slice(-4),
+            displayName: entry.ownerId,
             isYou: isUser,
             avatar: '🍌',
           };
@@ -846,7 +847,12 @@ function DraftRoomContent() {
 
         liveInitializedRef.current = true;
         setEngineReady(true);
-        // Airplane mode restored by dedicated effect (covers all phases)
+
+        // Restore airplane mode from stored state
+        const storedDraft = draftId ? draftStore.getDraft(draftId) : undefined;
+        if (storedDraft?.airplaneMode) {
+          engine.setAirplaneMode(true);
+        }
 
         console.log('[Draft Room] Engine ready — draft data loaded successfully');
 
@@ -961,89 +967,22 @@ function DraftRoomContent() {
     });
   }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
 
-  // ==================== DIRECT LOCALSTORAGE PERSISTENCE ====================
-  // No effects for save — effects race with React Strict Mode and async state.
-  // Save: directly in event handlers (synchronous, no race conditions).
-  // Restore: from useState initializers or a single mount effect for engine state.
-
-  // Helper: get the draft localStorage key prefix
-  const getPersistId = () => draftId || urlDraftId;
-
-  // Restore airplane mode on mount — engine state can only be set via setter
+  // Persist airplane mode separately — skips initial render so we don't
+  // overwrite the stored value with `false` before the restore code reads it.
+  const airplaneSyncedRef = useRef(false);
   useEffect(() => {
-    const id = getPersistId();
-    if (!id) return;
-    if (localStorage.getItem(`airplane:${id}`) === '1') {
-      engine.setAirplaneMode(true);
+    if (!draftId) return;
+    if (!airplaneSyncedRef.current) {
+      airplaneSyncedRef.current = true;
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId]);
+    draftStore.updateDraft(draftId, { airplaneMode: engine.airplaneMode });
+  }, [draftId, engine.airplaneMode]);
 
-  // Restore queue on mount
-  useEffect(() => {
-    const id = getPersistId();
-    if (!id) return;
-    try {
-      const raw = localStorage.getItem(`queue:${id}`);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (Array.isArray(saved) && saved.length > 0 && engine.queuedPlayers.length === 0) {
-          engine.reorderQueue(saved);
-        }
-      }
-    } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId]);
-
-  // Wrapper: toggle airplane and save to localStorage in one shot
-  const handleToggleAirplane = useCallback(() => {
-    engine.toggleAirplaneMode();
-    const id = getPersistId();
-    if (!id) return;
-    // toggleAirplaneMode flips the current value, so save the OPPOSITE of current
-    const newValue = !engine.airplaneMode;
-    localStorage.setItem(`airplane:${id}`, newValue ? '1' : '0');
-    draftStore.updateDraft(id, { airplaneMode: newValue });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.airplaneMode, engine.toggleAirplaneMode, draftId, urlDraftId]);
-
-  // Wrapper: toggle mute and save to localStorage in one shot
-  const handleToggleMute = useCallback(() => {
-    const newValue = !isMuted;
-    setIsMuted(newValue);
-    const id = getPersistId();
-    if (id) localStorage.setItem(`mute:${id}`, newValue ? '1' : '0');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMuted, draftId, urlDraftId]);
-
-  // Save queue whenever it changes (no race condition — queue starts empty, restore adds items)
-  useEffect(() => {
-    const id = getPersistId();
-    if (!id) return;
-    if (engine.queuedPlayers.length > 0) {
-      localStorage.setItem(`queue:${id}`, JSON.stringify(engine.queuedPlayers));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.queuedPlayers, draftId]);
-
-  // Also save airplane when auto-enabled (2 consecutive timeouts)
-  // This watches engine.airplaneMode but only saves when it turns ON (not off)
-  useEffect(() => {
-    if (!engine.airplaneMode) return;
-    const id = getPersistId();
-    if (!id) return;
-    localStorage.setItem(`airplane:${id}`, '1');
-    draftStore.updateDraft(id, { airplaneMode: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.airplaneMode, draftId]);
-
-  // Write 6: Draft completes — remove from active drafts + cleanup direct localStorage keys
+  // Write 6: Draft completes — remove from active drafts
   useEffect(() => {
     if (engine.draftStatus === 'completed' && draftId) {
       draftStore.removeDraft(draftId);
-      localStorage.removeItem(`airplane:${draftId}`);
-      localStorage.removeItem(`mute:${draftId}`);
-      localStorage.removeItem(`queue:${draftId}`);
     }
   }, [engine.draftStatus, draftId]);
 
@@ -1126,7 +1065,7 @@ function DraftRoomContent() {
               return {
                 id: String(idx + 1),
                 name: entry.ownerId,
-                displayName: isUser ? 'You' : entry.ownerId.slice(0, 6) + '...' + entry.ownerId.slice(-4),
+                displayName: entry.ownerId,
                 isYou: isUser,
                 avatar: '🍌',
               };
@@ -1215,15 +1154,16 @@ function DraftRoomContent() {
             throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
           }
 
-          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => {
+            const isUser = u.ownerId.toLowerCase() === walletParam.toLowerCase();
+            return {
             id: String(idx + 1),
             name: u.ownerId,
-            displayName: u.ownerId.length > 10
-              ? u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4)
-              : u.ownerId,
-            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
+            displayName: u.ownerId,
+            isYou: isUser,
             avatar: '🍌',
-          }));
+          };
+          });
 
           pollDone = true;
           clearInterval(progressInterval);
@@ -1297,25 +1237,14 @@ function DraftRoomContent() {
     const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
     setMainCountdown(remaining);
 
-    // Draft type is assigned by the backend when draft fills (league.Level).
-    // Fetch it now; fall back to stored type or 'pro' if unavailable.
-    const id = draftId || urlDraftId;
-    if (id && walletParam) {
-      getDraftTokenLevel(walletParam, id).then(level => {
-        if (!level) return;
-        const typeMap: Record<string, DraftType> = { 'Jackpot': 'jackpot', 'Hall of Fame': 'hof', 'Pro': 'pro' };
-        const mapped = typeMap[level] || 'pro';
-        setDraftType(mapped);
-        if (draftId) draftStore.updateDraft(draftId, { type: mapped, draftType: mapped });
-      }).catch(() => {});
-    }
-
     if (isLiveMode) setLiveDataReady(true);
     if (draftId) {
+      // Type is decided NOW — store it so the drafting page knows it
+      // regardless of whether the user stays for the slot animation
       draftStore.updateDraft(draftId, {
         phase: 'pre-spin',
         preSpinStartedAt: countdownStart,
-        randomizingStartedAt: undefined,
+        randomizingStartedAt: undefined,  // Clear — no longer randomizing
         draftOrder: order,
         userDraftPosition: userPos,
         type: draftType,
@@ -1449,11 +1378,8 @@ function DraftRoomContent() {
   // overwrites the local engine state with real server data when it succeeds.
 
   useEffect(() => {
-    if (mainCountdown <= 15 && showSlotMachine && slotAnimationDone) {
-      setShowSlotMachine(false);
-      if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
-    }
-  }, [mainCountdown, showSlotMachine, slotAnimationDone, draftId]);
+    if (mainCountdown <= 15 && showSlotMachine && slotAnimationDone) setShowSlotMachine(false);
+  }, [mainCountdown, showSlotMachine, slotAnimationDone]);
 
   useEffect(() => {
     if (mainCountdown <= 15 && screenShake) setScreenShake(false);
@@ -1913,18 +1839,19 @@ function DraftRoomContent() {
                   : '#fff';
 
                 const playerData = engine.draftOrder[slot.ownerIndex];
-                let displayName = '';
+                // Display name: use profile name for self, clean truncation for others
+                let truncatedName = '';
                 if (playerData) {
-                  if (playerData.isYou) {
-                    displayName = (user?.username && !user.username.startsWith('0x')) ? user.username : 'You';
+                  if (playerData.isYou && user?.username && !user.username.startsWith('0x')) {
+                    const name = user.username;
+                    truncatedName = name.length > 14 ? name.substring(0, 12) + '...' : name;
                   } else {
                     const raw = playerData.name || playerData.displayName || '';
-                    displayName = raw.length > 14 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : raw;
+                    truncatedName = raw.length > 14 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : raw;
                   }
                 } else {
-                  displayName = slot.ownerName || '';
+                  truncatedName = slot.ownerName || '';
                 }
-                const truncatedName = (displayName || '').length > 14 ? (displayName || '').substring(0, 12) + '...' : (displayName || '');
 
                 return (
                   <div
@@ -2028,23 +1955,24 @@ function DraftRoomContent() {
                 const borderColor = isUser ? '#F3E216' : isFilled ? '#444' : '#333';
                 // Show wallet addresses when available, placeholder names otherwise
                 const hasWalletData = player && !player.isYou && player.name && player.name.length > 10;
-                const myName = (user?.username && !user.username.startsWith('0x')) ? user.username : 'You';
-                let displayName = '';
+                const myName = user?.username && !user.username.startsWith('0x') ? user.username : 'You';
+                let truncatedName = '';
                 if (isRandomizing) {
-                  displayName = isUser ? myName : (hasWalletData ? `${player!.name.slice(0, 6)}...${player!.name.slice(-4)}` : `Player ${i + 1}`);
+                  truncatedName = isUser ? myName : (hasWalletData ? player!.displayName : `Player ${i + 1}`);
                 } else if (isFilling) {
-                  displayName = isUser ? myName : (isFilled ? `Player ${i + 1}` : '---');
+                  truncatedName = isUser ? myName : (isFilled ? `Player ${i + 1}` : '---');
                 } else if (player) {
                   if (player.isYou) {
-                    displayName = myName;
+                    truncatedName = myName;
                   } else {
                     const raw = player.name || player.displayName || '';
-                    displayName = raw.length > 14 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : raw;
+                    truncatedName = raw.length > 14 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : raw;
                   }
                 } else {
-                  displayName = '???';
+                  truncatedName = '???';
                 }
-                const truncatedName = (displayName || '').length > 14 ? (displayName || '').substring(0, 12) + '...' : (displayName || '');
+                // Truncate profile names that are too long for the card
+                if (truncatedName.length > 14) truncatedName = truncatedName.substring(0, 12) + '...';
 
                 // During pre-spin+, first box shows countdown timer
                 const showCountdown = !isFilling && i === 0;
@@ -2198,15 +2126,15 @@ function DraftRoomContent() {
               )}
               <div>
                 <button
-                  onClick={handleToggleMute}
+                  onClick={() => setIsMuted(!isMuted)}
                   className="text-[12px] text-right cursor-pointer flex items-center justify-end border border-gray-500 px-1 font-primary"
                 >
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Airplane mode toggle — always visible */}
+              {/* Airplane mode toggle — always visible (like mute button) */}
               <button
-                  onClick={handleToggleAirplane}
+                  onClick={() => engine.toggleAirplaneMode()}
                   title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
                   className="cursor-pointer flex items-center justify-center transition-all"
                   style={{
@@ -2236,7 +2164,7 @@ function DraftRoomContent() {
 
         {/* Tab content area */}
         {phase === 'drafting' && engine.draftStatus === 'completed' ? (
-          <DraftComplete draftId={draftId || urlDraftId} />
+          <DraftComplete draftId={draftId} />
         ) : (
           <>
             {activeTab === 'draft' && (
@@ -2326,11 +2254,7 @@ function DraftRoomContent() {
           mainCountdown={mainCountdown}
           slotAnimationDone={slotAnimationDone}
           formatTime={formatTime}
-          onClose={() => {
-            if (!slotAnimationDone) return;
-            setShowSlotMachine(false);
-            if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
-          }}
+          onClose={() => slotAnimationDone && setShowSlotMachine(false)}
         />
       )}
 

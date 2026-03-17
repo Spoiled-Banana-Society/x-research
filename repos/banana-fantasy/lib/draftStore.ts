@@ -37,8 +37,6 @@ export interface DraftState {
 
   // Airplane mode (auto-pick enabled)
   airplaneMode?: boolean;
-  // Slot machine was dismissed (don't re-show on re-entry)
-  slotDismissed?: boolean;
 
   // Engine state for resuming mid-draft
   enginePicks?: Array<{
