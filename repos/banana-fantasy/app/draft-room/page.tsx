@@ -2236,7 +2236,7 @@ function DraftRoomContent() {
 
         {/* Tab content area */}
         {phase === 'drafting' && engine.draftStatus === 'completed' ? (
-          <DraftComplete />
+          <DraftComplete draftId={draftId || urlDraftId} />
         ) : (
           <>
             {activeTab === 'draft' && (
