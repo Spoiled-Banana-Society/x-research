@@ -1913,10 +1913,18 @@ function DraftRoomContent() {
                   : '#fff';
 
                 const playerData = engine.draftOrder[slot.ownerIndex];
-                const displayName = playerData
-                  ? (playerData.isYou ? (playerData.displayName || 'You') : (playerData.displayName || playerData.name || ''))
-                  : (slot.ownerName || '');
-                const truncatedName = (displayName || '').length > 12 ? (displayName || '').substring(0, 10) + '...' : (displayName || '');
+                let displayName = '';
+                if (playerData) {
+                  if (playerData.isYou) {
+                    displayName = (user?.username && !user.username.startsWith('0x')) ? user.username : 'You';
+                  } else {
+                    const raw = playerData.name || playerData.displayName || '';
+                    displayName = raw.length > 14 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : raw;
+                  }
+                } else {
+                  displayName = slot.ownerName || '';
+                }
+                const truncatedName = (displayName || '').length > 14 ? (displayName || '').substring(0, 12) + '...' : (displayName || '');
 
                 return (
                   <div
@@ -2020,12 +2028,23 @@ function DraftRoomContent() {
                 const borderColor = isUser ? '#F3E216' : isFilled ? '#444' : '#333';
                 // Show wallet addresses when available, placeholder names otherwise
                 const hasWalletData = player && !player.isYou && player.name && player.name.length > 10;
-                const displayName = isRandomizing
-                  ? (isUser ? 'You' : (hasWalletData ? player!.displayName : `Player ${i + 1}`))
-                  : isFilling
-                  ? (isUser ? 'You' : (isFilled ? `Player ${i + 1}` : '---'))
-                  : (player ? (player.isYou ? (player.displayName || 'You') : (player.displayName || player.name || '')) : '???');
-                const truncatedName = (displayName || '').length > 12 ? (displayName || '').substring(0, 10) + '...' : (displayName || '');
+                const myName = (user?.username && !user.username.startsWith('0x')) ? user.username : 'You';
+                let displayName = '';
+                if (isRandomizing) {
+                  displayName = isUser ? myName : (hasWalletData ? `${player!.name.slice(0, 6)}...${player!.name.slice(-4)}` : `Player ${i + 1}`);
+                } else if (isFilling) {
+                  displayName = isUser ? myName : (isFilled ? `Player ${i + 1}` : '---');
+                } else if (player) {
+                  if (player.isYou) {
+                    displayName = myName;
+                  } else {
+                    const raw = player.name || player.displayName || '';
+                    displayName = raw.length > 14 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : raw;
+                  }
+                } else {
+                  displayName = '???';
+                }
+                const truncatedName = (displayName || '').length > 14 ? (displayName || '').substring(0, 12) + '...' : (displayName || '');
 
                 // During pre-spin+, first box shows countdown timer
                 const showCountdown = !isFilling && i === 0;

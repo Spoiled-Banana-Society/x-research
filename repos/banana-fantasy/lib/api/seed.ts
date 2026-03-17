@@ -134,7 +134,7 @@ const seedWheelHistory: WheelSpin[] = [
 const seedDraftHistory: CompletedDraft[] = [
   {
     id: 'c1',
-    contestName: 'BBB #892',
+    contestName: 'League #892',
     type: 'jackpot',
     finalPlace: 1,
     totalPlayers: 10,
@@ -150,7 +150,7 @@ const seedDraftHistory: CompletedDraft[] = [
   },
   {
     id: 'c2',
-    contestName: 'BBB #756',
+    contestName: 'League #756',
     type: 'hof',
     finalPlace: 2,
     totalPlayers: 10,
@@ -166,7 +166,7 @@ const seedDraftHistory: CompletedDraft[] = [
   },
   {
     id: 'c3',
-    contestName: 'BBB #621',
+    contestName: 'League #621',
     type: 'regular',
     finalPlace: 3,
     totalPlayers: 10,
@@ -215,9 +215,9 @@ const seedPromos: Promo[] = [
         'When you get the 10th pick in any draft you earn a free Banana Wheel spin. This can happen multiple times - each Pick 10 earns you a spin!',
       totalPick10s: 8,
       pick10History: [
-        { date: '2026-01-15', draftName: 'BBB #1042', status: 'claim' },
-        { date: '2026-01-14', draftName: 'BBB #892', status: 'claim' },
-        { date: '2026-01-12', draftName: 'BBB #756', status: 'claimed' },
+        { date: '2026-01-15', draftName: 'League #1042', status: 'claim' },
+        { date: '2026-01-14', draftName: 'League #892', status: 'claim' },
+        { date: '2026-01-12', draftName: 'League #756', status: 'claimed' },
       ],
     },
   },

@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
       type,
       walletAddress: walletAddress.toLowerCase(),
       tokenId: String(tokenId),
-      teamName: teamName || `BBB #${tokenId}`,
+      teamName: teamName || `Team #${tokenId}`,
       price: price ?? null,
       counterparty: counterparty?.toLowerCase() ?? null,
       orderHash: orderHash ?? null,

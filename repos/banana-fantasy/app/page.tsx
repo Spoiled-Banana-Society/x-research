@@ -170,7 +170,7 @@ export default function HomePage() {
     } else {
       // Non-staging: use local draft with bots (no API call needed)
       const localDraftId = `local-${Date.now()}`;
-      const localContestName = `BBB #${Math.floor(Math.random() * 9000) + 1000}`;
+      const localContestName = `League #${Math.floor(Math.random() * 9000) + 1000}`;
       draftStore.addDraft({
         id: localDraftId,
         contestName: localContestName,

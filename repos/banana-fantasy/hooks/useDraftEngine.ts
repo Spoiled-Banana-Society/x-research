@@ -316,7 +316,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     const order: DraftPlayer[] = draftInfo.draftOrder.map((u, idx) => ({
       id: String(idx + 1),
       name: u.ownerId, // In live mode, name is the wallet address
-      displayName: u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+      displayName: u.ownerId,
       isYou: u.ownerId.toLowerCase() === userWallet.toLowerCase(),
       avatar: '🍌',
     }));

@@ -269,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const merged: User = {
             ...backendUser,
             loginMethod,
-            username: savedProfile?.username || backendUser.username,
+            username: backendUser.username || savedProfile?.username,
             profilePicture: savedProfile?.profilePicture || backendUser.profilePicture,
             nflTeam: savedProfile?.nflTeam || backendUser.nflTeam,
           };

@@ -201,7 +201,7 @@ export default function DraftingPage() {
         const activeTokens = tokens.filter((t) => !!t.leagueId && !hiddenDraftIds.has(t.leagueId) && !hiddenDraftIds.has(t.cardId));
         const mapped: Draft[] = activeTokens.map((t) => ({
           id: t.leagueId || t.cardId,
-          contestName: t.leagueDisplayName || `BBB #${t.leagueId || t.cardId}`,
+          contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
           status: 'drafting' as const,
           type: t.level === 'Jackpot' ? 'jackpot' as const : t.level === 'Hall of Fame' ? 'hof' as const : 'pro' as const,
           draftSpeed: 'fast' as const,
@@ -212,7 +212,7 @@ export default function DraftingPage() {
         // Ensure API drafts are in draftStore with liveWalletAddress so
         // the 3s poll can sync picks-away and timer data from the server
         for (const d of mapped) {
-          if (!draftStore.getDraft(d.id)) {
+          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
             draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
           }
         }
@@ -543,8 +543,9 @@ export default function DraftingPage() {
     if (!isLive) return localDrafts;
     const localIds = new Set(localDrafts.map(d => d.id));
     const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
-    return [...localDrafts, ...apiOnly];
-  }, [isLive, localDrafts, liveDrafts]);
+    const all = [...localDrafts, ...apiOnly];
+    return all.filter(d => !hiddenDraftIds.has(d.id));
+  }, [isLive, localDrafts, liveDrafts, hiddenDraftIds]);
 
   // Sort drafts: Your turn > In progress (by picks away) > Filling (oldest first, newest at bottom)
   const sortedDrafts = [...activeDrafts].sort((a, b) => {
@@ -859,16 +860,23 @@ export default function DraftingPage() {
             onClick={async () => {
               // Hide all current drafts (both local and server-side)
               const allIds = activeDrafts.map(d => d.id);
-              const newHidden = new Set([...Array.from(hiddenDraftIds), ...allIds]);
+              // Also grab any IDs from draftStore that might not be in activeDrafts
+              const storeIds = draftStore.getActiveDrafts().map(d => d.id);
+              const combinedIds = [...new Set([...allIds, ...storeIds])];
+
+              const newHidden = new Set([...Array.from(hiddenDraftIds), ...combinedIds]);
               localStorage.setItem('banana-hidden-drafts', JSON.stringify(Array.from(newHidden)));
               setHiddenDraftIds(newHidden);
               setLiveDrafts([]);
-              localStorage.removeItem('banana-active-drafts');
+              // Remove each draft from draftStore explicitly
+              for (const id of combinedIds) {
+                draftStore.removeDraft(id);
+              }
               localStorage.removeItem('banana-completed-drafts');
               // Also try leaving server-side (best effort)
               const wallet = user?.walletAddress;
-              if (wallet && allIds.length > 0) {
-                Promise.allSettled(allIds.map(id => leaveDraft(id, wallet)));
+              if (wallet && combinedIds.length > 0) {
+                Promise.allSettled(combinedIds.map(id => leaveDraft(id, wallet)));
               }
             }}
             className="text-xs text-white/40 hover:text-white/70 transition-colors"

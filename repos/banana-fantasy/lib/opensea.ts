@@ -213,8 +213,8 @@ function listingPriceUsd(listing: OpenSeaListing): number {
 
 /**
  * Build display name for an NFT.
- * OpenSea often returns bare names like "#1" — we want "BBB Pass #1" for undrafted
- * passes and "BBB #1" for drafted teams with a roster.
+ * OpenSea often returns bare names like "#1" — we want "Draft Pass #1" for undrafted
+ * passes and "Team #1" for drafted teams with a roster.
  */
 function nftDisplayName(
   leagueName: string | null,
@@ -225,7 +225,7 @@ function nftDisplayName(
   if (leagueName) return leagueName;
   // Skip OpenSea names that are just "#N" or bare numbers — not useful
   if (openSeaName && !/^#?\d+$/.test(openSeaName.trim())) return openSeaName;
-  return hasRoster ? `BBB #${tokenId}` : `BBB Pass #${tokenId}`;
+  return hasRoster ? `Team #${tokenId}` : `Draft Pass #${tokenId}`;
 }
 
 /**

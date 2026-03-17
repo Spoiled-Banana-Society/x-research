@@ -4,7 +4,7 @@ export const mockDraftRooms: DraftRoom[] = [
   {
     id: '1',
     contestId: '1',
-    contestName: 'BBB #1',
+    contestName: 'League #1',
     players: 10,
     maxPlayers: 10,
     status: 'drafting',
@@ -17,7 +17,7 @@ export const mockDraftRooms: DraftRoom[] = [
   {
     id: '2',
     contestId: '1',
-    contestName: 'BBB #2',
+    contestName: 'League #2',
     players: 10,
     maxPlayers: 10,
     status: 'drafting',
@@ -30,7 +30,7 @@ export const mockDraftRooms: DraftRoom[] = [
   {
     id: '3',
     contestId: '1',
-    contestName: 'BBB #3',
+    contestName: 'League #3',
     players: 10,
     maxPlayers: 10,
     status: 'drafting',
@@ -43,7 +43,7 @@ export const mockDraftRooms: DraftRoom[] = [
   {
     id: '4',
     contestId: '1',
-    contestName: 'BBB #4',
+    contestName: 'League #4',
     players: 10,
     maxPlayers: 10,
     status: 'drafting',
@@ -56,7 +56,7 @@ export const mockDraftRooms: DraftRoom[] = [
   {
     id: '5',
     contestId: '1',
-    contestName: 'BBB #5',
+    contestName: 'League #5',
     players: 7,
     maxPlayers: 10,
     status: 'filling',
@@ -100,7 +100,7 @@ export const mockDraftRooms: DraftRoom[] = [
   {
     id: '6',
     contestId: '1',
-    contestName: 'BBB #6',
+    contestName: 'League #6',
     players: 10,
     maxPlayers: 10,
     status: 'drafting',

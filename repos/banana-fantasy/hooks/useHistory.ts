@@ -28,7 +28,7 @@ function mapTokenToCompletedDraft(t: ApiDraftToken): CompletedDraft {
   // Derive league name from league ID (same logic as mapDraftTokenToLeague)
   const leagueId = t.leagueId || t.cardId;
   const leagueNum = leagueId.match(/(\d+)$/)?.[1];
-  const contestName = leagueNum ? `BBB #${leagueNum}` : (t.leagueDisplayName || `League ${leagueId}`);
+  const contestName = leagueNum ? `League #${leagueNum}` : (t.leagueDisplayName || `League ${leagueId}`);
 
   const finalPlace = t.rank ? parseInt(t.rank, 10) : 0;
 

@@ -3,15 +3,20 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function DraftComplete() {
+interface DraftCompleteProps {
+  draftId?: string;
+}
+
+export function DraftComplete({ draftId }: DraftCompleteProps) {
   const router = useRouter();
 
   useEffect(() => {
+    const destination = draftId ? `/draft-results/${draftId}` : '/drafting';
     const timeout = setTimeout(() => {
-      router.push('/drafting');
+      router.push(destination);
     }, 10000);
     return () => clearTimeout(timeout);
-  }, [router]);
+  }, [router, draftId]);
 
   return (
     <div className="mt-[340px] text-center">

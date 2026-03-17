@@ -53,7 +53,7 @@ async function fetchNftMeta(tokenId: string) {
       }
     } catch { /* optional */ }
 
-    const name = leagueName || nft.name || `BBB #${tokenId}`;
+    const name = leagueName || nft.name || `Team #${tokenId}`;
     const imageUrl = nft.display_image_url || nft.image_url || null;
 
     return { name, imageUrl, level, rank, price };
