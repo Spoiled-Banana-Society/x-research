@@ -710,11 +710,11 @@ function DraftRoomContent() {
       } else {
         engine.draftPlayer(pickId);
       }
-    }, 200);
+    }, 500);
 
     return () => clearTimeout(timeoutId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.airplaneMode, engine.isUserTurn, phase, engine.draftStatus]);
+  }, [engine.airplaneMode, engine.isUserTurn, phase, engine.draftStatus, engine.currentPickNumber]);
 
   // ==================== Cross-tab heartbeat: signal to other tabs that draft-room ====================
   // has an active WS for this draft. The drafting page checks this to avoid opening
