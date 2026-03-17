@@ -147,7 +147,7 @@ function DraftRoomContent() {
         if (isStagingMode()) {
           const stagingBase = getStagingApiUrl();
           if (stagingBase) {
-            fetch(`${stagingBase}/staging/fill-bots/${speedParam || 'fast'}?count=9`, { method: 'POST' })
+            fetch(`${stagingBase}/staging/fill-bots/${speedParam || 'fast'}?count=9&leagueId=${newId}`, { method: 'POST' })
               .catch(() => console.warn('Bot fill failed'));
           }
         }
