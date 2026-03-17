@@ -1,12 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as batchManager from '@/lib/batchManager';
-
-export interface BatchProgress {
-  current: number;
-  total: number;
-  jackpotRemaining: number;
-  hofRemaining: number;
-}
+import { getBatchProgress, type BatchProgress } from '@/lib/api/leagues';
 
 interface UseBatchProgressReturn {
   data: BatchProgress | null;
@@ -18,20 +11,24 @@ interface UseBatchProgressReturn {
 export function useBatchProgress(): UseBatchProgressReturn {
   const [data, setData] = useState<BatchProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error] = useState<Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback(() => {
-    try {
-      const progress = batchManager.getBatchProgress();
-      setData(progress);
-    } catch {}
-    setIsLoading(false);
+    getBatchProgress()
+      .then(result => {
+        setData(result);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err : new Error('Unknown error'));
+        setIsLoading(false);
+      });
   }, []);
 
   useEffect(() => {
     refresh();
-    // Poll every 5 seconds for updates (other tabs may claim types)
-    const interval = setInterval(refresh, 5_000);
+    // Poll every 30 seconds for live updates
+    const interval = setInterval(refresh, 30_000);
     return () => clearInterval(interval);
   }, [refresh]);
 

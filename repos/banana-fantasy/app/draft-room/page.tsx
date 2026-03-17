@@ -30,7 +30,7 @@ import type { DraftType, RoomPhase } from '@/lib/draftRoomConstants';
 import { useNotifOptIn } from '@/app/providers';
 import * as draftStore from '@/lib/draftStore';
 import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
-import * as batchManager from '@/lib/batchManager';
+import { getDraftTokenLevel } from '@/lib/api/leagues';
 
 function DraftRoomContent() {
   const searchParams = useSearchParams();
@@ -1297,13 +1297,18 @@ function DraftRoomContent() {
     const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
     setMainCountdown(remaining);
 
-    // Claim draft type from guaranteed distribution batch
-    // (checks history first to prevent double-claiming on re-entry)
+    // Draft type is assigned by the backend when draft fills (league.Level).
+    // Fetch it now; fall back to stored type or 'pro' if unavailable.
     const id = draftId || urlDraftId;
-    const claimedType = id
-      ? (batchManager.getClaimedType(id) || batchManager.claimNextType(id))
-      : 'pro';
-    setDraftType(claimedType);
+    if (id && walletParam) {
+      getDraftTokenLevel(walletParam, id).then(level => {
+        if (!level) return;
+        const typeMap: Record<string, DraftType> = { 'Jackpot': 'jackpot', 'Hall of Fame': 'hof', 'Pro': 'pro' };
+        const mapped = typeMap[level] || 'pro';
+        setDraftType(mapped);
+        if (draftId) draftStore.updateDraft(draftId, { type: mapped, draftType: mapped });
+      }).catch(() => {});
+    }
 
     if (isLiveMode) setLiveDataReady(true);
     if (draftId) {
@@ -1313,8 +1318,8 @@ function DraftRoomContent() {
         randomizingStartedAt: undefined,
         draftOrder: order,
         userDraftPosition: userPos,
-        type: claimedType,
-        draftType: claimedType,
+        type: draftType,
+        draftType: draftType,
       });
     }
     console.log('[Draft Room] Transitioned to pre-spin phase');
