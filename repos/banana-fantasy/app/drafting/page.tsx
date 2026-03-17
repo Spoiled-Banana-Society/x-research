@@ -266,7 +266,7 @@ export default function DraftingPage() {
               computeTurnsFromServer(info, draft.liveWalletAddress!);
 
             const totalPicks = (info.draftOrder?.length || 10) * 15;
-            const isCompleted = info.pickNumber > totalPicks;
+            const isCompleted = info.pickNumber >= totalPicks;
 
             if (isCompleted) {
               draftStore.removeDraft(draft.id);
@@ -544,7 +544,7 @@ export default function DraftingPage() {
     const localIds = new Set(localDrafts.map(d => d.id));
     const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
     const all = [...localDrafts, ...apiOnly];
-    return all.filter(d => !hiddenDraftIds.has(d.id));
+    return all.filter(d => !hiddenDraftIds.has(d.id) && d.status !== 'completed');
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds]);
 
   // Sort drafts: Your turn > In progress (by picks away) > Filling (oldest first, newest at bottom)
