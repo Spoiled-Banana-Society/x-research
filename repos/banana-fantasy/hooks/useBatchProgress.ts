@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getBatchProgress, type BatchProgress } from '@/lib/api/leagues';
 
 interface UseBatchProgressReturn {
   data: BatchProgress | null;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => void;
 }
 
 export function useBatchProgress(): UseBatchProgressReturn {
@@ -12,35 +13,24 @@ export function useBatchProgress(): UseBatchProgressReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchBatchProgress() {
-      try {
-        const result = await getBatchProgress();
-        if (!cancelled) {
-          setData(result);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err : new Error('Unknown error'));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    fetchBatchProgress();
-
-    // Poll every 30 seconds for live updates
-    const interval = setInterval(fetchBatchProgress, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+  const refresh = useCallback(() => {
+    getBatchProgress()
+      .then(result => {
+        setData(result);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err : new Error('Unknown error'));
+        setIsLoading(false);
+      });
   }, []);
 
-  return { data, isLoading, error };
+  useEffect(() => {
+    refresh();
+    // Poll every 30 seconds for live updates
+    const interval = setInterval(refresh, 30_000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  return { data, isLoading, error, refresh };
 }
