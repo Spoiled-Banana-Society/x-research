@@ -366,7 +366,7 @@ function DraftRoomContent() {
               }
               setReelOffsets(initOffsets);
               animationOffsetRef.current = animOffset;
-              showSlotIfNotDismissed();
+              setShowSlotMachine(true);
               setSlotAnimationDone(false);
               setPhase('spinning');
             } else {
@@ -375,7 +375,7 @@ function DraftRoomContent() {
               const landingIndex = (generatedReels[0]?.length || 50) - 8;
               const finalOffset = landingIndex * itemHeight;
               setReelOffsets([finalOffset, finalOffset, finalOffset]);
-              showSlotIfNotDismissed();
+              setShowSlotMachine(true);
               setSlotAnimationDone(true);
               setPhase('result');
             }
@@ -423,7 +423,7 @@ function DraftRoomContent() {
                 }
                 setReelOffsets(initOffsets);
                 animationOffsetRef.current = animOffset2;
-                showSlotIfNotDismissed();
+                setShowSlotMachine(true);
                 setSlotAnimationDone(false);
                 setPhase('spinning');
               } else {
@@ -432,7 +432,7 @@ function DraftRoomContent() {
                 const landingIndex2 = (generatedReels2[0]?.length || 50) - 8;
                 const finalOffset2 = landingIndex2 * itemHeight2;
                 setReelOffsets([finalOffset2, finalOffset2, finalOffset2]);
-                showSlotIfNotDismissed();
+                setShowSlotMachine(true);
                 setSlotAnimationDone(true);
                 setPhase('result');
               }
@@ -538,7 +538,7 @@ function DraftRoomContent() {
         }
         setReelOffsets(initOffsets);
         animationOffsetRef.current = animOffset;
-        showSlotIfNotDismissed();
+        setShowSlotMachine(true);
         setSlotAnimationDone(false);
         setPhase('spinning');
       } else {
@@ -547,7 +547,7 @@ function DraftRoomContent() {
         const landingIndex3 = (generatedReels3[0]?.length || 50) - 8;
         const finalOffset3 = landingIndex3 * itemHeight3;
         setReelOffsets([finalOffset3, finalOffset3, finalOffset3]);
-        showSlotIfNotDismissed();
+        setShowSlotMachine(true);
         setSlotAnimationDone(true);
         setPhase('result');
       }
