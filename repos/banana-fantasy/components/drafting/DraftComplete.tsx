@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import * as draftStore from '@/lib/draftStore';
 
 interface DraftCompleteProps {
   draftId?: string;
@@ -11,6 +12,11 @@ export function DraftComplete({ draftId }: DraftCompleteProps) {
   const router = useRouter();
 
   useEffect(() => {
+    // Remove from active drafts so it doesn't show on the drafting page
+    if (draftId) {
+      draftStore.removeDraft(draftId);
+    }
+
     const destination = draftId ? `/draft-results/${draftId}` : '/drafting';
     const timeout = setTimeout(() => {
       router.push(destination);
