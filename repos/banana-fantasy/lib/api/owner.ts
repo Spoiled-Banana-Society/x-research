@@ -172,7 +172,16 @@ export function mapDraftTokenToLeague(token: ApiDraftToken): League {
     weeklyScore: Number.isFinite(weeklyScore) ? weeklyScore : 0,
     seasonScore: Number.isFinite(seasonScore) ? seasonScore : 0,
     prizeIndicator: token.prizes?.USDC,
-    status: token.leagueId ? 'active' : 'completed',
+    status: (() => {
+      if (!token.leagueId) return 'completed';
+      // A draft with a full 15-player roster is completed
+      if (token.roster) {
+        const count = (token.roster.QB?.length || 0) + (token.roster.RB?.length || 0)
+          + (token.roster.WR?.length || 0) + (token.roster.TE?.length || 0) + (token.roster.DST?.length || 0);
+        if (count >= 15) return 'completed';
+      }
+      return 'active';
+    })(),
     roster: mapRosterToUiRoster(token.roster),
     draftDate: new Date().toISOString(),
   };
