@@ -14,7 +14,7 @@ type ViewMode = 'myteams' | 'leaderboard';
 
 export default function StandingsPage() {
   const { isLoggedIn, user } = useAuth();
-  const leaguesQuery = useLeagues({ userId: user?.id, status: 'all' });
+  const leaguesQuery = useLeagues({ userId: user?.id, status: 'completed' });
   const { data: currentGameweek } = useGameweek();
 
   const leagues = leaguesQuery.data;
