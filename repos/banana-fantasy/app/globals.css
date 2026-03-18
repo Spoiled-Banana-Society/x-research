@@ -335,3 +335,28 @@ body {
 .animate-card-enter {
   animation: card-enter 0.3s ease-out both;
 }
+
+/* Modal sheet slide-up */
+@keyframes modal-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-modal-sheet {
+  animation: modal-sheet-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.animate-modal-backdrop {
+  animation: modal-fade-in 0.2s ease-out forwards;
+}
+@media (min-width: 640px) {
+  @keyframes modal-sheet-up {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .animate-modal-sheet {
+    animation: modal-sheet-up 0.25s ease-out forwards;
+  }
+}

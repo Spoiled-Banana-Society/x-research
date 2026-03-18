@@ -3,11 +3,11 @@
 import React from 'react';
 import { formatScore, formatRank } from '@/lib/formatters';
 import type { League } from '@/types';
+import type { ModalTab } from './LeagueDetailModal';
 
 interface TeamCardProps {
   league: League;
-  isSelected: boolean;
-  onSelect: (league: League) => void;
+  onOpenModal: (league: League, tab: ModalTab) => void;
   index?: number;
 }
 
@@ -75,26 +75,60 @@ function getPlaceBadge(place: number) {
   );
 }
 
-export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardProps) {
+export function TeamCard({ league, onOpenModal, index = 0 }: TeamCardProps) {
   const config = typeConfig[league.type] || typeConfig.regular;
   const inTheMoney = league.leagueRank > 0 && league.leagueRank <= 2;
   const isCompleted = league.status === 'completed';
 
+  const actionButtons: { tab: ModalTab; label: string; icon: React.ReactNode }[] = [
+    {
+      tab: 'roster',
+      label: 'Roster',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      tab: 'board',
+      label: 'Board',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+      ),
+    },
+    {
+      tab: 'team',
+      label: 'Team',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
-    <button
-      onClick={() => onSelect(league)}
+    <div
       className={`
         animate-card-enter w-full text-left rounded-2xl overflow-hidden border transition-all duration-200
         ${isCompleted ? 'opacity-80' : ''}
-        ${isSelected
-          ? 'border-banana/50 bg-banana/[0.06] ring-1 ring-banana/20'
-          : `${config.border} ${config.bg} hover:brightness-125`
-        }
+        ${config.border} ${config.bg} hover:brightness-125
       `}
       style={{ animationDelay: `${index * 50}ms` }}
     >
       <div className="flex items-stretch">
-        {/* Left accent bar — green if in the money, otherwise type gradient */}
+        {/* Left accent bar */}
         <div
           className={`w-1.5 flex-shrink-0 rounded-l-2xl ${
             inTheMoney
@@ -104,35 +138,26 @@ export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardPr
         />
 
         <div className="flex-1 px-4 py-4 sm:px-5 min-w-0">
-          {/* Top row: rank badge + league name + type pill + prize + completed badge */}
+          {/* Top row: rank badge + league name + type pill + prize */}
           <div className="flex items-center gap-2.5 mb-3">
-            {/* Rank badge */}
             {league.leagueRank > 0 && getPlaceBadge(league.leagueRank)}
-
-            {/* League name */}
             <h3 className="text-white font-medium text-sm sm:text-base truncate">
               {league.name}
             </h3>
-
-            {/* Type pill */}
             <span
               className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${config.color}/20 ${config.text}`}
             >
               {config.label}
             </span>
-
-            {/* Prize pill */}
             {league.prizeIndicator != null && league.prizeIndicator > 0 && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 flex-shrink-0">
                 ${league.prizeIndicator}
               </span>
             )}
-
-            {/* Completed badge — hidden since standings only shows completed drafts */}
           </div>
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-3">
             <div>
               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-0.5">Rank</p>
               <p className="text-white font-bold text-lg">
@@ -153,28 +178,21 @@ export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardPr
             </div>
           </div>
 
-        </div>
-
-        {/* Arrow indicator */}
-        <div className="flex items-center pr-4 flex-shrink-0">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`transition-transform duration-200 ${
-              isSelected ? 'text-banana rotate-90' : 'text-white/20'
-            }`}
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            {actionButtons.map(({ tab, label, icon }) => (
+              <button
+                key={tab}
+                onClick={() => onOpenModal(league, tab)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.10] border border-white/[0.06] text-white/50 hover:text-white/80 text-xs font-medium transition-colors"
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

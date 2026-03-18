@@ -1,0 +1,627 @@
+'use client';
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { getDraftSummary, getDraftInfo, type ApiDraftPick } from '@/lib/api/drafts';
+import { getOwnerDraftTokens } from '@/lib/api/owner';
+import { getDraftsApiUrl } from '@/lib/staging';
+import type { League } from '@/types';
+
+export type ModalTab = 'roster' | 'board' | 'team';
+
+interface LeagueDetailModalProps {
+  league: League;
+  initialTab: ModalTab;
+  walletAddress: string;
+  onClose: () => void;
+}
+
+// Position colors (same as draft-results)
+const POS_COLORS: Record<string, string> = {
+  QB: '#FF474C',
+  RB: '#3c9120',
+  WR: '#cb6ce6',
+  TE: '#326cf8',
+  DST: '#DF893E',
+};
+
+const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'DST'] as const;
+
+const typeConfig: Record<string, { label: string; text: string; bg: string }> = {
+  jackpot: { label: 'Jackpot', text: 'text-jackpot', bg: 'bg-jackpot/10' },
+  hof: { label: 'HOF', text: 'text-hof', bg: 'bg-hof/10' },
+  pro: { label: 'Pro', text: 'text-pro', bg: 'bg-pro/10' },
+  regular: { label: 'Pro', text: 'text-pro', bg: 'bg-pro/10' },
+};
+
+interface RosterPlayer {
+  playerId: string;
+  displayName: string;
+  team: string;
+  position: string;
+  pickNum: number;
+  round: number;
+  byeWeek: string;
+  adp: number;
+}
+
+interface PlayerRoster {
+  QB: RosterPlayer[];
+  RB: RosterPlayer[];
+  WR: RosterPlayer[];
+  TE: RosterPlayer[];
+  DST: RosterPlayer[];
+  pfpDisplayName: string;
+}
+
+function parseRoster(raw: Record<string, unknown>): PlayerRoster {
+  const result: PlayerRoster = { QB: [], RB: [], WR: [], TE: [], DST: [], pfpDisplayName: '' };
+  const pfp = (raw.PFP || {}) as Record<string, unknown>;
+  result.pfpDisplayName = String(pfp.displayName || '');
+
+  for (const pos of POSITION_ORDER) {
+    const players = (raw[pos] as unknown[]) || [];
+    result[pos] = players.map((p: unknown) => {
+      const item = p as Record<string, unknown>;
+      const info = (item.playerStateInfo || {}) as Record<string, unknown>;
+      const stats = (item.stats || {}) as Record<string, unknown>;
+      return {
+        playerId: String(info.playerId ?? item.playerId ?? ''),
+        displayName: String(info.displayName ?? item.displayName ?? ''),
+        team: String(info.team ?? item.team ?? ''),
+        position: String(info.position ?? pos),
+        pickNum: Number(info.pickNum ?? 0),
+        round: Number(info.round ?? 0),
+        byeWeek: String(stats.byeWeek ?? '-'),
+        adp: Number(stats.adp ?? 0),
+      };
+    });
+  }
+  return result;
+}
+
+function truncateAddress(addr: string): string {
+  if (!addr.startsWith('0x') || addr.length < 10) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+async function fetchRosters(draftId: string): Promise<Record<string, Record<string, unknown>>> {
+  const base = getDraftsApiUrl();
+  const res = await fetch(`${base}/draft/${draftId}/state/rosters`);
+  if (!res.ok) throw new Error('Failed to fetch rosters');
+  return res.json();
+}
+
+const NUM_TEAMS = 10;
+const NUM_ROUNDS = 15;
+
+export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }: LeagueDetailModalProps) {
+  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
+  const [isClosing, setIsClosing] = useState(false);
+  const config = typeConfig[league.type] || typeConfig.regular;
+  const draftId = league.id;
+
+  // Roster state
+  const [allRosters, setAllRosters] = useState<Record<string, PlayerRoster>>({});
+  const [playerKeys, setPlayerKeys] = useState<string[]>([]);
+  const [selectedPlayer, setSelectedPlayer] = useState('');
+  const [rostersLoading, setRostersLoading] = useState(true);
+
+  // Board state
+  const [boardPicks, setBoardPicks] = useState<ApiDraftPick[]>([]);
+  const [boardLoading, setBoardLoading] = useState(true);
+
+  // Team state
+  const [cardImageUrl, setCardImageUrl] = useState<string | null>(null);
+  const [draftLevel, setDraftLevel] = useState('Pro');
+  const [teamLoading, setTeamLoading] = useState(true);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(onClose, 200);
+  }, [onClose]);
+
+  // Close on escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleClose]);
+
+  // Prevent body scroll
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  // Fetch rosters
+  useEffect(() => {
+    if (!draftId) return;
+    (async () => {
+      try {
+        const raw = await fetchRosters(draftId);
+        const parsed: Record<string, PlayerRoster> = {};
+        const keys = Object.keys(raw);
+        for (const key of keys) parsed[key] = parseRoster(raw[key]);
+        setAllRosters(parsed);
+        setPlayerKeys(keys);
+        const userKey = walletAddress
+          ? keys.find(k => k.toLowerCase() === walletAddress.toLowerCase())
+          : undefined;
+        setSelectedPlayer(userKey || keys.find(k => k.startsWith('0x')) || keys[0] || '');
+      } catch { /* silent */ }
+      finally { setRostersLoading(false); }
+    })();
+  }, [draftId, walletAddress]);
+
+  // Fetch board data
+  useEffect(() => {
+    if (!draftId) return;
+    (async () => {
+      try {
+        const picks = await getDraftSummary(draftId);
+        setBoardPicks(picks);
+      } catch { /* silent */ }
+      finally { setBoardLoading(false); }
+    })();
+  }, [draftId]);
+
+  // Fetch team card
+  useEffect(() => {
+    if (!walletAddress || !draftId) { setTeamLoading(false); return; }
+    (async () => {
+      try {
+        const [tokens, info] = await Promise.allSettled([
+          getOwnerDraftTokens(walletAddress),
+          getDraftInfo(draftId),
+        ]);
+        if (tokens.status === 'fulfilled') {
+          const match = tokens.value.find(
+            (t) => String(t.leagueId || '').toLowerCase() === draftId.toLowerCase()
+          );
+          if (match) {
+            const imgUrl = String((match as Record<string, unknown>)._imageUrl ?? (match as Record<string, unknown>).imageUrl ?? '');
+            if (imgUrl && !imgUrl.includes('draft-token-image-default')) {
+              setCardImageUrl(imgUrl);
+            }
+          }
+        }
+        if (info.status === 'fulfilled') {
+          const d = info.value as Record<string, unknown>;
+          setDraftLevel(String(d.draftLevel ?? d.level ?? d.draftType ?? 'Pro'));
+        }
+      } catch { /* silent */ }
+      finally { setTeamLoading(false); }
+    })();
+  }, [walletAddress, draftId]);
+
+  const getPlayerLabel = (key: string): string => {
+    const r = allRosters[key];
+    if (r?.pfpDisplayName) return r.pfpDisplayName;
+    if (key.startsWith('0x')) return truncateAddress(key);
+    if (key.startsWith('bot-')) return key.replace(/^bot-fast-\d+-/, 'Bot ');
+    return key;
+  };
+
+  const roster = allRosters[selectedPlayer];
+
+  // Build board grid
+  const { boardGrid, drafterOrder } = useMemo(() => {
+    if (boardPicks.length === 0) return { boardGrid: [], drafterOrder: [] };
+
+    // Build drafter order from round 1
+    const round1 = boardPicks
+      .filter(p => (p.pickNum || 0) >= 1 && (p.pickNum || 0) <= NUM_TEAMS)
+      .sort((a, b) => (a.pickNum || 0) - (b.pickNum || 0));
+    const order = round1.map(p => p.ownerAddress || '');
+
+    const grid: (ApiDraftPick | null)[][] = Array.from({ length: NUM_ROUNDS }, () =>
+      Array.from({ length: NUM_TEAMS }, () => null)
+    );
+
+    for (const pick of boardPicks) {
+      const pn = pick.pickNum || 0;
+      if (pn < 1 || pn > NUM_TEAMS * NUM_ROUNDS) continue;
+      const round = Math.ceil(pn / NUM_TEAMS);
+      const posInRound = (pn - 1) % NUM_TEAMS;
+      const col = round % 2 === 1 ? posInRound : NUM_TEAMS - 1 - posInRound;
+      if (round <= NUM_ROUNDS) grid[round - 1][col] = pick;
+    }
+
+    return { boardGrid: grid, drafterOrder: order };
+  }, [boardPicks]);
+
+  const userColumnIndex = useMemo(() => {
+    if (!walletAddress || drafterOrder.length === 0) return -1;
+    return drafterOrder.findIndex(addr => addr.toLowerCase() === walletAddress.toLowerCase());
+  }, [walletAddress, drafterOrder]);
+
+  const columnHeaders = useMemo(() => {
+    if (drafterOrder.length > 0) {
+      return drafterOrder.map(addr => {
+        if (!addr || !addr.startsWith('0x')) return addr || '?';
+        const key = Object.keys(allRosters).find(k => k.toLowerCase() === addr.toLowerCase());
+        if (key && allRosters[key]?.pfpDisplayName) return allRosters[key].pfpDisplayName;
+        return truncateAddress(addr);
+      });
+    }
+    return Array.from({ length: NUM_TEAMS }, (_, i) => `Team ${i + 1}`);
+  }, [drafterOrder, allRosters]);
+
+  const getPosition = (playerId: string): string => {
+    const parts = playerId.split('-');
+    return parts[parts.length - 1]?.replace(/[0-9]/g, '').toUpperCase() || '';
+  };
+
+  // Download card
+  const handleSaveCard = useCallback(() => {
+    if (!cardImageUrl) return;
+    const a = document.createElement('a');
+    a.href = `/api/save-card?url=${encodeURIComponent(cardImageUrl)}`;
+    a.download = `${league.name}.png`;
+    a.click();
+  }, [cardImageUrl, league.name]);
+
+  // Download roster image
+  const handleSaveRoster = useCallback(() => {
+    if (!roster) return;
+
+    const canvas = document.createElement('canvas');
+    const W = 1080, H = 1350;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const L = 80, R = W - 80;
+
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(league.name, W / 2, 80);
+
+    let y = 140;
+    const statW = 80;
+    const byeX = R - statW * 2;
+    const adpX = R - statW;
+    const pickX = R;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BYE', byeX, y);
+    ctx.fillText('ADP', adpX, y);
+    ctx.fillText('PICK', pickX, y);
+
+    y += 14;
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(L, y);
+    ctx.lineTo(R, y);
+    ctx.stroke();
+    y += 10;
+
+    for (const pos of POSITION_ORDER) {
+      const players = roster[pos] || [];
+      if (players.length === 0) continue;
+      const color = POS_COLORS[pos];
+
+      y += 30;
+      ctx.fillStyle = color;
+      ctx.font = 'bold 24px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(pos, L, y);
+      y += 12;
+
+      for (const p of players) {
+        y += 38;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(L, y - 22);
+        ctx.lineTo(L, y + 6);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(p.playerId, L + 14, y);
+
+        ctx.textAlign = 'center';
+        ctx.fillText(p.byeWeek, byeX, y);
+        ctx.fillText(String(p.adp || '-'), adpX, y);
+        ctx.fillText(String(p.pickNum), pickX, y);
+      }
+      y += 20;
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.font = '16px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('sbsfantasy.com', W / 2, H - 40);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${league.name}-roster.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  }, [roster, league.name]);
+
+  const tabs: { id: ModalTab; label: string }[] = [
+    { id: 'roster', label: 'Roster' },
+    { id: 'board', label: 'Board' },
+    { id: 'team', label: 'Team' },
+  ];
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${
+        isClosing ? 'opacity-0 pointer-events-none' : ''
+      }`}
+      style={{ transition: 'opacity 0.2s ease' }}
+      onClick={handleClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-modal-backdrop" />
+
+      {/* Sheet */}
+      <div
+        className="relative w-full sm:w-[640px] sm:max-h-[85vh] max-h-[90vh] bg-[#111118] border border-white/[0.08] sm:rounded-2xl rounded-t-2xl overflow-hidden flex flex-col animate-modal-sheet"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-white font-bold text-lg truncate">{league.name}</h2>
+            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${config.bg} ${config.text}`}>
+              {config.label}
+            </span>
+          </div>
+          <button
+            onClick={handleClose}
+            className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center transition-colors flex-shrink-0 text-white/50"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex border-b border-white/[0.06] flex-shrink-0">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+                activeTab === tab.id ? 'text-banana' : 'text-white/40 hover:text-white/70'
+              }`}
+            >
+              {tab.label}
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-banana rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5">
+          {/* ROSTER TAB */}
+          {activeTab === 'roster' && (
+            <div>
+              {rostersLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="h-8 rounded-lg bg-white/[0.03] animate-pulse" />
+                  ))}
+                </div>
+              ) : roster ? (
+                <>
+                  {/* Player selector */}
+                  {playerKeys.length > 1 && (
+                    <select
+                      value={selectedPlayer}
+                      onChange={(e) => setSelectedPlayer(e.target.value)}
+                      className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-4 py-2.5 text-white text-sm font-medium appearance-none cursor-pointer mb-4"
+                    >
+                      {playerKeys.map((key) => (
+                        <option key={key} value={key} className="bg-[#111118]">
+                          {getPlayerLabel(key)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Header row */}
+                  <div className="flex items-center py-2 border-b border-white/[0.08]">
+                    <div className="flex-1" />
+                    <div className="w-11 text-center text-white/30 text-[10px] font-bold uppercase">BYE</div>
+                    <div className="w-11 text-center text-white/30 text-[10px] font-bold uppercase">ADP</div>
+                    <div className="w-11 text-center text-white/30 text-[10px] font-bold uppercase">Pick</div>
+                  </div>
+
+                  {/* Roster by position */}
+                  {POSITION_ORDER.map((pos) => {
+                    const players = roster[pos] || [];
+                    if (players.length === 0) return null;
+                    const color = POS_COLORS[pos];
+
+                    return (
+                      <div key={pos} className="border-b border-white/[0.06] pb-3">
+                        <p className="font-bold pt-4 pb-1 text-lg" style={{ color }}>{pos}</p>
+                        {players.map((player) => (
+                          <div
+                            key={player.playerId + player.pickNum}
+                            className="flex items-center py-1.5 pl-2.5"
+                            style={{ borderLeft: `2px solid ${color}` }}
+                          >
+                            <div className="flex-1">
+                              <p className="text-white font-bold uppercase text-xs">{player.playerId}</p>
+                            </div>
+                            <div className="w-11 text-center text-white text-xs font-bold">{player.byeWeek}</div>
+                            <div className="w-11 text-center text-white text-xs font-bold">{player.adp || '-'}</div>
+                            <div className="w-11 text-center text-white text-xs font-bold">{player.pickNum}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <p className="text-white/40 text-sm text-center py-8">No roster data available</p>
+              )}
+            </div>
+          )}
+
+          {/* BOARD TAB */}
+          {activeTab === 'board' && (
+            <div>
+              {boardLoading ? (
+                <div className="h-40 rounded-lg bg-white/[0.03] animate-pulse" />
+              ) : boardGrid.length > 0 ? (
+                <div className="overflow-x-auto -mx-5 px-5 pb-2">
+                  <table className="text-[10px] w-max min-w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="sticky left-0 z-10 bg-[#111118] px-1.5 py-2 text-white/30 font-medium text-left w-8">R</th>
+                        {columnHeaders.map((header, i) => (
+                          <th
+                            key={i}
+                            className={`px-1 py-2 font-medium text-center min-w-[72px] ${
+                              i === userColumnIndex ? 'text-banana' : 'text-white/30'
+                            }`}
+                          >
+                            <span className="truncate block max-w-[72px]">{header}</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boardGrid.map((row, roundIdx) => (
+                        <tr key={roundIdx} className="border-t border-white/[0.04]">
+                          <td className="sticky left-0 z-10 bg-[#111118] px-1.5 py-1.5 text-white/30 font-medium">{roundIdx + 1}</td>
+                          {row.map((pick, colIdx) => {
+                            const pos = pick ? getPosition(pick.playerId) : '';
+                            const color = POS_COLORS[pos] || '#666';
+                            const isUserCol = colIdx === userColumnIndex;
+
+                            return (
+                              <td
+                                key={colIdx}
+                                className={`px-1 py-1.5 text-center ${isUserCol ? 'bg-banana/[0.06]' : ''}`}
+                              >
+                                {pick ? (
+                                  <div className="flex items-center gap-0.5 justify-center">
+                                    <span
+                                      className="inline-block text-[9px] font-bold px-1 py-0.5 rounded"
+                                      style={{ backgroundColor: `${color}22`, color }}
+                                    >
+                                      {pos}
+                                    </span>
+                                    <span className="text-white/70 font-medium truncate max-w-[40px]">
+                                      {pick.playerId.split('-').slice(0, -1).join('-') || pick.playerId}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-white/10">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-white/40 text-sm text-center py-8">Draft board not available</p>
+              )}
+            </div>
+          )}
+
+          {/* TEAM TAB */}
+          {activeTab === 'team' && (
+            <div className="text-center">
+              {teamLoading ? (
+                <div className="w-64 h-80 rounded-xl bg-white/[0.03] animate-pulse mx-auto" />
+              ) : (
+                <>
+                  {/* Draft info */}
+                  <div className="mb-4">
+                    <span
+                      className="text-sm font-semibold"
+                      style={{
+                        color: draftLevel.toLowerCase() === 'jackpot' ? '#ef4444'
+                          : draftLevel.toLowerCase().includes('hof') || draftLevel.toLowerCase().includes('hall') ? '#D4AF37'
+                          : '#a855f7',
+                      }}
+                    >
+                      {draftLevel}
+                    </span>
+                    <span className="text-white/20 mx-2">&middot;</span>
+                    <span className="text-white/70 text-sm">{league.name}</span>
+                    {league.leagueRank > 0 && (
+                      <>
+                        <span className="text-white/20 mx-2">&middot;</span>
+                        <span className="text-white/70 text-sm">Rank #{league.leagueRank}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Card image */}
+                  {cardImageUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={cardImageUrl}
+                        alt="Draft Card"
+                        className="w-64 md:w-72 rounded-xl mx-auto mb-5"
+                      />
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          onClick={handleSaveCard}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/70 text-sm transition-colors"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Download Card
+                        </button>
+                        <button
+                          onClick={handleSaveRoster}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/70 text-sm transition-colors"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Download Roster
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-64 h-80 rounded-xl border border-white/[0.06] bg-white/[0.02] mx-auto flex items-center justify-center">
+                      <p className="text-white/30 text-sm">No card image available</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

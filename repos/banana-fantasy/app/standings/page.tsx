@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { TeamCard } from '@/components/standings/TeamCard';
-import { TeamDetail } from '@/components/standings/TeamDetail';
+import { LeagueDetailModal, type ModalTab } from '@/components/standings/LeagueDetailModal';
 import { LeaderboardView } from '@/components/standings/LeaderboardView';
 import { useAuth } from '@/hooks/useAuth';
 import { useLeagues } from '@/hooks/useLeagues';
@@ -25,12 +25,16 @@ export default function StandingsPage() {
   React.useEffect(() => {
     if (isLoggedIn) setViewMode('myteams');
   }, [isLoggedIn]);
-  const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
+
   const [gameweek, setGameweek] = useState<string>(currentGameweek);
   const [teamSearch, setTeamSearch] = useState('');
   const [teamsPage, setTeamsPage] = useState(0);
   const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('oldest');
   const TEAMS_PER_PAGE = 20;
+
+  // Modal state
+  const [modalLeague, setModalLeague] = useState<League | null>(null);
+  const [modalTab, setModalTab] = useState<ModalTab>('roster');
 
   // Update gameweek when API returns
   React.useEffect(() => {
@@ -94,8 +98,9 @@ export default function StandingsPage() {
   // Reset page when search changes
   React.useEffect(() => { setTeamsPage(0); }, [teamSearch]);
 
-  const handleSelectLeague = (league: League) => {
-    setSelectedLeague(selectedLeague?.id === league.id ? null : league);
+  const handleOpenModal = (league: League, tab: ModalTab) => {
+    setModalLeague(league);
+    setModalTab(tab);
   };
 
   // Draft type breakdown for portfolio card
@@ -278,8 +283,7 @@ export default function StandingsPage() {
                     <TeamCard
                       key={league.id}
                       league={league}
-                      isSelected={selectedLeague?.id === league.id}
-                      onSelect={handleSelectLeague}
+                      onOpenModal={handleOpenModal}
                       index={i}
                     />
                   ))}
@@ -315,13 +319,6 @@ export default function StandingsPage() {
             </div>
           )}
 
-          {/* Selected team detail */}
-          {selectedLeague && (
-            <div className="mb-8">
-              <TeamDetail league={selectedLeague} gameweek={gameweek} />
-            </div>
-          )}
-
           {/* Empty state */}
           {!leaguesQuery.isValidating && leagues.length === 0 && (
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-16 text-center mb-8">
@@ -342,6 +339,16 @@ export default function StandingsPage() {
       {/* LEADERBOARD VIEW */}
       {(viewMode === 'leaderboard' || !isLoggedIn) && (
         <LeaderboardView gameweek={gameweek} />
+      )}
+
+      {/* League Detail Modal */}
+      {modalLeague && (
+        <LeagueDetailModal
+          league={modalLeague}
+          initialTab={modalTab}
+          walletAddress={user?.walletAddress ?? ''}
+          onClose={() => setModalLeague(null)}
+        />
       )}
     </div>
   );
