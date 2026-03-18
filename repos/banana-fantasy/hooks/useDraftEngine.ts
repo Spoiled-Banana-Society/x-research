@@ -702,9 +702,15 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     setAvailablePlayers(players);
   }, []);
 
+  const removeFromAvailable = useCallback((playerId: string) => {
+    setAvailablePlayers(prev => prev.filter(p => p.playerId !== playerId));
+  }, []);
+
   // Re-populate draftSummary from REST summary data on reconnect
   // summaryData is array of { playerInfo: { playerId, position, team, ownerAddress, pickNum } }
   const refreshSummaryPicks = useCallback((summaryData: Array<{ playerInfo: { playerId: string; position: string; team: string; ownerAddress: string; pickNum: number } }>) => {
+    // Collect all picked player IDs from the summary
+    const pickedIds = new Set<string>();
     setDraftSummary(prev => {
       const updated = [...prev];
       for (const entry of summaryData) {
@@ -714,10 +720,17 @@ export function useDraftEngine(mode: DraftMode = 'local') {
           if (updated[idx]) {
             updated[idx] = { ...updated[idx], playerId: pi.playerId, position: pi.position, team: pi.team };
           }
+          pickedIds.add(pi.playerId);
         }
       }
       return updated;
     });
+
+    // Rebuild available players — remove any that were picked
+    if (pickedIds.size > 0) {
+      setAvailablePlayers(prev => prev.filter(p => !pickedIds.has(p.playerId)));
+    }
+
     // Also update lastPickRef to the highest ACTUAL pick in the summary
     // (only count entries with a playerId — unpicked slots have pickNum set but empty playerId)
     const highestPick = summaryData
@@ -854,6 +867,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     removeFromQueue,
     reorderQueue,
     refreshAvailablePlayers,
+    removeFromAvailable,
     refreshSummaryPicks,
     isInQueue,
 

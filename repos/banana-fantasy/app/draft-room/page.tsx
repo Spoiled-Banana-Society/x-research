@@ -664,8 +664,27 @@ function DraftRoomContent() {
       engine.handleFinalCard(payload);
     },
     onInvalidPick: (payload) => {
-      // Surface server pick rejections — matches production useDraftRoom.ts logging
       console.warn('[WS] Invalid pick rejected by server:', payload);
+      // If in airplane mode, the rejected player is stale — remove it and retry
+      if (engine.airplaneMode && engine.isUserTurn) {
+        const msg = (payload as { errorMessage?: string })?.errorMessage || '';
+        // Extract player ID from error message like "This player was already picked LAC-WR1"
+        const match = msg.match(/already picked (\S+)/);
+        if (match) {
+          const staleId = match[1];
+          console.log('[Airplane] Removing stale player and retrying:', staleId);
+          engine.removeFromAvailable(staleId);
+          // Retry with next best player after short delay
+          setTimeout(() => {
+            const nextPick = engine.getAutoPickPlayer();
+            if (nextPick) {
+              console.log('[Airplane] Retrying auto-pick with:', nextPick);
+              const retryPayload = engine.draftPlayer(nextPick);
+              if (retryPayload) ws.sendPick(retryPayload);
+            }
+          }, 300);
+        }
+      }
     },
     onNewQueue: (payload) => {
       // Server sent updated queue — sync local state
