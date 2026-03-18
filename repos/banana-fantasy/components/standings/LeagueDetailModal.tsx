@@ -374,7 +374,9 @@ export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }
 
       {/* Sheet */}
       <div
-        className="relative w-full sm:w-[640px] sm:max-h-[85vh] max-h-[90vh] bg-[#111118] border border-white/[0.08] sm:rounded-2xl rounded-t-2xl overflow-hidden flex flex-col animate-modal-sheet"
+        className={`relative w-full sm:max-h-[85vh] max-h-[90vh] bg-[#111118] border border-white/[0.08] sm:rounded-2xl rounded-t-2xl overflow-hidden flex flex-col animate-modal-sheet ${
+          activeTab === 'board' ? 'sm:w-[95vw] sm:max-w-[1240px]' : 'sm:w-[640px]'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -488,59 +490,116 @@ export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }
               {boardLoading ? (
                 <div className="h-40 rounded-lg bg-white/[0.03] animate-pulse" />
               ) : boardGrid.length > 0 ? (
-                <div className="overflow-x-auto -mx-5 px-5 pb-2">
-                  <table className="text-[10px] w-max min-w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="sticky left-0 z-10 bg-[#111118] px-1.5 py-2 text-white/30 font-medium text-left w-8">R</th>
-                        {columnHeaders.map((header, i) => (
-                          <th
-                            key={i}
-                            className={`px-1 py-2 font-medium text-center min-w-[72px] ${
-                              i === userColumnIndex ? 'text-banana' : 'text-white/30'
-                            }`}
-                          >
-                            <span className="truncate block max-w-[72px]">{header}</span>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {boardGrid.map((row, roundIdx) => (
-                        <tr key={roundIdx} className="border-t border-white/[0.04]">
-                          <td className="sticky left-0 z-10 bg-[#111118] px-1.5 py-1.5 text-white/30 font-medium">{roundIdx + 1}</td>
-                          {row.map((pick, colIdx) => {
-                            const pos = pick ? getPosition(pick.playerId) : '';
-                            const color = POS_COLORS[pos] || '#666';
-                            const isUserCol = colIdx === userColumnIndex;
+                <div className="overflow-x-auto -mx-5 px-5 pb-2" style={{ maxWidth: 1200, margin: '0 auto' }}>
+                  {/* Header row: drafter names */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', padding: '10px 0 0' }}>
+                    {columnHeaders.map((header, i) => (
+                      <div
+                        key={`heading-${i}`}
+                        style={{
+                          width: 100,
+                          marginTop: 10,
+                          padding: 5,
+                          textAlign: 'center',
+                          fontWeight: 'bold',
+                          fontSize: 12,
+                          color: i === userColumnIndex ? '#F3E216' : '#fff',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {header}
+                      </div>
+                    ))}
+                  </div>
 
-                            return (
-                              <td
-                                key={colIdx}
-                                className={`px-1 py-1.5 text-center ${isUserCol ? 'bg-banana/[0.06]' : ''}`}
+                  {/* Grid rows */}
+                  {boardGrid.map((row, roundIdx) => (
+                    <div
+                      key={roundIdx}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(10, 1fr)',
+                      }}
+                    >
+                      {row.map((pick, colIdx) => {
+                        const isPicked = !!pick;
+                        const pos = pick ? getPosition(pick.playerId) : '';
+                        const hexColor = isPicked ? (POS_COLORS[pos] || '#888') : '';
+                        const isUserPick = colIdx === userColumnIndex && isPicked;
+
+                        return (
+                          <div
+                            key={`${roundIdx}-${colIdx}`}
+                            style={{
+                              width: 100,
+                              height: 80,
+                              margin: '7px 5px',
+                              padding: 5,
+                              borderRadius: 5,
+                              backgroundColor: isPicked ? hexColor : '#333',
+                              border: `3px solid ${isUserPick ? '#F3E216' : isPicked ? hexColor : 'transparent'}`,
+                              display: 'flex',
+                              flexFlow: 'column nowrap',
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              textAlign: 'left',
+                              cursor: isPicked ? 'pointer' : 'default',
+                              transition: 'transform 0.15s ease, filter 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (isPicked) {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.filter = 'brightness(2)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.filter = 'brightness(1)';
+                            }}
+                          >
+                            {isPicked && pick ? (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: 17,
+                                    fontWeight: 'bold',
+                                    color: '#000',
+                                    textAlign: 'left',
+                                    lineHeight: 1.2,
+                                  }}
+                                >
+                                  {pick.playerId}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    color: '#000',
+                                    textAlign: 'left',
+                                  }}
+                                >
+                                  R{roundIdx + 1} P{pick.pickNum}
+                                </span>
+                              </>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 'bold',
+                                  color: 'rgba(255,255,255,0.2)',
+                                  textAlign: 'left',
+                                }}
                               >
-                                {pick ? (
-                                  <div className="flex items-center gap-0.5 justify-center">
-                                    <span
-                                      className="inline-block text-[9px] font-bold px-1 py-0.5 rounded"
-                                      style={{ backgroundColor: `${color}22`, color }}
-                                    >
-                                      {pos}
-                                    </span>
-                                    <span className="text-white/70 font-medium truncate max-w-[40px]">
-                                      {pick.playerId.split('-').slice(0, -1).join('-') || pick.playerId}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-white/10">-</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                                R{roundIdx + 1}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <p className="text-white/40 text-sm text-center py-8">Draft board not available</p>
