@@ -1133,10 +1133,14 @@ function DraftRoomContent() {
           // This prevents a race where setting draftOrder here causes the "at 10" effect
           // to succeed instantly, skipping the progress bar.
           if (phase === 'filling') {
-            setPlayerCount(prev => Math.max(prev, info.draftOrder.length));
+            // Don't update playerCount here during filling — the filling animation
+            // (800ms interval) handles the visual count-up. Jumping playerCount to
+            // the server value skips the animation when bots fill instantly.
+            // The filling animation will reach 10 naturally, then the "at 10" effect
+            // takes over and polls for the draft order.
             if (info.draftOrder.length >= 10) {
-              console.log('[Draft Room] Poll detected 10/10 — handing off to randomizing phase');
-              return; // Stop polling, let "at 10" effect take over
+              console.log('[Draft Room] Poll detected 10/10 — letting filling animation finish');
+              // Don't return — keep polling so we pick up the draft order after filling animation completes
             }
           } else {
             // After filling (pre-spin/spinning/result), update draftOrder normally
