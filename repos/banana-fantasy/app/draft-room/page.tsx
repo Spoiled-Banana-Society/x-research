@@ -1210,7 +1210,7 @@ function DraftRoomContent() {
     if (draftId) {
       draftStore.updateDraft(draftId, { randomizingStartedAt, players: 10 });
     }
-    const MIN_RANDOMIZING_MS = 3000;
+    const MIN_RANDOMIZING_MS = 4000;
     const pollDraftId = draftId; // Capture for async closure
 
     // Smooth progress animation — ticks every 50ms, reaches ~99% over ~15s
@@ -1253,16 +1253,19 @@ function DraftRoomContent() {
           setDraftOrder(realOrder);
           console.log('[Draft Room] Wallets loaded:', realOrder.map((p: { displayName: string }) => p.displayName));
 
-          // Smoothly animate remaining progress to 100% over ~300ms
+          // Ensure minimum total display time — animate progress smoothly over remaining time
+          const elapsed = Date.now() - randomizingStartedAt;
+          const remainingMs = Math.max(300, MIN_RANDOMIZING_MS - elapsed);
           const currentProgress = serverWaitProgressRef.current;
           await new Promise<void>(resolve => {
-            const steps = 10;
-            const stepTime = 30; // 30ms per step = 300ms total
+            const steps = Math.max(10, Math.floor(remainingMs / 50));
+            const stepTime = remainingMs / steps;
             let step = 0;
             const finishInterval = setInterval(() => {
               step++;
               const t = step / steps;
-              const smoothed = currentProgress + (1 - currentProgress) * t;
+              // Smooth ease-out from current progress to 100%
+              const smoothed = currentProgress + (1 - currentProgress) * (1 - Math.pow(1 - t, 2));
               serverWaitProgressRef.current = smoothed;
               setServerWaitProgress(smoothed);
               if (step >= steps) {
@@ -1272,12 +1275,6 @@ function DraftRoomContent() {
               }
             }, stepTime);
           });
-
-          // Ensure minimum total display time
-          const elapsed = Date.now() - randomizingStartedAt;
-          if (elapsed < MIN_RANDOMIZING_MS) {
-            await new Promise(r => setTimeout(r, MIN_RANDOMIZING_MS - elapsed));
-          }
 
           // Store result in state — the transition effect below will pick it up
           console.log('[Draft Room] Setting serverPollResult to trigger transition');
