@@ -257,7 +257,8 @@ export async function getOwnerDraftTokens(walletAddress: string): Promise<ApiDra
  */
 export async function getOwnerLeaguesFromDraftTokens(walletAddress: string): Promise<League[]> {
   const tokens = await getOwnerDraftTokens(walletAddress);
-  return tokens.map(mapDraftTokenToLeague);
+  // Only map tokens that are in a league — available/unused tokens are not leagues
+  return tokens.filter(t => !!t.leagueId).map(mapDraftTokenToLeague);
 }
 
 /**
