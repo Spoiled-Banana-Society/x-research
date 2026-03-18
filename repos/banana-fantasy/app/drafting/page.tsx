@@ -198,7 +198,16 @@ export default function DraftingPage() {
         const tokens: ApiDraftToken[] = Array.isArray(raw) ? raw : [];
         // Only show tokens that are actively in a league (have a leagueId).
         // Available/unused tokens have empty leagueId and should not appear as drafts.
-        const activeTokens = tokens.filter((t) => !!t.leagueId && !hiddenDraftIds.has(t.leagueId) && !hiddenDraftIds.has(t.cardId));
+        const activeTokens = tokens.filter((t) => {
+          if (!t.leagueId || hiddenDraftIds.has(t.leagueId) || hiddenDraftIds.has(t.cardId)) return false;
+          // Completed drafts have a full 15-player roster — don't show as active
+          if (t.roster) {
+            const rosterCount = (t.roster.QB?.length || 0) + (t.roster.RB?.length || 0)
+              + (t.roster.WR?.length || 0) + (t.roster.TE?.length || 0) + (t.roster.DST?.length || 0);
+            if (rosterCount >= 15) return false;
+          }
+          return true;
+        });
         const mapped: Draft[] = activeTokens.map((t) => ({
           id: t.leagueId || t.cardId,
           contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
