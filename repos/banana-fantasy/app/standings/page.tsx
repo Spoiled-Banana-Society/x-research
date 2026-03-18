@@ -19,7 +19,12 @@ export default function StandingsPage() {
 
   const leagues = leaguesQuery.data;
 
-  const [viewMode, setViewMode] = useState<ViewMode>(isLoggedIn ? 'myteams' : 'leaderboard');
+  const [viewMode, setViewMode] = useState<ViewMode>('myteams');
+
+  // Switch to My Teams when auth loads (isLoggedIn starts false, becomes true after auth)
+  React.useEffect(() => {
+    if (isLoggedIn) setViewMode('myteams');
+  }, [isLoggedIn]);
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [gameweek, setGameweek] = useState<string>(currentGameweek);
   const [teamSearch, setTeamSearch] = useState('');
