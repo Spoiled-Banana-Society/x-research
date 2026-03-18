@@ -24,6 +24,7 @@ export default function StandingsPage() {
   const [gameweek, setGameweek] = useState<string>(currentGameweek);
   const [teamSearch, setTeamSearch] = useState('');
   const [teamsPage, setTeamsPage] = useState(0);
+  const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('oldest');
   const TEAMS_PER_PAGE = 20;
 
   // Update gameweek when API returns
@@ -55,19 +56,28 @@ export default function StandingsPage() {
     return opts;
   }, []);
 
-  // Filter by search query
+  // Filter by search query and sort by league number
   const filteredLeagues = useMemo(() => {
-    if (!teamSearch.trim()) return leagues;
-    const q = teamSearch.trim().toLowerCase().replace(/^#/, '');
-    return leagues.filter((league) => {
-      if (league.name.toLowerCase().includes(q)) return true;
-      if (league.id.toLowerCase().includes(q)) return true;
-      const numMatch = league.name.match(/#(\d+)/);
-      if (numMatch && numMatch[1].includes(q)) return true;
-      if (league.roster.some(p => p.teamPosition.toLowerCase().includes(q) || p.slot.toLowerCase().includes(q))) return true;
-      return false;
+    let result = [...leagues];
+    if (teamSearch.trim()) {
+      const q = teamSearch.trim().toLowerCase().replace(/^#/, '');
+      result = result.filter((league) => {
+        if (league.name.toLowerCase().includes(q)) return true;
+        if (league.id.toLowerCase().includes(q)) return true;
+        const numMatch = league.name.match(/#(\d+)/);
+        if (numMatch && numMatch[1].includes(q)) return true;
+        if (league.roster.some(p => p.teamPosition.toLowerCase().includes(q) || p.slot.toLowerCase().includes(q))) return true;
+        return false;
+      });
+    }
+    // Sort by league number
+    result.sort((a, b) => {
+      const numA = parseInt(a.id.match(/(\d+)$/)?.[1] || '0', 10);
+      const numB = parseInt(b.id.match(/(\d+)$/)?.[1] || '0', 10);
+      return sortOrder === 'oldest' ? numA - numB : numB - numA;
     });
-  }, [leagues, teamSearch]);
+    return result;
+  }, [leagues, teamSearch, sortOrder]);
 
   // Paginate
   const totalTeamPages = Math.ceil(filteredLeagues.length / TEAMS_PER_PAGE);
@@ -247,12 +257,18 @@ export default function StandingsPage() {
             <div className="space-y-3 mb-6">
               {filteredLeagues.length > 0 ? (
                 <>
-                  {/* Show count when filtered or paginated */}
-                  {(teamSearch || filteredLeagues.length > TEAMS_PER_PAGE) && (
-                    <p className="text-white/30 text-xs px-1 mb-2">
-                      Showing {teamsPage * TEAMS_PER_PAGE + 1}-{Math.min((teamsPage + 1) * TEAMS_PER_PAGE, filteredLeagues.length)} of {filteredLeagues.length} teams
+                  {/* Count + sort toggle */}
+                  <div className="flex items-center justify-between px-1 mb-2">
+                    <p className="text-white/30 text-xs">
+                      {filteredLeagues.length} {filteredLeagues.length === 1 ? 'team' : 'teams'}
                     </p>
-                  )}
+                    <button
+                      onClick={() => setSortOrder(prev => prev === 'oldest' ? 'newest' : 'oldest')}
+                      className="text-white/30 text-xs hover:text-white/60 transition-colors"
+                    >
+                      {sortOrder === 'oldest' ? 'Oldest first ↑' : 'Newest first ↓'}
+                    </button>
+                  </div>
                   {paginatedLeagues.map((league, i) => (
                     <TeamCard
                       key={league.id}

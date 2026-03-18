@@ -128,12 +128,7 @@ export function TeamCard({ league, isSelected, onSelect, index = 0 }: TeamCardPr
               </span>
             )}
 
-            {/* Completed badge */}
-            {isCompleted && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-white/50 flex-shrink-0">
-                Completed
-              </span>
-            )}
+            {/* Completed badge — hidden since standings only shows completed drafts */}
           </div>
 
           {/* Stats row */}
