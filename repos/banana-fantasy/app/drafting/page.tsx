@@ -221,8 +221,13 @@ export default function DraftingPage() {
         // Ensure API drafts are in draftStore with liveWalletAddress so
         // the 3s poll can sync picks-away and timer data from the server
         for (const d of mapped) {
-          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
+          if (hiddenDraftIds.has(d.id)) continue;
+          const existing = draftStore.getDraft(d.id);
+          if (!existing) {
             draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
+          } else if (!existing.liveWalletAddress) {
+            // Patch missing liveWalletAddress so sync can pick it up
+            draftStore.updateDraft(d.id, { liveWalletAddress: user!.walletAddress! });
           }
         }
         setLiveDrafts(mapped);
@@ -264,6 +269,12 @@ export default function DraftingPage() {
 
           // Re-read fresh state — tick effect may have updated type/phase during async API call
           const fresh = draftStore.getDraft(draft.id) || draft;
+
+          // Fix contest name from API if the stored name is wrong
+          const apiDisplayName = typeof info.displayName === 'string' ? info.displayName : '';
+          if (apiDisplayName && fresh.contestName !== apiDisplayName) {
+            draftStore.updateDraft(draft.id, { contestName: apiDisplayName });
+          }
 
           const playerCount = info.draftOrder?.length || 0;
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
