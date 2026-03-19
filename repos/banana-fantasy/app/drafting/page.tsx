@@ -218,24 +218,11 @@ export default function DraftingPage() {
           maxPlayers: 10,
           lastUpdated: Date.now(),
         }));
-        // Clean up ghost entries with invalid IDs (e.g. "BBB #1335")
-        // but preserve pending entries (id starts with "pending-")
-        const allStored = draftStore.getActiveDrafts();
-        for (const d of allStored) {
-          if (!d.id.startsWith('2025-') && !d.id.startsWith('pending-')) {
-            draftStore.removeDraft(d.id);
-          }
-        }
-
         // Ensure API drafts are in draftStore with liveWalletAddress so
         // the 3s poll can sync picks-away and timer data from the server
         for (const d of mapped) {
-          const existing = draftStore.getDraft(d.id);
-          if (!existing) {
+          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
             draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
-          } else if (!existing.liveWalletAddress) {
-            // Patch missing liveWalletAddress so sync can pick it up
-            draftStore.updateDraft(d.id, { liveWalletAddress: user!.walletAddress! });
           }
         }
         setLiveDrafts(mapped);
@@ -277,12 +264,6 @@ export default function DraftingPage() {
 
           // Re-read fresh state — tick effect may have updated type/phase during async API call
           const fresh = draftStore.getDraft(draft.id) || draft;
-
-          // Fix contest name from API if the stored name is wrong
-          const apiDisplayName = typeof info.displayName === 'string' ? info.displayName : '';
-          if (apiDisplayName && fresh.contestName !== apiDisplayName) {
-            draftStore.updateDraft(draft.id, { contestName: apiDisplayName });
-          }
 
           const playerCount = info.draftOrder?.length || 0;
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;

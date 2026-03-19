@@ -187,7 +187,6 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   const [currentDrafterAddress, setCurrentDrafterAddress] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
   const walletAddressRef = useRef(''); // Ref mirror for stable callbacks (handleNewPick)
-  const userDraftPositionRef = useRef(0); // Ref mirror for handleNewPick timeout detection
   const [finalCard, setFinalCard] = useState<{ cardId: string; imageUrl: string } | null>(null);
   const [endOfTurnTimestamp, setEndOfTurnTimestamp] = useState(0);
   // Phase tracking — matches old useDraftRoom.ts "phase" concept:
@@ -231,7 +230,6 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     setDraftOrder(shuffledOrder);
     const userPos = shuffledOrder.findIndex(p => p.isYou);
     setUserDraftPosition(userPos);
-    userDraftPositionRef.current = userPos;
 
     const initialRosters: Record<string, PositionRoster> = {};
     shuffledOrder.forEach(p => {
@@ -260,7 +258,6 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     setDraftOrder(shuffledOrder);
     const userPos = shuffledOrder.findIndex(p => p.isYou);
     setUserDraftPosition(userPos);
-    userDraftPositionRef.current = userPos;
 
     // Rebuild rosters from picks
     const builtRosters: Record<string, PositionRoster> = {};
@@ -327,7 +324,6 @@ export function useDraftEngine(mode: DraftMode = 'local') {
 
     const userPos = order.findIndex(p => p.isYou);
     setUserDraftPosition(userPos);
-    userDraftPositionRef.current = userPos;
 
     // Build available players from rankings
     const available: PlayerData[] = playerRankings
@@ -503,19 +499,14 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     // Track consecutive auto-picks for airplane mode (live mode)
     // Uses walletAddressRef (not walletAddress state) so this callback stays stable with [] deps
     const wallet = walletAddressRef.current;
-    // Match by ownerAddress OR by snake draft position (fallback if ownerAddress is missing/mismatched)
-    const ownerMatch = wallet && pickData.ownerAddress?.toLowerCase() === wallet;
-    const positionMatch = wallet && getSnakeDrafterIndex(pickData.pickNum) === userDraftPositionRef.current;
-    const isUserPick = ownerMatch || positionMatch;
-
-    if (isUserPick) {
+    if (wallet && pickData.ownerAddress.toLowerCase() === wallet) {
       if (userPickedManuallyRef.current) {
         // User picked manually — reset counter
         consecutiveTimeoutsRef.current = 0;
       } else {
         // Server auto-picked (timer expired) — increment counter
         consecutiveTimeoutsRef.current += 1;
-        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current, 'ownerMatch:', ownerMatch, 'positionMatch:', positionMatch);
+        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
         if (consecutiveTimeoutsRef.current >= 2) {
           console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
           setAirplaneMode(true);

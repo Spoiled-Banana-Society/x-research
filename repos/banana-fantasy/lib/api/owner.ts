@@ -155,13 +155,12 @@ export function mapDraftTokenToLeague(token: ApiDraftToken): League {
   const seasonScore = token.seasonScore ? Number(token.seasonScore) : 0;
   const weeklyScore = token.weekScore ? Number(token.weekScore) : 0;
 
-  // Use backend's display name (global sequential numbering across fast + slow drafts).
-  // Fallback: extract number from league ID if display name is missing.
+  // Derive league name from league ID (e.g. "2025-fast-draft-1201" → "League #1201")
+  // The backend displayName field has a bug where multiple leagues get the same name,
+  // so we use the league ID number as the source of truth.
   const leagueId = token.leagueId || token.cardId;
-  const name = token.leagueDisplayName || (() => {
-    const leagueNum = leagueId.match(/(\d+)$/)?.[1];
-    return leagueNum ? `League #${leagueNum}` : `League ${leagueId}`;
-  })();
+  const leagueNum = leagueId.match(/(\d+)$/)?.[1];
+  const name = leagueNum ? `League #${leagueNum}` : (token.leagueDisplayName || `League ${leagueId}`);
 
   return {
     id: leagueId,

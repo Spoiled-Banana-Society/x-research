@@ -25,12 +25,10 @@ function mapTokenToCompletedDraft(t: ApiDraftToken): CompletedDraft {
     );
   }
 
-  // Use backend's display name (global sequential numbering across fast + slow drafts)
+  // Derive league name from league ID (same logic as mapDraftTokenToLeague)
   const leagueId = t.leagueId || t.cardId;
-  const contestName = t.leagueDisplayName || (() => {
-    const leagueNum = leagueId.match(/(\d+)$/)?.[1];
-    return leagueNum ? `League #${leagueNum}` : `League ${leagueId}`;
-  })();
+  const leagueNum = leagueId.match(/(\d+)$/)?.[1];
+  const contestName = leagueNum ? `League #${leagueNum}` : (t.leagueDisplayName || `League ${leagueId}`);
 
   const finalPlace = t.rank ? parseInt(t.rank, 10) : 0;
 

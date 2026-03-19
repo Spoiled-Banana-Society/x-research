@@ -143,14 +143,6 @@ function DraftRoomContent() {
           liveWalletAddress: walletParam,
         });
 
-        // Ensure this draft is never hidden — remove from hidden list if present
-        try {
-          const hidden = JSON.parse(localStorage.getItem('banana-hidden-drafts') || '[]');
-          if (hidden.includes(newId)) {
-            localStorage.setItem('banana-hidden-drafts', JSON.stringify(hidden.filter((id: string) => id !== newId)));
-          }
-        } catch { /* ignore */ }
-
         // Fire off bot fill in background (staging only)
         if (isStagingMode()) {
           const stagingBase = getStagingApiUrl();
@@ -2331,7 +2323,6 @@ function DraftRoomContent() {
                 picks={engine.picks}
                 userDraftPosition={engine.userDraftPosition}
                 initialPlayer={rosterViewPlayer}
-                user={user}
               />
             )}
             {activeTab === 'chat' && (
