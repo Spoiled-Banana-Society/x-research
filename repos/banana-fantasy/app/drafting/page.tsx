@@ -230,9 +230,10 @@ export default function DraftingPage() {
           lastUpdated: Date.now(),
         }));
         // Clean up ghost entries with invalid IDs (e.g. "BBB #1335")
+        // but preserve pending entries (id starts with "pending-")
         const allStored = draftStore.getActiveDrafts();
         for (const d of allStored) {
-          if (!d.id.startsWith('2025-')) {
+          if (!d.id.startsWith('2025-') && !d.id.startsWith('pending-')) {
             draftStore.removeDraft(d.id);
           }
         }
