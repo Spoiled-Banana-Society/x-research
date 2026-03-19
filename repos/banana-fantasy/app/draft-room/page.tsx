@@ -1250,7 +1250,8 @@ function DraftRoomContent() {
 
           pollDone = true;
           clearInterval(progressInterval);
-          setDraftOrder(realOrder);
+          // Don't setDraftOrder here — wait for bar to finish + transition effect to handle it.
+          // Setting it early causes wallets to appear in the header before the bar reaches 100%.
           console.log('[Draft Room] Wallets loaded:', realOrder.map((p: { displayName: string }) => p.displayName));
 
           // Ensure minimum total display time — animate progress smoothly over remaining time
