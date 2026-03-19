@@ -11,11 +11,17 @@ interface DraftRosterProps {
   picks: DraftPick[];
   userDraftPosition: number;
   initialPlayer?: string; // Pre-select a specific player's roster
+  user?: { username?: string; profilePicture?: string } | null;
 }
 
 const POSITION_KEYS: (keyof PositionRoster)[] = ['QB', 'RB', 'WR', 'TE', 'DST'];
 
-export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, initialPlayer }: DraftRosterProps) {
+function truncateWallet(addr: string): string {
+  if (!addr.startsWith('0x') || addr.length < 10) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, initialPlayer, user }: DraftRosterProps) {
   const [selectedPlayer, setSelectedPlayer] = useState(
     initialPlayer || draftOrder[userDraftPosition]?.name || draftOrder[0]?.name || ''
   );
@@ -27,9 +33,12 @@ export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, ini
 
   const roster = rosters[selectedPlayer];
 
-  // Find the display name for the selected player
-  const selectedDraftPlayer = draftOrder.find(p => p.name === selectedPlayer);
-  const displayName = selectedDraftPlayer?.displayName || selectedDraftPlayer?.name || selectedPlayer;
+  // Find the display name for the selected player (case-insensitive — wallets may differ in casing)
+  const selectedDraftPlayer = draftOrder.find(p => p.name.toLowerCase() === selectedPlayer.toLowerCase());
+  const isUserRoster = selectedDraftPlayer?.isYou || selectedPlayer.toLowerCase() === draftOrder[userDraftPosition]?.name?.toLowerCase();
+  const displayName = isUserRoster
+    ? (user?.username || 'You')
+    : selectedDraftPlayer?.displayName || truncateWallet(selectedPlayer);
 
   // Count players per position
   const positionCounts: Record<string, number> = {};

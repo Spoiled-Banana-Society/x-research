@@ -2323,6 +2323,7 @@ function DraftRoomContent() {
                 picks={engine.picks}
                 userDraftPosition={engine.userDraftPosition}
                 initialPlayer={rosterViewPlayer}
+                user={user}
               />
             )}
             {activeTab === 'chat' && (
