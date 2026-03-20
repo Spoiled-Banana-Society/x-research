@@ -73,7 +73,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                   <div className="w-[36px] h-[22px] sm:w-[44px] sm:h-[28px] rounded-md bg-white/10" />
                 </div>
                 {/* JP/HOF skeleton — matches hidden sm:flex w-[72px] py-1 */}
-                <div className="hidden sm:flex flex-col items-center w-[72px] py-1 animate-pulse gap-1">
+                <div className="flex flex-col items-center w-[72px] py-1 animate-pulse gap-1">
                   <div className="h-[18px] w-[52px] rounded bg-white/10" />
                   <div className="h-[14px] w-[60px] rounded bg-white/10" />
                 </div>

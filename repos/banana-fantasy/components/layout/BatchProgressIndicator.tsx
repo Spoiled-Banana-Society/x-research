@@ -52,7 +52,7 @@ export function BatchProgressIndicator() {
         </div>
       }
     >
-      <div className="hidden sm:flex flex-col items-center w-[72px] py-1 cursor-help">
+      <div className="flex flex-col items-center w-[72px] py-1 cursor-help">
         <span className="text-[16px] font-semibold tabular-nums text-white/75 leading-tight">
           {current}<span className="text-white/40 font-normal">/{total}</span>
         </span>
