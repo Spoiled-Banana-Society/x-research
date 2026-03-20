@@ -63,31 +63,31 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
             </nav>
           </div>
 
-          {/* Right side icons - tighter spacing */}
-          <div className="flex items-center gap-1">
+          {/* Right side icons */}
+          <div className="flex items-center gap-0.5 sm:gap-1">
             {isLoading || (isLoggedIn && !isBalanceLoaded) ? (
               // Skeleton placeholders — same wrappers/sizes as real elements
               <>
-                {/* Ticket skeleton — matches Link px-2 py-1.5 + SVG size */}
-                <div className="flex items-center px-2 py-1.5 animate-pulse">
+                {/* Ticket skeleton */}
+                <div className="flex items-center px-1 sm:px-2 py-1.5 animate-pulse">
                   <div className="w-[36px] h-[22px] sm:w-[44px] sm:h-[28px] rounded-md bg-white/10" />
                 </div>
-                {/* JP/HOF skeleton — matches hidden sm:flex w-[72px] py-1 */}
-                <div className="flex flex-col items-center w-[72px] py-1 animate-pulse gap-1">
-                  <div className="h-[18px] w-[52px] rounded bg-white/10" />
-                  <div className="h-[14px] w-[60px] rounded bg-white/10" />
+                {/* JP/HOF skeleton */}
+                <div className="flex flex-col items-center w-[56px] sm:w-[72px] py-1 animate-pulse gap-1">
+                  <div className="h-[16px] sm:h-[18px] w-[42px] sm:w-[52px] rounded bg-white/10" />
+                  <div className="h-[12px] sm:h-[14px] w-[48px] sm:w-[60px] rounded bg-white/10" />
                 </div>
-                {/* Wheel skeleton — matches Link px-2 py-1.5 + SVG size */}
-                <div className="flex items-center px-2 py-1.5 animate-pulse">
-                  <div className="w-[28px] h-[28px] sm:w-[36px] sm:h-[36px] rounded-full bg-white/10" />
+                {/* Wheel skeleton */}
+                <div className="flex items-center px-1 sm:px-2 py-1.5 animate-pulse">
+                  <div className="w-[24px] h-[24px] sm:w-[36px] sm:h-[36px] rounded-full bg-white/10" />
                 </div>
-                {/* Prizes skeleton — matches Link px-3 py-2 + text-2xl */}
-                <div className="flex items-center px-3 py-2 animate-pulse">
-                  <div className="w-6 h-6 rounded bg-white/10" />
+                {/* Prizes skeleton */}
+                <div className="flex items-center px-1.5 sm:px-3 py-2 animate-pulse">
+                  <div className="w-5 sm:w-6 h-5 sm:h-6 rounded bg-white/10" />
                 </div>
-                {/* Notification skeleton — matches bell px-3 py-2 */}
-                <div className="flex items-center px-3 py-2 animate-pulse">
-                  <div className="w-5 h-5 rounded bg-white/10" />
+                {/* Notification skeleton */}
+                <div className="flex items-center px-1.5 sm:px-3 py-2 animate-pulse">
+                  <div className="w-4 sm:w-5 h-4 sm:h-5 rounded bg-white/10" />
                 </div>
                 {/* Profile skeleton — matches w-9 h-9 rounded-full */}
                 <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
@@ -113,7 +113,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                   <Link
                     href="/buy-drafts"
                     aria-label={`Draft passes: ${isLoggedIn && user ? user.draftPasses + user.freeDrafts : 0} available`}
-                    className="flex items-center px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                    className="flex items-center px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
                   >
                     <svg width="44" height="28" viewBox="0 0 88 56" className="transition-transform group-hover:scale-110 w-[36px] h-[22px] sm:w-[44px] sm:h-[28px]">
                       <defs>
@@ -159,9 +159,9 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                   <Link
                     href="/banana-wheel"
                     aria-label={`Banana Wheel${isLoggedIn && user && user.wheelSpins > 0 ? `: ${user.wheelSpins} spins available` : ''}`}
-                    className="relative flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                    className="relative flex items-center gap-1.5 px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
                   >
-                    <svg width="36" height="36" viewBox="0 0 100 100" className="transition-transform group-hover:scale-110 w-[28px] h-[28px] sm:w-[36px] sm:h-[36px]">
+                    <svg width="36" height="36" viewBox="0 0 100 100" className="transition-transform group-hover:scale-110 w-[24px] h-[24px] sm:w-[36px] sm:h-[36px]">
                       {/* Outer dark ring */}
                       <circle cx="50" cy="50" r="48" fill="#2D3A6D" stroke="#1E2A5E" strokeWidth="2"/>
 
@@ -197,9 +197,9 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                   <Link
                     href="/prizes"
                     aria-label="Prizes"
-                    className="flex items-center px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                    className="flex items-center px-1.5 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
                   >
-                    <span className="text-2xl" aria-hidden="true">🏆</span>
+                    <span className="text-lg sm:text-2xl" aria-hidden="true">🏆</span>
                   </Link>
                 </Tooltip>
 

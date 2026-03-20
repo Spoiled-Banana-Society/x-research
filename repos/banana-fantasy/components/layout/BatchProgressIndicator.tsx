@@ -52,22 +52,22 @@ export function BatchProgressIndicator() {
         </div>
       }
     >
-      <div className="flex flex-col items-center w-[72px] py-1 cursor-help">
-        <span className="text-[16px] font-semibold tabular-nums text-white/75 leading-tight">
+      <div className="flex flex-col items-center w-[56px] sm:w-[72px] py-1 cursor-help">
+        <span className="text-[13px] sm:text-[16px] font-semibold tabular-nums text-white/75 leading-tight">
           {current}<span className="text-white/40 font-normal">/{total}</span>
         </span>
-        <div className="flex items-center justify-center gap-[6px] leading-tight">
+        <div className="flex items-center justify-center gap-[4px] sm:gap-[6px] leading-tight">
           <span className="inline-flex items-center gap-[2px]">
-            <span className={`text-[12px] font-bold tabular-nums ${jackpotHit ? 'text-green-400' : 'text-red-400'}`}>
+            <span className={`text-[10px] sm:text-[12px] font-bold tabular-nums ${jackpotHit ? 'text-green-400' : 'text-red-400'}`}>
               {jackpotHit ? '\u2713' : jackpotRemaining}
             </span>
-            <span className="text-[9px] font-semibold text-white/50">JP</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold text-white/50">JP</span>
           </span>
           <span className="inline-flex items-center gap-[2px]">
-            <span className={`text-[12px] font-bold tabular-nums ${allHofHit ? 'text-green-400' : 'text-banana'}`}>
+            <span className={`text-[10px] sm:text-[12px] font-bold tabular-nums ${allHofHit ? 'text-green-400' : 'text-banana'}`}>
               {allHofHit ? '\u2713' : hofRemaining}
             </span>
-            <span className="text-[9px] font-semibold text-white/50">HOF</span>
+            <span className="text-[8px] sm:text-[9px] font-semibold text-white/50">HOF</span>
           </span>
         </div>
       </div>
