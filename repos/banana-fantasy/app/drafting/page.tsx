@@ -200,7 +200,7 @@ export default function DraftingPage() {
         // Only show tokens that are actively in a league (have a leagueId).
         // Available/unused tokens have empty leagueId and should not appear as drafts.
         const activeTokens = tokens.filter((t) => {
-          if (!t.leagueId) return false;
+          if (!t.leagueId || hiddenDraftIds.has(t.leagueId) || hiddenDraftIds.has(t.cardId)) return false;
           // Completed drafts have a full 15-player roster — don't show as active
           if (t.roster) {
             const rosterCount = (t.roster.QB?.length || 0) + (t.roster.RB?.length || 0)
@@ -209,16 +209,6 @@ export default function DraftingPage() {
           }
           return true;
         });
-        // Un-hide any active drafts that were previously hidden.
-        // API is source of truth — if the backend says it's active, show it.
-        const activeIds = activeTokens.map(t => t.leagueId).filter(Boolean);
-        const staleHidden = activeIds.filter(id => hiddenDraftIds.has(id));
-        if (staleHidden.length > 0) {
-          const updated = new Set(hiddenDraftIds);
-          staleHidden.forEach(id => updated.delete(id));
-          localStorage.setItem('banana-hidden-drafts', JSON.stringify([...updated]));
-          setHiddenDraftIds(updated);
-        }
         const mapped: Draft[] = activeTokens.map((t) => ({
           id: t.leagueId || t.cardId,
           contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
@@ -232,7 +222,7 @@ export default function DraftingPage() {
         // Ensure API drafts are in draftStore with liveWalletAddress so
         // the 3s poll can sync picks-away and timer data from the server
         for (const d of mapped) {
-          if (!draftStore.getDraft(d.id)) {
+          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
             draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
           }
         }

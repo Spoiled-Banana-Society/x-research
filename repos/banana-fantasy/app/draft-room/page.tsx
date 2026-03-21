@@ -136,6 +136,14 @@ function DraftRoomContent() {
           const newId = draftRoom.id;
           setDraftId(newId);
 
+          // Un-hide this specific draft if it was previously hidden by "Clear All"
+          try {
+            const hidden = JSON.parse(localStorage.getItem('banana-hidden-drafts') || '[]');
+            if (hidden.includes(newId)) {
+              localStorage.setItem('banana-hidden-drafts', JSON.stringify(hidden.filter((id: string) => id !== newId)));
+            }
+          } catch { /* ignore */ }
+
           // Remove the pending entry and add the real one
           draftStore.removeDraft(pendingId);
           draftStore.addDraft({
