@@ -2016,7 +2016,7 @@ function DraftRoomContent() {
                     data-pick={slot.pickNum}
                     className="flex-shrink-0 text-center overflow-hidden cursor-pointer"
                     style={{
-                      minWidth: '140px',
+                      minWidth: 'clamp(100px, 12vw, 140px)',
                       flex: 1,
                       padding: '10px 0 0 0',
                       borderRadius: '5px',
@@ -2145,7 +2145,7 @@ function DraftRoomContent() {
                     key={i}
                     className="flex-shrink-0 text-center overflow-hidden cursor-pointer"
                     style={{
-                      minWidth: '140px',
+                      minWidth: 'clamp(100px, 12vw, 140px)',
                       flex: 1,
                       padding: '10px 0 0 0',
                       borderRadius: '5px',

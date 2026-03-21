@@ -59,7 +59,7 @@ export function ContestCard({ contest, onEnter, onDetails }: ContestCardProps) {
           <h3 className="text-3xl font-bold text-white">{contest.name}</h3>
           {/* Prize Pool */}
           <div className="flex items-center justify-center gap-2">
-            <span className="text-6xl font-extrabold text-banana drop-shadow-lg">{formatCurrency(contest.prizePool)}</span>
+            <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-banana drop-shadow-lg">{formatCurrency(contest.prizePool)}</span>
             <span className="text-sm text-white/50 font-medium leading-tight text-left">Guaranteed<br/>Prize Pool</span>
           </div>
 
