@@ -45,12 +45,12 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
             <Logo />
 
             {/* Desktop Navigation */}
-            <nav aria-label="Main navigation" className="hidden md:flex items-center">
+            <nav aria-label="Main navigation" className="hidden md:flex items-center flex-shrink min-w-0">
               {navItems.map((item) => (
                 <Tooltip key={item.href} content={item.tooltip}>
                   <Link
                     href={item.href}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216] ${
+                    className={`px-1.5 lg:px-3 py-2 rounded-lg text-xs lg:text-sm font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216] ${
                       isActive(item.href)
                         ? 'text-white'
                         : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
