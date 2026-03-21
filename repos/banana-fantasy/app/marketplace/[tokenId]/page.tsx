@@ -1343,26 +1343,66 @@ export default function NftDetailPage() {
                   {/* Expiration */}
                   <div className="mb-4">
                     <label className="block text-text-secondary text-sm mb-2">Offer Expires In</label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-5 gap-2">
                       {[
+                        { label: '1 hour', value: 1 / 24 },
                         { label: '1 day', value: 1 },
                         { label: '3 days', value: 3 },
                         { label: '7 days', value: 7 },
-                        { label: '30 days', value: 30 },
+                        { label: 'Custom', value: -1 },
                       ].map(opt => (
                         <button
-                          key={opt.value}
-                          onClick={() => setOfferExpiration(opt.value)}
+                          key={opt.label}
+                          onClick={() => {
+                            if (opt.value === -1) {
+                              setOfferExpiration(-1);
+                            } else {
+                              setOfferExpiration(opt.value);
+                            }
+                          }}
                           className={`py-2 rounded-lg text-xs font-medium transition-all border ${
-                            offerExpiration === opt.value
-                              ? 'border-banana bg-banana/10 text-banana'
-                              : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated'
+                            opt.value === -1
+                              ? (offerExpiration === -1 ? 'border-banana bg-banana/10 text-banana' : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated')
+                              : (offerExpiration === opt.value ? 'border-banana bg-banana/10 text-banana' : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated')
                           }`}
                         >
                           {opt.label}
                         </button>
                       ))}
                     </div>
+                    {offerExpiration === -1 && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Amount"
+                          className="flex-1 bg-bg-primary border border-bg-tertiary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-banana/50"
+                          id="custom-expiry-amount"
+                          defaultValue=""
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            const unit = (document.getElementById('custom-expiry-unit') as HTMLSelectElement)?.value || 'hours';
+                            if (!isNaN(val) && val > 0) {
+                              setOfferExpiration(unit === 'days' ? val : val / 24);
+                            }
+                          }}
+                        />
+                        <select
+                          id="custom-expiry-unit"
+                          className="bg-bg-primary border border-bg-tertiary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-banana/50"
+                          defaultValue="hours"
+                          onChange={(e) => {
+                            const amount = parseFloat((document.getElementById('custom-expiry-amount') as HTMLInputElement)?.value);
+                            if (!isNaN(amount) && amount > 0) {
+                              setOfferExpiration(e.target.value === 'days' ? amount : amount / 24);
+                            }
+                          }}
+                        >
+                          <option value="hours">Hours</option>
+                          <option value="days">Days</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Summary */}
@@ -1391,7 +1431,7 @@ export default function NftDetailPage() {
 
                   <button
                     onClick={handleMakeOffer}
-                    disabled={!offerAmount || offerAmountNum <= 0}
+                    disabled={!offerAmount || offerAmountNum <= 0 || offerExpiration <= 0}
                     className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Submit Offer
