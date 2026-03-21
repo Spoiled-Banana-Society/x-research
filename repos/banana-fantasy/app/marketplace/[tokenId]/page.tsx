@@ -102,6 +102,9 @@ export default function NftDetailPage() {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerAmount, setOfferAmount] = useState('');
   const [offerExpiration, setOfferExpiration] = useState(7);
+  const [showCustomExpiry, setShowCustomExpiry] = useState(false);
+  const [customExpiryAmount, setCustomExpiryAmount] = useState('');
+  const [customExpiryUnit, setCustomExpiryUnit] = useState<'hours' | 'days'>('hours');
   const [offerStep, setOfferStep] = useState<'input' | 'processing' | 'complete'>('input');
   const [offerError, setOfferError] = useState<string | null>(null);
 
@@ -1332,7 +1335,7 @@ export default function NftDetailPage() {
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        className="w-full bg-bg-primary border border-bg-tertiary rounded-xl pl-8 pr-4 py-3 text-text-primary font-mono text-lg placeholder:text-text-muted/50 focus:outline-none focus:border-banana"
+                        className="w-full bg-bg-primary border border-bg-tertiary rounded-xl pl-8 pr-4 py-3 text-text-primary font-mono text-lg placeholder:text-text-muted/50 focus:outline-none focus:border-banana [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
                     {price && offerAmountNum > 0 && offerAmountNum >= price && (
@@ -1343,64 +1346,88 @@ export default function NftDetailPage() {
                   {/* Expiration */}
                   <div className="mb-4">
                     <label className="block text-text-secondary text-sm mb-2">Offer Expires In</label>
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="flex gap-2">
                       {[
-                        { label: '1 hour', value: 1 / 24 },
-                        { label: '1 day', value: 1 },
-                        { label: '3 days', value: 3 },
-                        { label: '7 days', value: 7 },
-                        { label: 'Custom', value: -1 },
+                        { label: '1hr', days: 1 / 24 },
+                        { label: '1d', days: 1 },
+                        { label: '3d', days: 3 },
+                        { label: '7d', days: 7 },
                       ].map(opt => (
                         <button
                           key={opt.label}
-                          onClick={() => {
-                            if (opt.value === -1) {
-                              setOfferExpiration(-1);
-                            } else {
-                              setOfferExpiration(opt.value);
-                            }
-                          }}
-                          className={`py-2 rounded-lg text-xs font-medium transition-all border ${
-                            opt.value === -1
-                              ? (offerExpiration === -1 ? 'border-banana bg-banana/10 text-banana' : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated')
-                              : (offerExpiration === opt.value ? 'border-banana bg-banana/10 text-banana' : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated')
+                          onClick={() => { setOfferExpiration(opt.days); setShowCustomExpiry(false); }}
+                          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all border ${
+                            !showCustomExpiry && offerExpiration === opt.days
+                              ? 'border-banana bg-banana/10 text-banana'
+                              : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated'
                           }`}
                         >
                           {opt.label}
                         </button>
                       ))}
+                      <button
+                        onClick={() => {
+                          setShowCustomExpiry(true);
+                          setOfferExpiration(0);
+                        }}
+                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all border ${
+                          showCustomExpiry
+                            ? 'border-banana bg-banana/10 text-banana'
+                            : 'border-bg-tertiary text-text-secondary hover:border-bg-elevated'
+                        }`}
+                      >
+                        Custom
+                      </button>
                     </div>
-                    {offerExpiration === -1 && (
-                      <div className="flex items-center gap-2 mt-2">
+                    {showCustomExpiry && (
+                      <div className="flex items-center gap-2 mt-3">
                         <input
-                          type="number"
-                          min="1"
-                          placeholder="Amount"
-                          className="flex-1 bg-bg-primary border border-bg-tertiary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-banana/50"
-                          id="custom-expiry-amount"
-                          defaultValue=""
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="e.g. 12"
+                          value={customExpiryAmount}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            const unit = (document.getElementById('custom-expiry-unit') as HTMLSelectElement)?.value || 'hours';
+                            const raw = e.target.value.replace(/[^0-9]/g, '');
+                            setCustomExpiryAmount(raw);
+                            const val = parseInt(raw, 10);
                             if (!isNaN(val) && val > 0) {
-                              setOfferExpiration(unit === 'days' ? val : val / 24);
+                              setOfferExpiration(customExpiryUnit === 'days' ? val : val / 24);
+                            } else {
+                              setOfferExpiration(0);
                             }
                           }}
+                          className="flex-1 bg-bg-primary border border-bg-tertiary rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-banana/50 [appearance:textfield]"
                         />
-                        <select
-                          id="custom-expiry-unit"
-                          className="bg-bg-primary border border-bg-tertiary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-banana/50"
-                          defaultValue="hours"
-                          onChange={(e) => {
-                            const amount = parseFloat((document.getElementById('custom-expiry-amount') as HTMLInputElement)?.value);
-                            if (!isNaN(amount) && amount > 0) {
-                              setOfferExpiration(e.target.value === 'days' ? amount : amount / 24);
-                            }
-                          }}
-                        >
-                          <option value="hours">Hours</option>
-                          <option value="days">Days</option>
-                        </select>
+                        <div className="flex rounded-lg border border-bg-tertiary overflow-hidden">
+                          <button
+                            onClick={() => {
+                              setCustomExpiryUnit('hours');
+                              const val = parseInt(customExpiryAmount, 10);
+                              if (!isNaN(val) && val > 0) setOfferExpiration(val / 24);
+                            }}
+                            className={`px-3 py-2.5 text-xs font-medium transition-all ${
+                              customExpiryUnit === 'hours'
+                                ? 'bg-banana/15 text-banana'
+                                : 'bg-bg-primary text-text-secondary hover:text-white'
+                            }`}
+                          >
+                            Hours
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCustomExpiryUnit('days');
+                              const val = parseInt(customExpiryAmount, 10);
+                              if (!isNaN(val) && val > 0) setOfferExpiration(val);
+                            }}
+                            className={`px-3 py-2.5 text-xs font-medium transition-all ${
+                              customExpiryUnit === 'days'
+                                ? 'bg-banana/15 text-banana'
+                                : 'bg-bg-primary text-text-secondary hover:text-white'
+                            }`}
+                          >
+                            Days
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
