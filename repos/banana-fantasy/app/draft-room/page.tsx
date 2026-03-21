@@ -116,6 +116,7 @@ function DraftRoomContent() {
       fillingStartedAt: joinStartedAt,
       fillingInitialPlayers: 1,
       liveWalletAddress: walletParam,
+      passType: passTypeParam || 'paid',
     });
 
     async function joinAndFill() {

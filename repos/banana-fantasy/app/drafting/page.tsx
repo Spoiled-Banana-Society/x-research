@@ -138,6 +138,7 @@ export default function DraftingPage() {
       params.set('mode', 'live');
       params.set('wallet', user.walletAddress);
     }
+    if (draft.passType) params.set('passType', draft.passType);
     return `/draft-room?${params.toString()}`;
   };
 
