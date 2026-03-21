@@ -259,6 +259,7 @@ export interface Promo {
   claimable?: boolean;
   claimCount?: number;
   isNew?: boolean;
+  completedDraftIds?: string[]; // Tracks draft IDs for idempotency (daily-drafts)
   modalContent: {
     title: string;
     explanation: string;

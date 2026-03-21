@@ -1063,8 +1063,18 @@ function DraftRoomContent() {
       localStorage.removeItem(`airplane:${draftId}`);
       localStorage.removeItem(`mute:${draftId}`);
       localStorage.removeItem(`queue:${draftId}`);
+
+      // Track draft completion for daily-drafts promo (live mode only)
+      const userId = user?.id;
+      if (userId && isLiveMode) {
+        fetch('/api/promos/draft-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, draftId }),
+        }).catch(() => {}); // Fire-and-forget
+      }
     }
-  }, [engine.draftStatus, draftId]);
+  }, [engine.draftStatus, draftId, user?.id, isLiveMode]);
 
   // Trigger notification opt-in when draft completes
   useEffect(() => {
