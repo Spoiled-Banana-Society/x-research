@@ -1009,13 +1009,13 @@ export default function DraftingPage() {
                     )}
                   </div>
 
-                  {/* Speed */}
-                  <div className="w-16 flex-shrink-0 text-center">
+                  {/* Speed — hidden on small screens */}
+                  <div className="w-16 flex-shrink-0 text-center hidden sm:block">
                     <span className="text-white/50 text-sm">{draft.draftSpeed === 'fast' ? '30 sec' : '8 hour'}</span>
                   </div>
 
-                  {/* Type */}
-                  <div className="w-28 flex-shrink-0 flex items-center justify-center gap-1.5">
+                  {/* Type — hidden on small screens */}
+                  <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
                     {(live.displayPhase === 'pre-spin-countdown' || (live.displayPhase === 'draft-starting' && live.countdown != null && live.countdown > 37)) ? (
                       <span className="text-banana text-sm font-semibold animate-pulse">Revealing...</span>
                     ) : isRevealed ? (

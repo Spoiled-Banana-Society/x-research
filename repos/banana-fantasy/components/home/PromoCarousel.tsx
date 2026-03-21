@@ -15,13 +15,27 @@ interface PromoCarouselProps {
   onGenerateReferralCode?: () => Promise<{ code: string; link: string } | null>;
 }
 
-const VISIBLE_COUNT = 3;
 const CARD_WIDTH = 208; // w-52 = 13rem = 208px
 const GAP = 20; // gap-5 = 1.25rem = 20px
+
+function useVisibleCount() {
+  const [count, setCount] = useState(3);
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      setCount(w < 640 ? 1 : w < 900 ? 2 : 3);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return count;
+}
 
 export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateReferralCode }: PromoCarouselProps) {
   const router = useRouter();
   const { user, updateUser, isLoggedIn, setShowLoginModal, newUserPromoClaimed, isTwitterVerified, isBB3Holder } = useAuth();
+  const VISIBLE_COUNT = useVisibleCount();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
