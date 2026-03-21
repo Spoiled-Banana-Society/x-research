@@ -84,6 +84,46 @@ export default function HomePage() {
   const selectedContest = contestsQuery.data?.[0];
   const modals = useModalStack();
 
+  // Poll active drafts for fills — fire promo tracking when a draft hits 10/10
+  // This catches drafts that fill while the user is on the home page
+  React.useEffect(() => {
+    if (!user?.id || !user?.walletAddress || !_isStagingMode()) return;
+    const wallet = user.walletAddress;
+    const userId = user.id;
+
+    const checkDrafts = async () => {
+      try {
+        const { getOwnerDraftTokens } = await import('@/lib/api/owner');
+        const tokens = await getOwnerDraftTokens(wallet);
+        for (const t of tokens) {
+          if (!t.leagueId) continue;
+          const draftId = t.leagueId;
+          const trackedKey = `promo-tracked:${draftId}`;
+          if (localStorage.getItem(trackedKey)) continue;
+          // Check if draft is full (has a league = was assigned to a draft)
+          // If the token has a leagueId, the draft exists. Check if it has started.
+          try {
+            const { getDraftInfo } = await import('@/lib/draftApi');
+            const info = await getDraftInfo(draftId);
+            if (info.draftOrder && info.draftOrder.length >= 10) {
+              localStorage.setItem(trackedKey, '1');
+              fetch('/api/promos/draft-complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, draftId }),
+              }).then(() => promosQuery.refreshPromos()).catch(() => {});
+            }
+          } catch {}
+        }
+      } catch {}
+    };
+
+    checkDrafts();
+    const interval = setInterval(checkDrafts, 10_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.walletAddress]);
+
   const buildDraftRoomUrl = React.useCallback((draftId: string, contestName: string, speed: 'fast' | 'slow') => {
     const params = new URLSearchParams({
       id: draftId,
