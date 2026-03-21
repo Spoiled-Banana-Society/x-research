@@ -2406,6 +2406,7 @@ function DraftRoomContent() {
           formatTime={formatTime}
           onClose={() => {
             setShowSlotMachine(false);
+            cleanupAudio();
             if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
           }}
         />
