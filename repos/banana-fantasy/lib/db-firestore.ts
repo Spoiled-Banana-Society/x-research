@@ -846,6 +846,9 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
     // Idempotency: don't double-count the same draft
     if (ids.includes(draftId)) return promo;
 
+    // Already at target — don't increment past max, wait for claim
+    if (promo.claimable) return promo;
+
     // Timer expiry check: if 24hr window passed, reset for a new cycle
     if (promo.timerEndTime) {
       const expired = new Date(promo.timerEndTime).getTime() < Date.now();
