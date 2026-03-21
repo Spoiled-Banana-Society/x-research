@@ -877,11 +877,14 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
       promo.timerEndTime = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
     }
 
-    // Check if target reached — clear timer so UI shows "24:00:00" until next cycle
+    // Target reached — auto-reset progress to 0 + grant claim.
+    // User sees: 3/4 → (4th draft) → 0/4 with CLAIM button + 24:00:00.
     if (promo.progressCurrent >= (promo.progressMax || 4)) {
+      promo.progressCurrent = 0;
       promo.claimable = true;
       promo.claimCount = (promo.claimCount || 0) + 1;
       promo.timerEndTime = undefined;
+      promo.completedDraftIds = [];
       needsTimerDelete = true;
     }
 

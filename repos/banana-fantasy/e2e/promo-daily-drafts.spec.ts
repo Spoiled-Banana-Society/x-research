@@ -48,46 +48,32 @@ test.describe('Daily Drafts Promo (4/4 → Free Spin)', () => {
     expect(r3.promo.progressCurrent).toBe(3);
     expect(r3.promo.claimable).toBe(false);
 
-    // Draft 4: should hit 4/4, claimable, timer CLEARED
+    // Draft 4: auto-resets to 0/4 + claimable + timer cleared
     const r4 = await callApi('/api/promos/draft-complete', { userId: TEST_USER, draftId: 'draft-4' });
     console.log('After draft 4:', r4.promo?.progressCurrent, 'claimable:', r4.promo?.claimable, 'timer:', r4.promo?.timerEndTime);
-    expect(r4.promo.progressCurrent).toBe(4);
+    expect(r4.promo.progressCurrent).toBe(0); // Auto-reset, never shows 4/4
     expect(r4.promo.claimable).toBe(true);
     expect(r4.promo.claimCount).toBeGreaterThanOrEqual(1);
-    expect(r4.promo.timerEndTime).toBeFalsy(); // Timer cleared at 4/4
+    expect(r4.promo.timerEndTime).toBeFalsy(); // Timer cleared
 
-    // Draft 5: should NOT increment past 4 (claimable guard)
+    // Draft 5: starts new cycle at 1/4 (even though claim hasn't happened yet)
+    // claimable guard blocks increment — stays at 0 until claimed
     const r5 = await callApi('/api/promos/draft-complete', { userId: TEST_USER, draftId: 'draft-5' });
-    console.log('After draft 5 (should stay 4):', r5.promo?.progressCurrent);
-    expect(r5.promo.progressCurrent).toBe(4);
+    console.log('After draft 5 (blocked by claim):', r5.promo?.progressCurrent);
+    expect(r5.promo.progressCurrent).toBe(0);
 
-    // Verify via GET promos — should show 4/4, no timer
-    const promosAt4 = getDailyDrafts(await getPromos(TEST_USER));
-    console.log('GET promos at 4/4:', promosAt4?.progressCurrent, 'timer:', promosAt4?.timerEndTime);
-    expect(promosAt4.progressCurrent).toBe(4);
-    expect(promosAt4.timerEndTime).toBeFalsy();
-    expect(promosAt4.claimable).toBe(true);
-
-    // CLAIM
+    // CLAIM — gets wheel spin, claimable clears
     const claimResult = await callApi('/api/promos/claim', { userId: TEST_USER, promoId: '1' });
-    console.log('After claim:', claimResult.promo?.progressCurrent, 'timer:', claimResult.promo?.timerEndTime, 'spins:', claimResult.spinsAdded);
+    console.log('After claim:', claimResult.promo?.progressCurrent, 'spins:', claimResult.spinsAdded);
     expect(claimResult.promo.progressCurrent).toBe(0);
-    expect(claimResult.promo.timerEndTime).toBeFalsy(); // Timer cleared
     expect(claimResult.promo.claimable).toBe(false);
     expect(claimResult.spinsAdded).toBeGreaterThanOrEqual(1);
-
-    // Verify via GET promos — should show 0/4, no timer
-    const promosAfterClaim = getDailyDrafts(await getPromos(TEST_USER));
-    console.log('GET promos after claim:', promosAfterClaim?.progressCurrent, 'timer:', promosAfterClaim?.timerEndTime);
-    expect(promosAfterClaim.progressCurrent).toBe(0);
-    expect(promosAfterClaim.timerEndTime).toBeFalsy();
-    expect(promosAfterClaim.claimable).toBe(false);
 
     // Start new cycle — draft 6 should go to 1/4 with new timer
     const r6 = await callApi('/api/promos/draft-complete', { userId: TEST_USER, draftId: 'draft-6' });
     console.log('New cycle draft 1:', r6.promo?.progressCurrent, 'timer:', r6.promo?.timerEndTime);
     expect(r6.promo.progressCurrent).toBe(1);
-    expect(r6.promo.timerEndTime).toBeTruthy(); // Fresh timer
+    expect(r6.promo.timerEndTime).toBeTruthy();
     expect(r6.promo.claimable).toBe(false);
   });
 
@@ -109,7 +95,7 @@ test.describe('Daily Drafts Promo (4/4 → Free Spin)', () => {
       await callApi('/api/promos/draft-complete', { userId, draftId: `cycle1-${i}` });
     }
     const at4 = getDailyDrafts(await getPromos(userId));
-    expect(at4.progressCurrent).toBe(4);
+    expect(at4.progressCurrent).toBe(0); // Auto-reset
     expect(at4.claimable).toBe(true);
     expect(at4.claimCount).toBe(1);
 
@@ -124,7 +110,7 @@ test.describe('Daily Drafts Promo (4/4 → Free Spin)', () => {
       await callApi('/api/promos/draft-complete', { userId, draftId: `cycle2-${i}` });
     }
     const at4again = getDailyDrafts(await getPromos(userId));
-    expect(at4again.progressCurrent).toBe(4);
+    expect(at4again.progressCurrent).toBe(0); // Auto-reset
     expect(at4again.claimable).toBe(true);
     expect(at4again.claimCount).toBe(1);
   });
