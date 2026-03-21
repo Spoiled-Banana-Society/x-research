@@ -220,6 +220,7 @@ function DraftRoomContent() {
   const [allReelItems, setAllReelItems] = useState<DraftType[][]>([[], [], []]);
   const [reelOffsets, setReelOffsets] = useState([0, 0, 0]);
   const [showSlotMachine, setShowSlotMachine] = useState(false);
+  const slotActiveRef = useRef(false); // Ref for animation callbacks to check
   const [slotAnimationDone, setSlotAnimationDone] = useState(false);
   // Helper: only show slot if it wasn't already dismissed in this draft
   const showSlotIfNotDismissed = (dId?: string) => {
@@ -227,6 +228,7 @@ function DraftRoomContent() {
     const s = id ? draftStore.getDraft(id) : undefined;
     if (s?.slotDismissed) return;
     setShowSlotMachine(true);
+    slotActiveRef.current = true;
   };
   const [showFlash, setShowFlash] = useState(false);
   const [screenShake, setScreenShake] = useState(false);
@@ -1445,6 +1447,7 @@ function DraftRoomContent() {
       generateReelItemsForReel(reelResults[2], 2),
     ]);
     setShowSlotMachine(true);
+    slotActiveRef.current = true;
     setSlotAnimationDone(false);
     setPhase('spinning');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1609,7 +1612,7 @@ function DraftRoomContent() {
       for (let i = 0; i < 3; i++) {
         const progress = Math.min(elapsed / reelDurations[i], 1);
         newOffsets[i] = easeOutQuint(progress) * targetOffset;
-        if (progress >= 1 && !stoppedReels[i]) { stoppedReels[i] = true; playReelStop(); }
+        if (progress >= 1 && !stoppedReels[i]) { stoppedReels[i] = true; if (slotActiveRef.current) playReelStop(); }
         if (progress < 1) allStopped = false;
       }
 
@@ -1658,7 +1661,7 @@ function DraftRoomContent() {
         }
 
         setTimeout(() => {
-          playWinSound(draftType === 'jackpot' || draftType === 'hof');
+          if (slotActiveRef.current) playWinSound(draftType === 'jackpot' || draftType === 'hof');
           setSlotAnimationDone(true);
           setPhase('result');
           const currentDraftId = draftIdRef.current;
@@ -1672,7 +1675,7 @@ function DraftRoomContent() {
 
     const isResuming = offset > 0;
     const startTimeout = setTimeout(() => {
-      if (!isResuming) playSpinningSound(); // Don't replay spinning sound on re-entry
+      if (!isResuming && slotActiveRef.current) playSpinningSound();
       animationId = requestAnimationFrame(animate);
     }, isResuming ? 0 : 200); // No delay on resume — start immediately
 
@@ -2406,6 +2409,7 @@ function DraftRoomContent() {
           formatTime={formatTime}
           onClose={() => {
             setShowSlotMachine(false);
+            slotActiveRef.current = false;
             cleanupAudio();
             if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
           }}
