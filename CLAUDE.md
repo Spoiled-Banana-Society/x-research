@@ -54,10 +54,13 @@ cd /tmp/sbs-frontend-v2 && git add -A && git commit -m "<description>" && git pu
 - If there's a merge conflict, resolve it carefully — don't discard either side without checking.
 - Commit messages start with your name: "Richard: ..." or "Boris: ..."
 
-### ⚠️ Git Commit Safety (CRITICAL — Prevents Overwriting Others' Work)
-- **ALWAYS `git pull origin main` in banana-fantasy before committing.** Your local files may be stale if the other person pushed recently.
-- **Only stage files you actually changed:** Use `git add <specific-files>`, NEVER `git add -A` or `git add .`. Blanket staging includes stale versions of files the other person changed and silently reverts their work.
-- **Before pushing, run `git diff --stat HEAD~1` to verify** you're only changing the files you intended. If you see files you didn't touch, something is wrong — investigate before pushing.
+### ⛔⛔⛔ Git Commit Safety (NON-NEGOTIABLE — HAS CAUSED MULTIPLE INCIDENTS) ⛔⛔⛔
+Richard's commits have REPEATEDLY overwritten Boris's work because of stale local files. This has happened multiple times and caused hours of rework. Follow these steps EVERY TIME — no exceptions:
+
+1. **ALWAYS `git pull origin main` BEFORE committing.** Your local copies of files you didn't edit are stale. Without pulling, your commit includes old versions that silently revert the other person's changes.
+2. **ONLY stage files you actually changed:** `git add <specific-files>`. NEVER use `git add -A` or `git add .` — this stages every file in your working directory, including stale versions of files the other person changed.
+3. **BEFORE pushing, verify:** `git diff --stat HEAD~1` — if you see files you didn't touch, STOP. You're about to overwrite someone else's work. Unstage those files and re-commit.
+4. **If pushing to sbs-frontend-v2 (banana-fantasy remote), pull there too:** `cd ~/banana-fantasy && git pull origin main` before committing.
 
 ## Company Overview
 - **Company:** Spoiled Banana Society (SBS)
