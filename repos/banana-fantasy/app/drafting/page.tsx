@@ -269,6 +269,19 @@ export default function DraftingPage() {
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
           const isFull = playerCount >= 10;
 
+          // Track draft start for daily-drafts promo (fire once per draft)
+          if (isFull && user?.id) {
+            const trackedKey = `promo-tracked:${draft.id}`;
+            if (!localStorage.getItem(trackedKey)) {
+              localStorage.setItem(trackedKey, '1');
+              fetch('/api/promos/draft-complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, draftId: draft.id }),
+              }).catch(() => {});
+            }
+          }
+
           if (hasDraftStarted) {
             // Draft is actively in progress — compute picks away
             const { turnsUntilUserPick, isUserTurn, pickEndTimestamp } =
