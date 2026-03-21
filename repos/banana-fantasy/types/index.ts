@@ -276,6 +276,26 @@ export interface Promo {
   };
 }
 
+// Special draft queue types
+export type QueueType = 'jackpot' | 'hof';
+export type QueueStatus = 'filling' | 'voting' | 'scheduled' | 'drafting' | 'completed';
+
+export interface QueueMember {
+  wallet: string;
+  joinedAt: number;
+  vote: 'fast' | 'slow' | null;
+}
+
+export interface DraftQueue {
+  type: QueueType;
+  members: QueueMember[];
+  status: QueueStatus;
+  scheduledTime: number | null;
+  draftSpeed: 'fast' | 'slow' | null;
+  draftId: string | null;
+  votingDeadline: number | null;
+}
+
 // Transaction types
 export interface DraftPassPurchase {
   quantity: number;

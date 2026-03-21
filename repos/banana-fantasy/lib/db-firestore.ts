@@ -7,6 +7,7 @@ import { seedDb } from '@/lib/api/seed';
 import type {
   CompletedDraft,
   Contest,
+  DraftQueue,
   LeaderboardEntry,
   Promo,
   PrizeWithdrawal,
@@ -791,4 +792,129 @@ export async function getDraftHistory(userId: string): Promise<CompletedDraft[]>
     .get();
 
   return historySnap.docs.map((doc) => doc.data() as CompletedDraft);
+}
+
+// ==================== SPECIAL DRAFT QUEUES (Jackpot / HOF) ====================
+
+const QUEUES_COLLECTION = 'v2_queues';
+const QUEUE_MAX = 10;
+const VOTING_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
+const SCHEDULE_LEAD_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function emptyQueue(type: 'jackpot' | 'hof'): DraftQueue {
+  return { type, members: [], status: 'filling', scheduledTime: null, draftSpeed: null, draftId: null, votingDeadline: null };
+}
+
+export async function getQueueStatus(): Promise<{ jackpot: DraftQueue; hof: DraftQueue }> {
+  const db = getAdminFirestore();
+  const [jpSnap, hofSnap] = await Promise.all([
+    db.collection(QUEUES_COLLECTION).doc('jackpot').get(),
+    db.collection(QUEUES_COLLECTION).doc('hof').get(),
+  ]);
+  return {
+    jackpot: jpSnap.exists ? (jpSnap.data() as DraftQueue) : emptyQueue('jackpot'),
+    hof: hofSnap.exists ? (hofSnap.data() as DraftQueue) : emptyQueue('hof'),
+  };
+}
+
+export async function joinQueue(userId: string, queueType: 'jackpot' | 'hof'): Promise<DraftQueue> {
+  const db = getAdminFirestore();
+  await ensureUserSeeded(userId);
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(queueType);
+  const userRef = db.collection(USERS_COLLECTION).doc(userId);
+
+  return db.runTransaction(async (tx) => {
+    const [queueSnap, userSnap] = await Promise.all([tx.get(queueRef), tx.get(userRef)]);
+    const queue: DraftQueue = queueSnap.exists ? (queueSnap.data() as DraftQueue) : emptyQueue(queueType);
+    const user = userSnap.data() as User;
+
+    // Validate
+    if (queue.status !== 'filling') throw new ApiError(400, 'Queue is not accepting new members');
+    if (queue.members.length >= QUEUE_MAX) throw new ApiError(400, 'Queue is full');
+    if (queue.members.some(m => m.wallet === userId)) throw new ApiError(400, 'Already in queue');
+
+    const entryField = queueType === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
+    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
+    if (entries <= 0) throw new ApiError(400, `No ${queueType} entries available`);
+
+    // Consume entry
+    tx.set(userRef, { [entryField]: entries - 1 }, { merge: true });
+
+    // Add to queue
+    queue.members.push({ wallet: userId, joinedAt: Date.now(), vote: null });
+
+    // If queue is now full, start voting
+    if (queue.members.length >= QUEUE_MAX) {
+      queue.status = 'voting';
+      queue.votingDeadline = Date.now() + VOTING_WINDOW_MS;
+    }
+
+    tx.set(queueRef, queue);
+    return queue;
+  });
+}
+
+export async function leaveQueue(userId: string, queueType: 'jackpot' | 'hof'): Promise<DraftQueue> {
+  const db = getAdminFirestore();
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(queueType);
+  const userRef = db.collection(USERS_COLLECTION).doc(userId);
+
+  return db.runTransaction(async (tx) => {
+    const [queueSnap, userSnap] = await Promise.all([tx.get(queueRef), tx.get(userRef)]);
+    const queue: DraftQueue = queueSnap.exists ? (queueSnap.data() as DraftQueue) : emptyQueue(queueType);
+    const user = userSnap.data() as User;
+
+    if (queue.status !== 'filling') throw new ApiError(400, 'Cannot leave queue after voting has started');
+    const idx = queue.members.findIndex(m => m.wallet === userId);
+    if (idx === -1) throw new ApiError(400, 'Not in queue');
+
+    // Remove from queue
+    queue.members.splice(idx, 1);
+
+    // Refund entry
+    const entryField = queueType === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
+    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
+    tx.set(userRef, { [entryField]: entries + 1 }, { merge: true });
+
+    tx.set(queueRef, queue);
+    return queue;
+  });
+}
+
+export async function voteQueueSpeed(userId: string, queueType: 'jackpot' | 'hof', speed: 'fast' | 'slow'): Promise<DraftQueue> {
+  const db = getAdminFirestore();
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(queueType);
+
+  return db.runTransaction(async (tx) => {
+    const queueSnap = await tx.get(queueRef);
+    if (!queueSnap.exists) throw new ApiError(404, 'Queue not found');
+    const queue = queueSnap.data() as DraftQueue;
+
+    if (queue.status !== 'voting') throw new ApiError(400, 'Voting is not active');
+    const member = queue.members.find(m => m.wallet === userId);
+    if (!member) throw new ApiError(400, 'Not in queue');
+
+    member.vote = speed;
+
+    // Check if all voted or deadline passed
+    const allVoted = queue.members.every(m => m.vote !== null);
+    const deadlinePassed = queue.votingDeadline && Date.now() > queue.votingDeadline;
+
+    if (allVoted || deadlinePassed) {
+      // Tally votes — tie goes to fast
+      const fastVotes = queue.members.filter(m => m.vote === 'fast').length;
+      const slowVotes = queue.members.filter(m => m.vote === 'slow').length;
+      queue.draftSpeed = slowVotes > fastVotes ? 'slow' : 'fast';
+      queue.status = 'scheduled';
+      queue.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
+    }
+
+    tx.set(queueRef, queue);
+    return queue;
+  });
+}
+
+export async function resetQueue(queueType: 'jackpot' | 'hof'): Promise<void> {
+  const db = getAdminFirestore();
+  await db.collection(QUEUES_COLLECTION).doc(queueType).set(emptyQueue(queueType));
 }

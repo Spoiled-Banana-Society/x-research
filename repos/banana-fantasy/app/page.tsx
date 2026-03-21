@@ -7,6 +7,7 @@ import { ContestCard } from '@/components/home/ContestCard';
 import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { AddToHomeScreenCard } from '@/components/home/AddToHomeScreenCard';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
+import { SpecialDraftBanner } from '@/components/home/SpecialDraftBanner';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
 
 const BuyPassesModal = dynamic(
@@ -198,6 +199,9 @@ export default function HomePage() {
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 pt-16 flex flex-col min-h-[calc(100vh-64px)]">
+      {/* Special Draft Banner (shows when user has Jackpot/HOF entries) */}
+      <SpecialDraftBanner />
+
       {/* Featured Contest */}
       <section className="mb-6">
         {contestsQuery.isValidating && !selectedContest ? (
