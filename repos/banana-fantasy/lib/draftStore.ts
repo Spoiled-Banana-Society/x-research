@@ -34,7 +34,6 @@ export interface DraftState {
   // Live sync metadata (for REST polling on drafting page)
   liveWalletAddress?: string;    // Wallet address for API calls
   pickEndTimestamp?: number;     // Absolute Unix seconds — when current pick expires
-  passType?: 'paid' | 'free';   // Whether draft was entered with paid or free pass
 
   // Airplane mode (auto-pick enabled)
   airplaneMode?: boolean;

@@ -8,6 +8,7 @@ import { useDraftEngine } from '@/hooks/useDraftEngine';
 import type { DraftMode } from '@/hooks/useDraftEngine';
 import { useDraftWebSocket } from '@/hooks/useDraftWebSocket';
 import * as draftApi from '@/lib/draftApi';
+import { leaveDraft } from '@/lib/api/leagues';
 
 import { DraftRoomChat } from '@/components/drafting/DraftRoomChat';
 import { SlotMachineOverlay } from '@/components/drafting/SlotMachineOverlay';
@@ -61,6 +62,8 @@ function DraftRoomContent() {
   // Fallback: when server APIs can't provide player data, switch to local mode
   // so bots auto-play, local timer ticks, and ALL_POSITIONS provides 224 NFL players
   const [fallbackLocal, setFallbackLocal] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   // Draft engine — live mode uses 'live' for server state; fallbackLocal overrides to 'local'
   const engine = useDraftEngine(isLiveMode && !fallbackLocal ? 'live' : 'local');
@@ -1896,6 +1899,14 @@ function DraftRoomContent() {
             )}
           </div>
           <div className="flex items-center gap-4">
+            {phase === 'filling' && isLiveMode && (
+              <button
+                onClick={() => setShowLeaveConfirm(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/40 hover:text-red-400 hover:bg-red-400/10 border border-white/10 hover:border-red-400/30 transition-all"
+              >
+                Leave
+              </button>
+            )}
             {phase === 'drafting' && engine.draftStatus === 'active' && (
               <>
                 {engine.isUserTurn && (
@@ -2470,6 +2481,51 @@ function DraftRoomContent() {
           scrollbar-width: none;
         }
       `}</style>
+
+      {/* Leave Draft Confirmation Modal */}
+      {showLeaveConfirm && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setShowLeaveConfirm(false)}
+        >
+          <div
+            className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 max-w-sm w-full cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-white mb-2">Leave Draft?</h3>
+            <p className="text-white/60 mb-6">
+              Are you sure you want to leave <span className="text-white font-medium">{contestName}</span>? Your draft pass will be returned.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 px-4 py-3 bg-transparent border border-white/50 text-white font-medium rounded-xl hover:bg-white/10 hover:scale-105 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={leaving}
+                onClick={async () => {
+                  if (!draftId || !walletParam) return;
+                  setLeaving(true);
+                  try {
+                    await leaveDraft(draftId, walletParam);
+                    draftStore.removeDraft(draftId);
+                    window.location.href = '/drafting';
+                  } catch (err) {
+                    console.error('Failed to leave draft:', err);
+                    setLeaving(false);
+                    setShowLeaveConfirm(false);
+                  }
+                }}
+                className="flex-1 px-4 py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-400 transition-colors disabled:opacity-50"
+              >
+                {leaving ? 'Leaving...' : 'Leave Draft'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

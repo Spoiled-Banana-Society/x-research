@@ -200,7 +200,7 @@ export default function DraftingPage() {
         // Only show tokens that are actively in a league (have a leagueId).
         // Available/unused tokens have empty leagueId and should not appear as drafts.
         const activeTokens = tokens.filter((t) => {
-          if (!t.leagueId || hiddenDraftIds.has(t.leagueId) || hiddenDraftIds.has(t.cardId)) return false;
+          if (!t.leagueId) return false;
           // Completed drafts have a full 15-player roster — don't show as active
           if (t.roster) {
             const rosterCount = (t.roster.QB?.length || 0) + (t.roster.RB?.length || 0)
@@ -209,6 +209,16 @@ export default function DraftingPage() {
           }
           return true;
         });
+        // Un-hide any active drafts that were previously hidden.
+        // API is source of truth — if the backend says it's active, show it.
+        const activeIds = activeTokens.map(t => t.leagueId).filter(Boolean);
+        const staleHidden = activeIds.filter(id => hiddenDraftIds.has(id));
+        if (staleHidden.length > 0) {
+          const updated = new Set(hiddenDraftIds);
+          staleHidden.forEach(id => updated.delete(id));
+          localStorage.setItem('banana-hidden-drafts', JSON.stringify([...updated]));
+          setHiddenDraftIds(updated);
+        }
         const mapped: Draft[] = activeTokens.map((t) => ({
           id: t.leagueId || t.cardId,
           contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
@@ -222,7 +232,7 @@ export default function DraftingPage() {
         // Ensure API drafts are in draftStore with liveWalletAddress so
         // the 3s poll can sync picks-away and timer data from the server
         for (const d of mapped) {
-          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
+          if (!draftStore.getDraft(d.id)) {
             draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
           }
         }
@@ -861,12 +871,16 @@ export default function DraftingPage() {
   }, [promoCount, promoIndex]);
 
 
-  const confirmExitDraft = () => {
-    if (exitingDraft) {
-      // TODO: API call to exit draft and return draft pass
-      console.log('Exiting draft:', exitingDraft.contestName, '- Draft pass returned');
+  const confirmExitDraft = async () => {
+    if (!exitingDraft || !user?.walletAddress) return;
+    try {
+      await leaveDraft(exitingDraft.id, user.walletAddress);
+      draftStore.removeDraft(exitingDraft.id);
+      setLiveDrafts(prev => prev.filter(d => d.id !== exitingDraft.id));
+    } catch (err) {
+      console.error('Failed to leave draft:', err);
+    } finally {
       setExitingDraft(null);
-      // In real implementation, this would remove the draft from the list
     }
   };
 
@@ -1068,9 +1082,9 @@ export default function DraftingPage() {
                   </div>
 
                   {/* Button */}
-                  <div className="w-20 flex-shrink-0">
+                  <div className="w-28 flex-shrink-0 flex items-center justify-end gap-2">
                     {['filling', 'randomizing', 'pre-spin-countdown', 'draft-starting'].includes(live.displayPhase) ? (
-                      <div className="w-full">
+                      <>
                         <Tooltip content="Enter draft room">
                           <button
                             onClick={(e) => {
@@ -1082,7 +1096,22 @@ export default function DraftingPage() {
                             Enter
                           </button>
                         </Tooltip>
-                      </div>
+                        {live.displayPhase === 'filling' && (
+                          <Tooltip content="Leave draft">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExitingDraft(draft);
+                              }}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                              </svg>
+                            </button>
+                          </Tooltip>
+                        )}
+                      </>
                     ) : (
                       <button
                         onClick={(e) => {

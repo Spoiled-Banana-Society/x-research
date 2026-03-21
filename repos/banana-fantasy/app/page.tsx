@@ -84,7 +84,6 @@ export default function HomePage() {
   const selectedContest = contestsQuery.data?.[0];
   const modals = useModalStack();
 
-
   const buildDraftRoomUrl = React.useCallback((draftId: string, contestName: string, speed: 'fast' | 'slow') => {
     const params = new URLSearchParams({
       id: draftId,
@@ -165,7 +164,6 @@ export default function HomePage() {
         speed,
         mode: 'live',
         wallet: user.walletAddress,
-        passType,
       });
       if (forcedDraftType) params.set('promoType', forcedDraftType);
       router.push(`/draft-room?${params.toString()}`);
@@ -202,7 +200,9 @@ export default function HomePage() {
     <div className="w-full px-4 sm:px-8 lg:px-12 pt-16 flex flex-col min-h-[calc(100vh-64px)]">
       {/* Featured Contest */}
       <section className="mb-6">
-        {selectedContest ? (
+        {contestsQuery.isValidating && !selectedContest ? (
+          <SkeletonContestCard />
+        ) : selectedContest ? (
           <ContestCard
             contest={selectedContest}
             draftCount={isLoggedIn ? (user?.draftPasses || 0) + (user?.freeDrafts || 0) : 0}

@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
 import { API_CONFIG } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { seedDb } from '@/lib/api/seed';
@@ -193,7 +192,7 @@ export async function getPromos(userId: string): Promise<Promo[]> {
 
   const hasVerifiedTwitter = !twitterSnap.empty;
 
-  const promos = promosSnap.docs.map((doc) => {
+  return promosSnap.docs.map((doc) => {
     const promo = doc.data() as Promo;
     // Inject real twitterConnected status for promos that depend on it
     if (promo.type === 'new-user' || promo.type === 'tweet-engagement') {
@@ -201,22 +200,6 @@ export async function getPromos(userId: string): Promise<Promo[]> {
     }
     return promo;
   });
-
-  // Passive cleanup: reset expired daily-drafts timers
-  for (const promo of promos) {
-    if (promo.type === 'daily-drafts' && promo.timerEndTime && !promo.claimable) {
-      if (new Date(promo.timerEndTime).getTime() < Date.now() && (promo.progressCurrent || 0) > 0) {
-        promo.progressCurrent = 0;
-        promo.timerEndTime = undefined;
-        promo.completedDraftIds = [];
-        // Write cleanup back to Firestore (fire-and-forget)
-        const promoRef = db.collection(USERS_COLLECTION).doc(userId).collection(PROMOS_SUBCOLLECTION).doc(promo.id);
-        promoRef.update({ progressCurrent: 0, timerEndTime: FieldValue.delete(), completedDraftIds: [] }).catch(() => {});
-      }
-    }
-  }
-
-  return promos;
 }
 
 export async function claimPromo(userId: string, promoId: string) {
@@ -289,19 +272,9 @@ export async function claimPromo(userId: string, promoId: string) {
     if (promo.progressMax !== undefined) {
       promo.progressCurrent = 0;
     }
-    // Daily-drafts: also clear timer and draft ID tracking for new cycle
-    if (promo.type === 'daily-drafts') {
-      promo.timerEndTime = undefined;
-      promo.completedDraftIds = [];
-    }
 
     tx.set(userRef, stripUndefined(user), { merge: true });
     tx.set(promoRef, stripUndefined(promo), { merge: true });
-    // FieldValue.delete() explicitly removes the field from Firestore
-    // (stripUndefined + merge:true would silently leave it intact)
-    if (promo.type === 'daily-drafts') {
-      tx.update(promoRef, { timerEndTime: FieldValue.delete() });
-    }
 
     return { promo: deepClone(promo), spinsAdded, user: deepClone(user) };
   });
@@ -818,129 +791,4 @@ export async function getDraftHistory(userId: string): Promise<CompletedDraft[]>
     .get();
 
   return historySnap.docs.map((doc) => doc.data() as CompletedDraft);
-}
-
-// ==================== DAILY-DRAFTS PROMO: DRAFT COMPLETION TRACKING ====================
-
-const DAILY_DRAFTS_PROMO_ID = '1';
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Record a draft completion for the daily-drafts promo.
- * Increments progressCurrent, starts 24hr timer on first draft,
- * sets claimable when 4/4 reached. Idempotent per draftId.
- */
-export async function recordDraftCompletion(userId: string, draftId: string): Promise<Promo | null> {
-  const db = getAdminFirestore();
-  await ensureUserSeeded(userId);
-
-  const promoRef = db
-    .collection(USERS_COLLECTION)
-    .doc(userId)
-    .collection(PROMOS_SUBCOLLECTION)
-    .doc(DAILY_DRAFTS_PROMO_ID);
-
-  return db.runTransaction(async (tx) => {
-    const promoSnap = await tx.get(promoRef);
-    if (!promoSnap.exists) return null;
-
-    const promo = deepClone(promoSnap.data() as Promo);
-    if (promo.type !== 'daily-drafts') return null;
-
-    const ids = promo.completedDraftIds || [];
-
-    // Idempotency: don't double-count the same draft
-    if (ids.includes(draftId)) return promo;
-
-    // Timer expiry check: if 24hr window passed, reset for a new cycle
-    let needsTimerDelete = false;
-    if (promo.timerEndTime) {
-      const expired = new Date(promo.timerEndTime).getTime() < Date.now();
-      if (expired && !promo.claimable) {
-        promo.progressCurrent = 0;
-        promo.timerEndTime = undefined;
-        promo.completedDraftIds = [];
-        needsTimerDelete = true;
-      }
-    }
-
-    // Increment progress
-    const prevProgress = promo.progressCurrent || 0;
-    promo.progressCurrent = prevProgress + 1;
-    promo.completedDraftIds = [...(promo.completedDraftIds || []), draftId];
-
-    // Start 24hr timer on first draft of cycle
-    if (prevProgress === 0) {
-      promo.timerEndTime = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
-    }
-
-    // Target reached — auto-reset progress to 0 + grant claim.
-    // User sees: 3/4 → (4th draft) → 0/4 with CLAIM button + 24:00:00.
-    if (promo.progressCurrent >= (promo.progressMax || 4)) {
-      promo.progressCurrent = 0;
-      promo.claimable = true;
-      promo.claimCount = (promo.claimCount || 0) + 1;
-      promo.timerEndTime = undefined;
-      promo.completedDraftIds = [];
-      needsTimerDelete = true;
-    }
-
-    tx.set(promoRef, stripUndefined(promo), { merge: true });
-    // FieldValue.delete() explicitly removes timerEndTime from Firestore
-    if (needsTimerDelete) {
-      tx.update(promoRef, { timerEndTime: FieldValue.delete() });
-    }
-    return deepClone(promo);
-  });
-}
-
-// ==================== PICK-10 PROMO: RECORD WHEN USER GETS PICK #10 ====================
-
-const PICK10_PROMO_ID = '2';
-
-/**
- * Record a Pick 10 event — user got the 10th pick position in a draft.
- * Adds to pick10History with status 'claim', increments claimCount.
- * Idempotent per draftId.
- */
-export async function recordPick10(userId: string, draftId: string, draftName: string): Promise<Promo | null> {
-  const db = getAdminFirestore();
-  await ensureUserSeeded(userId);
-
-  const promoRef = db
-    .collection(USERS_COLLECTION)
-    .doc(userId)
-    .collection(PROMOS_SUBCOLLECTION)
-    .doc(PICK10_PROMO_ID);
-
-  return db.runTransaction(async (tx) => {
-    const promoSnap = await tx.get(promoRef);
-    if (!promoSnap.exists) return null;
-
-    const promo = deepClone(promoSnap.data() as Promo);
-    if (promo.type !== 'pick-10') return null;
-
-    const history = promo.modalContent.pick10History || [];
-
-    // Idempotency: don't double-count the same draft
-    if (history.some(h => h.draftName === draftId)) return promo;
-
-    // Add to history as claimable
-    history.unshift({
-      date: new Date().toISOString().split('T')[0],
-      draftName: draftId,
-      status: 'claim' as const,
-    });
-    promo.modalContent.pick10History = history;
-    promo.modalContent.totalPick10s = (promo.modalContent.totalPick10s || 0) + 1;
-
-    // Update claimability
-    const claimableCount = history.filter(h => h.status === 'claim').length;
-    promo.progressCurrent = 1;
-    promo.claimable = true;
-    promo.claimCount = claimableCount;
-
-    tx.set(promoRef, stripUndefined(promo), { merge: true });
-    return deepClone(promo);
-  });
 }

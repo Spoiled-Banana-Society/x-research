@@ -139,20 +139,6 @@ export function usePromos(opts?: { userId?: string }) {
 
   const refreshPromos = useCallback(() => swr.mutate(), [swr]);
 
-  // Refetch promos on window focus + poll every 10s for live updates
-  useEffect(() => {
-    const refetch = () => { swr.mutate(); };
-    const onVisibility = () => { if (document.visibilityState === 'visible') refetch(); };
-    window.addEventListener('focus', refetch);
-    document.addEventListener('visibilitychange', onVisibility);
-    const interval = setInterval(refetch, 10_000);
-    return () => {
-      window.removeEventListener('focus', refetch);
-      document.removeEventListener('visibilitychange', onVisibility);
-      clearInterval(interval);
-    };
-  }, [swr]);
-
   return {
     ...swr,
     promos,
