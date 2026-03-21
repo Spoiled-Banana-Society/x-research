@@ -43,7 +43,7 @@ export function SlotMachineOverlay({
   }, [autoVerifyRng, rngSeedData, slotAnimationDone, verifySpin]);
 
   const handleCloseSlotMachine = () => {
-    if (slotAnimationDone) onClose();
+    onClose();
   };
 
   return (

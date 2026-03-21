@@ -2405,7 +2405,6 @@ function DraftRoomContent() {
           slotAnimationDone={slotAnimationDone}
           formatTime={formatTime}
           onClose={() => {
-            if (!slotAnimationDone) return;
             setShowSlotMachine(false);
             if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
           }}
