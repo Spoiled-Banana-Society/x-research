@@ -1321,16 +1321,23 @@ function DraftRoomContent() {
     setMainCountdown(remaining);
 
     // Track draft start for daily-drafts promo (10/10 joined = counts as a draft)
+    // Use walletParam (always available from URL) as userId — matches Firestore user ID format
     const id = draftId || urlDraftId;
-    if (id && user?.id) {
+    const promoUserId = user?.id || walletParam?.toLowerCase();
+    if (id && promoUserId) {
       const trackedKey = `promo-tracked:${id}`;
       if (!localStorage.getItem(trackedKey)) {
         localStorage.setItem(trackedKey, '1');
+        console.log('[Promo] Tracking draft start for daily-drafts:', { userId: promoUserId, draftId: id });
         fetch('/api/promos/draft-complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id, draftId: id }),
-        }).catch(() => {});
+          body: JSON.stringify({ userId: promoUserId, draftId: id }),
+        }).then(r => r.json()).then(data => {
+          console.log('[Promo] Draft tracked:', data?.promo?.progressCurrent, '/', data?.promo?.progressMax);
+        }).catch(err => {
+          console.error('[Promo] Failed to track draft:', err);
+        });
       }
     }
 
