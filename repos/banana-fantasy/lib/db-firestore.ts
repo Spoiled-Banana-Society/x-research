@@ -866,10 +866,11 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
       promo.timerEndTime = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
     }
 
-    // Check if target reached
+    // Check if target reached — clear timer so UI shows "24:00:00" until next cycle
     if (promo.progressCurrent >= (promo.progressMax || 4)) {
       promo.claimable = true;
       promo.claimCount = (promo.claimCount || 0) + 1;
+      promo.timerEndTime = undefined;
     }
 
     tx.set(promoRef, stripUndefined(promo), { merge: true });
