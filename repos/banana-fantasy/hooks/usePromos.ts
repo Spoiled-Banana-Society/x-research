@@ -139,6 +139,19 @@ export function usePromos(opts?: { userId?: string }) {
 
   const refreshPromos = useCallback(() => swr.mutate(), [swr]);
 
+  // Refetch promos on window focus (catches updates from draft room/other pages)
+  useEffect(() => {
+    const onFocus = () => { swr.mutate(); };
+    window.addEventListener('focus', onFocus);
+    // Also listen for page navigation (Next.js client-side nav doesn't trigger focus)
+    const onVisibility = () => { if (document.visibilityState === 'visible') swr.mutate(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [swr]);
+
   return {
     ...swr,
     promos,
