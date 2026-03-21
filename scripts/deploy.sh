@@ -17,6 +17,9 @@ fi
 cd "$DEPLOY_REPO"
 git pull origin main
 
+# Touch sync marker for pre-push hook
+touch "$HOME/sbs-claude-shared-workspace/.last-richard-sync"
+
 # 2. Find which files changed in the shared workspace (compared to main)
 cd "$HOME/sbs-claude-shared-workspace"
 CHANGED=$(git diff origin/main~1 origin/main --name-only -- repos/banana-fantasy/ | sed 's|repos/banana-fantasy/||')
