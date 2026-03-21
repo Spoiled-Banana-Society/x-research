@@ -165,6 +165,7 @@ export default function HomePage() {
         speed,
         mode: 'live',
         wallet: user.walletAddress,
+        passType,
       });
       if (forcedDraftType) params.set('promoType', forcedDraftType);
       router.push(`/draft-room?${params.toString()}`);

@@ -269,8 +269,9 @@ export default function DraftingPage() {
           const hasDraftStarted = playerCount >= 10 && info.pickNumber >= 1;
           const isFull = playerCount >= 10;
 
-          // Track draft start for daily-drafts promo (fire once per draft)
-          if (isFull && user?.id) {
+          // Track promos — only paid drafts count (free drafts don't earn promo progress)
+          const isPaid = draft.passType !== 'free';
+          if (isFull && user?.id && isPaid) {
             const trackedKey = `promo-tracked:${draft.id}`;
             if (!localStorage.getItem(trackedKey)) {
               localStorage.setItem(trackedKey, '1');

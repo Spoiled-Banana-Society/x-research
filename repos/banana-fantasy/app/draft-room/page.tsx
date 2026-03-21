@@ -40,6 +40,8 @@ function DraftRoomContent() {
   const walletParam = searchParams.get('wallet') || '';
   const modeParam = searchParams.get('mode') as DraftMode | null;
   const speedParam = searchParams.get('speed') as 'fast' | 'slow' | null;
+  const passTypeParam = searchParams.get('passType') as 'paid' | 'free' | null;
+  const isPaidDraft = passTypeParam !== 'free'; // Default to paid if not specified
 
   // draftId is stateful — starts empty when navigating before joinDraft completes
   const [draftId, setDraftId] = useState(urlDraftId);
@@ -145,6 +147,7 @@ function DraftRoomContent() {
             fillingStartedAt: joinStartedAt,
             fillingInitialPlayers: draftRoom.players || 1,
             liveWalletAddress: walletParam,
+            passType: passTypeParam || 'paid',
           });
 
           // Fire off bot fill in background (staging only)
@@ -1335,11 +1338,10 @@ function DraftRoomContent() {
     const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
     setMainCountdown(remaining);
 
-    // Track draft start for daily-drafts promo (10/10 joined = counts as a draft)
-    // Use walletParam (always available from URL) as userId — matches Firestore user ID format
+    // Track promos — only paid drafts count (free drafts don't earn promo progress)
     const id = draftId || urlDraftId;
     const promoUserId = user?.id || walletParam?.toLowerCase();
-    if (id && promoUserId) {
+    if (id && promoUserId && isPaidDraft) {
       const trackedKey = `promo-tracked:${id}`;
       if (!localStorage.getItem(trackedKey)) {
         localStorage.setItem(trackedKey, '1');
@@ -1359,7 +1361,7 @@ function DraftRoomContent() {
     // Track Pick 10 promo — if user got the 10th pick position (index 9)
     // userPos comes from order.findIndex(p => p.isYou) — 0-indexed, so pick #10 = index 9
     console.log('[Promo] Pick position check:', { userPos, pickNumber: userPos + 1, id, promoUserId: !!promoUserId });
-    if (id && promoUserId && userPos === 9) {
+    if (id && promoUserId && isPaidDraft && userPos === 9) {
       const pick10Key = `promo-pick10:${id}`;
       if (!localStorage.getItem(pick10Key)) {
         localStorage.setItem(pick10Key, '1');
