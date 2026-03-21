@@ -1355,16 +1355,24 @@ function DraftRoomContent() {
     }
 
     // Track Pick 10 promo — if user got the 10th pick position (index 9)
+    // userPos comes from order.findIndex(p => p.isYou) — 0-indexed, so pick #10 = index 9
+    console.log('[Promo] Pick position check:', { userPos, pickNumber: userPos + 1, id, promoUserId: !!promoUserId });
     if (id && promoUserId && userPos === 9) {
       const pick10Key = `promo-pick10:${id}`;
       if (!localStorage.getItem(pick10Key)) {
         localStorage.setItem(pick10Key, '1');
-        console.log('[Promo] User got Pick 10!', { userId: promoUserId, draftId: id });
+        console.log('[Promo] User got Pick 10! Firing API...');
         fetch('/api/promos/pick10', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: promoUserId, draftId: id, draftName: contestName }),
-        }).catch(() => {});
+        }).then(r => r.json()).then(data => {
+          console.log('[Promo] Pick 10 recorded:', data?.promo?.claimCount, 'spins claimable');
+        }).catch(err => {
+          console.error('[Promo] Pick 10 tracking failed:', err);
+        });
+      } else {
+        console.log('[Promo] Pick 10 already tracked for this draft');
       }
     }
 
