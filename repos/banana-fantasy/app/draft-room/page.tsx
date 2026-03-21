@@ -1064,15 +1064,7 @@ function DraftRoomContent() {
       localStorage.removeItem(`mute:${draftId}`);
       localStorage.removeItem(`queue:${draftId}`);
 
-      // Track draft completion for daily-drafts promo (live mode only)
-      const userId = user?.id;
-      if (userId && isLiveMode) {
-        fetch('/api/promos/draft-complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, draftId }),
-        }).catch(() => {}); // Fire-and-forget
-      }
+      // Promo tracking now fires at draft start (pre-spin transition), not completion
     }
   }, [engine.draftStatus, draftId, user?.id, isLiveMode]);
 
@@ -1328,9 +1320,22 @@ function DraftRoomContent() {
     const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
     setMainCountdown(remaining);
 
+    // Track draft start for daily-drafts promo (10/10 joined = counts as a draft)
+    const id = draftId || urlDraftId;
+    if (id && user?.id) {
+      const trackedKey = `promo-tracked:${id}`;
+      if (!localStorage.getItem(trackedKey)) {
+        localStorage.setItem(trackedKey, '1');
+        fetch('/api/promos/draft-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, draftId: id }),
+        }).catch(() => {});
+      }
+    }
+
     // Draft type is assigned by the backend when draft fills (league.Level).
     // Fetch it now; fall back to stored type or 'pro' if unavailable.
-    const id = draftId || urlDraftId;
     if (id && walletParam) {
       getDraftTokenLevel(walletParam, id).then(level => {
         if (!level) return;

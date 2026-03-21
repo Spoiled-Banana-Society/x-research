@@ -204,20 +204,7 @@ export default function DraftingPage() {
           if (t.roster) {
             const rosterCount = (t.roster.QB?.length || 0) + (t.roster.RB?.length || 0)
               + (t.roster.WR?.length || 0) + (t.roster.TE?.length || 0) + (t.roster.DST?.length || 0);
-            if (rosterCount >= 15) {
-              // Track draft completion for daily-drafts promo (fire once per draft)
-              const draftId = t.leagueId || t.cardId;
-              const trackedKey = `promo-tracked:${draftId}`;
-              if (!localStorage.getItem(trackedKey) && user?.id) {
-                localStorage.setItem(trackedKey, '1');
-                fetch('/api/promos/draft-complete', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ userId: user.id, draftId }),
-                }).catch(() => {});
-              }
-              return false;
-            }
+            if (rosterCount >= 15) return false;
           }
           return true;
         });
