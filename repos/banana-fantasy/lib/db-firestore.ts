@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { API_CONFIG } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { seedDb } from '@/lib/api/seed';
@@ -206,11 +207,11 @@ export async function getPromos(userId: string): Promise<Promo[]> {
     if (promo.type === 'daily-drafts' && promo.timerEndTime && !promo.claimable) {
       if (new Date(promo.timerEndTime).getTime() < Date.now() && (promo.progressCurrent || 0) > 0) {
         promo.progressCurrent = 0;
-        (promo as any).timerEndTime = null;
+        promo.timerEndTime = undefined;
         promo.completedDraftIds = [];
         // Write cleanup back to Firestore (fire-and-forget)
         const promoRef = db.collection(USERS_COLLECTION).doc(userId).collection(PROMOS_SUBCOLLECTION).doc(promo.id);
-        promoRef.set({ progressCurrent: 0, timerEndTime: null, completedDraftIds: [] }, { merge: true }).catch(() => {});
+        promoRef.update({ progressCurrent: 0, timerEndTime: FieldValue.delete(), completedDraftIds: [] }).catch(() => {});
       }
     }
   }
@@ -289,15 +290,18 @@ export async function claimPromo(userId: string, promoId: string) {
       promo.progressCurrent = 0;
     }
     // Daily-drafts: also clear timer and draft ID tracking for new cycle
-    // Use null (not undefined) — stripUndefined removes undefined keys,
-    // and merge:true would leave the old Firestore value intact.
     if (promo.type === 'daily-drafts') {
-      (promo as any).timerEndTime = null;
+      promo.timerEndTime = undefined;
       promo.completedDraftIds = [];
     }
 
     tx.set(userRef, stripUndefined(user), { merge: true });
     tx.set(promoRef, stripUndefined(promo), { merge: true });
+    // FieldValue.delete() explicitly removes the field from Firestore
+    // (stripUndefined + merge:true would silently leave it intact)
+    if (promo.type === 'daily-drafts') {
+      tx.update(promoRef, { timerEndTime: FieldValue.delete() });
+    }
 
     return { promo: deepClone(promo), spinsAdded, user: deepClone(user) };
   });
@@ -852,12 +856,14 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
     if (promo.claimable) return promo;
 
     // Timer expiry check: if 24hr window passed, reset for a new cycle
+    let needsTimerDelete = false;
     if (promo.timerEndTime) {
       const expired = new Date(promo.timerEndTime).getTime() < Date.now();
       if (expired && !promo.claimable) {
         promo.progressCurrent = 0;
-        (promo as any).timerEndTime = null;
+        promo.timerEndTime = undefined;
         promo.completedDraftIds = [];
+        needsTimerDelete = true;
       }
     }
 
@@ -875,10 +881,15 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
     if (promo.progressCurrent >= (promo.progressMax || 4)) {
       promo.claimable = true;
       promo.claimCount = (promo.claimCount || 0) + 1;
-      (promo as any).timerEndTime = null;
+      promo.timerEndTime = undefined;
+      needsTimerDelete = true;
     }
 
     tx.set(promoRef, stripUndefined(promo), { merge: true });
+    // FieldValue.delete() explicitly removes timerEndTime from Firestore
+    if (needsTimerDelete) {
+      tx.update(promoRef, { timerEndTime: FieldValue.delete() });
+    }
     return deepClone(promo);
   });
 }
