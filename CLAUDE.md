@@ -62,6 +62,33 @@ Richard's commits have REPEATEDLY overwritten Boris's work because of stale loca
 3. **BEFORE pushing, verify:** `git diff --stat HEAD~1` — if you see files you didn't touch, STOP. You're about to overwrite someone else's work. Unstage those files and re-commit.
 4. **If pushing to sbs-frontend-v2 (banana-fantasy remote), pull there too:** `cd ~/banana-fantasy && git pull origin main` before committing.
 
+### Pre-Push Hook (RECOMMENDED — Set Up On First Session)
+Boris has a pre-push hook that blocks pushes if the sync hasn't been done recently. Richard should set up the same thing. Run this ONCE:
+
+```bash
+# Create the pre-push hook
+cat > ~/banana-fantasy/.git/hooks/pre-push << 'HOOKEOF'
+#!/bin/bash
+MARKER=~/banana-fantasy/.last-richard-sync
+MAX_AGE=600
+if [ ! -f "$MARKER" ]; then
+  echo ""; echo "⛔ PUSH BLOCKED — You haven't synced with the shared workspace!"
+  echo "Pull latest, merge, then: touch ~/banana-fantasy/.last-richard-sync"; echo ""
+  exit 1
+fi
+AGE=$(( $(date +%s) - $(stat -f %m "$MARKER") ))
+if [ "$AGE" -gt "$MAX_AGE" ]; then
+  echo ""; echo "⛔ PUSH BLOCKED — Sync is stale ($(( AGE / 60 ))m ago). Re-sync first."
+  echo "touch ~/banana-fantasy/.last-richard-sync"; echo ""
+  exit 1
+fi
+echo "✓ Sync is fresh ($(( AGE / 60 ))m ago) — push allowed."
+HOOKEOF
+chmod +x ~/banana-fantasy/.git/hooks/pre-push
+```
+
+After syncing with the shared workspace, always run: `touch ~/banana-fantasy/.last-richard-sync`
+
 ## Company Overview
 - **Company:** Spoiled Banana Society (SBS)
 - **Founded:** 2021
