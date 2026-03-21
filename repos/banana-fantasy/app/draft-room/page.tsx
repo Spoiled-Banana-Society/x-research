@@ -117,45 +117,58 @@ function DraftRoomContent() {
     });
 
     async function joinAndFill() {
-      try {
-        const { joinDraft } = await import('@/lib/api/leagues');
-        const promoType = searchParams?.get('promoType') as 'jackpot' | 'hof' | 'pro' | null;
-        const draftRoom = await joinDraft(walletParam, speedParam || 'fast', 1, promoType ?? undefined);
-        if (!draftRoom?.id) throw new Error('Join failed: no draft ID');
+      const MAX_JOIN_RETRIES = 3;
+      let lastErr: unknown = null;
 
-        const newId = draftRoom.id;
-        setDraftId(newId);
+      for (let attempt = 1; attempt <= MAX_JOIN_RETRIES; attempt++) {
+        try {
+          const { joinDraft } = await import('@/lib/api/leagues');
+          const promoType = searchParams?.get('promoType') as 'jackpot' | 'hof' | 'pro' | null;
+          const draftRoom = await joinDraft(walletParam, speedParam || 'fast', 1, promoType ?? undefined);
+          if (!draftRoom?.id) throw new Error('Join failed: no draft ID');
 
-        // Remove the pending entry and add the real one
-        draftStore.removeDraft(pendingId);
-        draftStore.addDraft({
-          id: newId,
-          contestName: draftRoom.contestName || `BBB #${newId}`,
-          status: 'filling',
-          type: null,
-          draftSpeed: speedParam || 'fast',
-          players: draftRoom.players || 1,
-          maxPlayers: 10,
-          joinedAt: joinStartedAt,
-          phase: 'filling',
-          fillingStartedAt: joinStartedAt,  // Use the ORIGINAL timestamp, not Date.now()
-          fillingInitialPlayers: draftRoom.players || 1,
-          liveWalletAddress: walletParam,
-        });
+          const newId = draftRoom.id;
+          setDraftId(newId);
 
-        // Fire off bot fill in background (staging only)
-        if (isStagingMode()) {
-          const stagingBase = getStagingApiUrl();
-          if (stagingBase) {
-            fetch(`${stagingBase}/staging/fill-bots/${speedParam || 'fast'}?count=9&leagueId=${newId}`, { method: 'POST' })
-              .catch(() => console.warn('Bot fill failed'));
+          // Remove the pending entry and add the real one
+          draftStore.removeDraft(pendingId);
+          draftStore.addDraft({
+            id: newId,
+            contestName: draftRoom.contestName || `BBB #${newId}`,
+            status: 'filling',
+            type: null,
+            draftSpeed: speedParam || 'fast',
+            players: draftRoom.players || 1,
+            maxPlayers: 10,
+            joinedAt: joinStartedAt,
+            phase: 'filling',
+            fillingStartedAt: joinStartedAt,
+            fillingInitialPlayers: draftRoom.players || 1,
+            liveWalletAddress: walletParam,
+          });
+
+          // Fire off bot fill in background (staging only)
+          if (isStagingMode()) {
+            const stagingBase = getStagingApiUrl();
+            if (stagingBase) {
+              fetch(`${stagingBase}/staging/fill-bots/${speedParam || 'fast'}?count=9&leagueId=${newId}`, { method: 'POST' })
+                .catch(() => console.warn('Bot fill failed'));
+            }
+          }
+          return; // Success — exit retry loop
+        } catch (err) {
+          lastErr = err;
+          console.warn(`[Draft Room] Join attempt ${attempt}/${MAX_JOIN_RETRIES} failed:`, err instanceof Error ? err.message : err);
+          if (attempt < MAX_JOIN_RETRIES) {
+            await new Promise(r => setTimeout(r, 2000 * attempt)); // Backoff: 2s, 4s
           }
         }
-      } catch (err) {
-        console.error('[Draft Room] Failed to join draft:', err);
-        draftStore.removeDraft(pendingId); // Clean up pending entry on failure
-        setLiveError(err instanceof Error ? err.message : 'Failed to join draft');
       }
+
+      // All retries exhausted — show error
+      console.error('[Draft Room] Failed to join draft after retries:', lastErr);
+      draftStore.removeDraft(pendingId);
+      setLiveError(lastErr instanceof Error ? lastErr.message : 'Failed to join draft');
     }
 
     joinAndFill();
