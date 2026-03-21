@@ -867,25 +867,34 @@ export default function DraftingPage() {
           <h1 className="text-2xl font-semibold text-white">My Drafts</h1>
           <button
             onClick={async () => {
-              // Hide all current drafts (both local and server-side)
+              // Collect ALL possible IDs to hide (draftStore IDs, API leagueIds, cardIds)
               const allIds = activeDrafts.map(d => d.id);
-              // Also grab any IDs from draftStore that might not be in activeDrafts
               const storeIds = draftStore.getActiveDrafts().map(d => d.id);
-              const combinedIds = [...new Set([...allIds, ...storeIds])];
+              // Also get raw API token IDs (leagueId + cardId) to cover ID mismatches
+              const liveTokenIds: string[] = [];
+              try {
+                const { getOwnerDraftTokens } = await import('@/lib/api/owner');
+                if (user?.walletAddress) {
+                  const tokens = await getOwnerDraftTokens(user.walletAddress);
+                  for (const t of tokens) {
+                    if (t.leagueId) liveTokenIds.push(t.leagueId);
+                    if (t.cardId) liveTokenIds.push(t.cardId);
+                  }
+                }
+              } catch {}
+              const combinedIds = [...new Set([...allIds, ...storeIds, ...liveTokenIds])];
 
               const newHidden = new Set([...Array.from(hiddenDraftIds), ...combinedIds]);
               localStorage.setItem('banana-hidden-drafts', JSON.stringify(Array.from(newHidden)));
               setHiddenDraftIds(newHidden);
               setLiveDrafts([]);
-              // Remove each draft from draftStore explicitly
-              for (const id of combinedIds) {
-                draftStore.removeDraft(id);
-              }
+              // Nuke draftStore entirely
+              localStorage.removeItem('banana-active-drafts');
               localStorage.removeItem('banana-completed-drafts');
               // Also try leaving server-side (best effort)
               const wallet = user?.walletAddress;
-              if (wallet && combinedIds.length > 0) {
-                Promise.allSettled(combinedIds.map(id => leaveDraft(id, wallet)));
+              if (wallet && allIds.length > 0) {
+                Promise.allSettled(allIds.map(id => leaveDraft(id, wallet)));
               }
             }}
             className="text-xs text-white/40 hover:text-white/70 transition-colors"
