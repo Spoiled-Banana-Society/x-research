@@ -323,7 +323,7 @@ export default function DraftingPage() {
               // While animation plays, save pick data but DON'T change display state.
               const animStillRunning = (() => {
                 if (fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
-                  return (nowMs - fresh.randomizingStartedAt) < 75000;
+                  return (nowMs - fresh.randomizingStartedAt) < 63000; // 3s bar + 60s countdown
                 }
                 if (fresh.preSpinStartedAt) {
                   return ((nowMs - fresh.preSpinStartedAt) / 1000) < 60;
@@ -380,7 +380,7 @@ export default function DraftingPage() {
               if (!fresh.preSpinStartedAt) {
                 if (fresh.randomizingStartedAt) {
                   // Bar is running — only skip to countdown if 15s elapsed
-                  const barStillRunning = (Date.now() - fresh.randomizingStartedAt) < 15000;
+                  const barStillRunning = (Date.now() - fresh.randomizingStartedAt) < 3000;
                   if (!barStillRunning) {
                     patch.preSpinStartedAt = serverPreSpin;
                     patch.randomizingStartedAt = undefined;
@@ -667,7 +667,7 @@ export default function DraftingPage() {
               } else {
                 // Bar fills over 15s — once full, transition to pre-spin countdown
                 const randomizingElapsed = now - d.randomizingStartedAt;
-                if (randomizingElapsed >= 15000) {
+                if (randomizingElapsed >= 3000) {
                   draftStore.updateDraft(d.id, {
                     phase: 'pre-spin',
                     players: 10,
@@ -707,7 +707,7 @@ export default function DraftingPage() {
 
         // CATCH-ALL: Force transition for ANY draft stuck in randomizing > 15s
         // (regardless of phase/status/fillingStartedAt — covers all edge cases)
-        if (d.randomizingStartedAt && !d.preSpinStartedAt && (now - d.randomizingStartedAt) >= 15000) {
+        if (d.randomizingStartedAt && !d.preSpinStartedAt && (now - d.randomizingStartedAt) >= 3000) {
           draftStore.updateDraft(d.id, {
             phase: 'pre-spin',
             preSpinStartedAt: now,
@@ -768,8 +768,8 @@ export default function DraftingPage() {
     const timerStart = timers.get(draft.id);
     if (timerStart && !draft.preSpinStartedAt) {
       const elapsed = now - timerStart;
-      if (elapsed < 15000) {
-        const t = elapsed / 15000;
+      if (elapsed < 3000) {
+        const t = elapsed / 3000;
         const progress = 0.99 * Math.pow(t, 0.6);
         return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: progress, isFilling: false };
       }
@@ -799,10 +799,10 @@ export default function DraftingPage() {
     // ── RANDOMIZING (from draftStore timestamp) ──
     if (draft.randomizingStartedAt && !draft.preSpinStartedAt) {
       const elapsed = now - draft.randomizingStartedAt;
-      if (elapsed >= 15000) {
+      if (elapsed >= 3000) {
         // Bar done — show countdown from when bar ended
         timers.delete(draft.id);
-        const effectivePreSpin = draft.randomizingStartedAt + 15000;
+        const effectivePreSpin = draft.randomizingStartedAt + 3000;
         const cdElapsed = (now - effectivePreSpin) / 1000;
         if (cdElapsed < 15) return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: Math.max(0, Math.ceil(15 - cdElapsed)), randomizingProgress: null, isFilling: false };
         if (cdElapsed < 60) return { displayPhase: 'draft-starting', playerCount: 10, countdown: Math.max(0, Math.ceil(60 - cdElapsed)), randomizingProgress: null, isFilling: false };
@@ -810,7 +810,7 @@ export default function DraftingPage() {
       }
       // Lock in timer if not set — use the draftStore timestamp
       if (!timers.has(draft.id)) timers.set(draft.id, draft.randomizingStartedAt);
-      const t = elapsed / 15000;
+      const t = elapsed / 3000;
       return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: 0.99 * Math.pow(t, 0.6), isFilling: false };
     }
 
@@ -826,7 +826,7 @@ export default function DraftingPage() {
         // Start randomizing immediately (tick will set the real timestamp next frame)
         if (!timers.has(draft.id)) timers.set(draft.id, now);
         const tStart = timers.get(draft.id)!;
-        const t = Math.min(1, (now - tStart) / 15000);
+        const t = Math.min(1, (now - tStart) / 3000);
         return { displayPhase: 'randomizing', playerCount: 10, countdown: null, randomizingProgress: 0.99 * Math.pow(t, 0.6), isFilling: false };
       }
       return { displayPhase: 'filling', playerCount: count, countdown: null, randomizingProgress: null, isFilling: true };

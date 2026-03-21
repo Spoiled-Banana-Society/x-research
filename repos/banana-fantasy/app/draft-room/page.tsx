@@ -76,7 +76,7 @@ function DraftRoomContent() {
   // Initialize from stored state so re-entry renders correctly on first frame (no flash)
   const _isResumingRandomize = !!(storedForInit?.randomizingStartedAt && !storedForInit?.preSpinStartedAt);
   const _resumeProgress = _isResumingRandomize
-    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / 15000); return 0.99 * Math.pow(t, 0.6); })()
+    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / 3000); return 0.99 * Math.pow(t, 0.6); })()
     : 0;
   const [waitingForServer, setWaitingForServer] = useState(_isResumingRandomize);
   const [serverWaitProgress, setServerWaitProgress] = useState(_resumeProgress);
@@ -189,7 +189,7 @@ function DraftRoomContent() {
       stored.preSpinStartedAt ||
       // If randomizing bar has been running 15s+, skip to loading (check server state)
       // instead of starting a new 60s poll that would get stuck
-      (stored.randomizingStartedAt && (Date.now() - stored.randomizingStartedAt) > 15000)
+      (stored.randomizingStartedAt && (Date.now() - stored.randomizingStartedAt) > 3000)
     )) return 'loading';
     if (!isLiveMode && stored?.phase) return stored.phase;
     return 'filling';
@@ -535,7 +535,7 @@ function DraftRoomContent() {
       ];
       setAllReelItems(generatedReels3);
       const animOffset = stored.preSpinStartedAt
-        ? Math.max(0, Date.now() - stored.preSpinStartedAt - 15000)
+        ? Math.max(0, Date.now() - stored.preSpinStartedAt - 3000)
         : 0;
       if (animOffset < 6000) {
         // Resume from exact position — pre-set reel offsets to avoid flash
@@ -1216,7 +1216,7 @@ function DraftRoomContent() {
 
     // Compute initial progress from elapsed time so the bar doesn't flash to 0%
     const initialElapsed = Date.now() - randomizingStartedAt;
-    const initialT = Math.min(1, initialElapsed / 15000);
+    const initialT = Math.min(1, initialElapsed / 3000);
     const initialProgress = 0.99 * (1 - Math.pow(1 - initialT, 3));
     setServerWaitProgress(initialProgress);
     serverWaitProgressRef.current = initialProgress;
@@ -1225,17 +1225,17 @@ function DraftRoomContent() {
     if (draftId) {
       draftStore.updateDraft(draftId, { randomizingStartedAt, players: 10 });
     }
-    const MIN_RANDOMIZING_MS = 4000;
+    const MIN_RANDOMIZING_MS = 2000;
     const pollDraftId = draftId; // Capture for async closure
 
-    // Smooth progress animation — ticks every 50ms, reaches ~99% over ~15s
+    // Smooth progress animation — ticks every 50ms, reaches ~99% over ~3s
     // Independent of API attempts so the bar moves smoothly
     let pollDone = false;
     const progressInterval = setInterval(() => {
       if (pollDone) { clearInterval(progressInterval); return; }
       const elapsed = Date.now() - randomizingStartedAt;
-      // Cubic ease-out: decelerates more gradually than quadratic
-      const t = Math.min(1, elapsed / 15000); // 15s to reach max
+      // Cubic ease-out: fills quickly then decelerates near end
+      const t = Math.min(1, elapsed / 3000); // 3s to reach max
       const progress = 0.99 * (1 - Math.pow(1 - t, 3)); // cubic ease-out, cap 99%
       serverWaitProgressRef.current = progress;
       setServerWaitProgress(progress);
@@ -1748,7 +1748,7 @@ function DraftRoomContent() {
   const randomizingProgressFromStore = isRandomizingFromStore
     ? (() => {
         const elapsed = Date.now() - storedNow!.randomizingStartedAt!;
-        const t = Math.min(1, elapsed / 15000);
+        const t = Math.min(1, elapsed / 3000);
         return 0.99 * Math.pow(t, 0.6);
       })()
     : 0;
