@@ -23,3 +23,4 @@ export const getContestStandings = db.getContestStandings;
 export const getExposure = db.getExposure;
 export const getDraftHistory = db.getDraftHistory;
 export const recordDraftCompletion = db.recordDraftCompletion;
+export const recordPick10 = db.recordPick10;

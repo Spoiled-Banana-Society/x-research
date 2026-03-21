@@ -280,6 +280,24 @@ export default function DraftingPage() {
                 body: JSON.stringify({ userId: user.id, draftId: draft.id }),
               }).catch(() => {});
             }
+
+            // Track Pick 10 promo — check if user has position #10 (index 9)
+            if (info.draftOrder && draft.liveWalletAddress) {
+              const userIdx = info.draftOrder.findIndex(
+                (e: { ownerId: string }) => e.ownerId.toLowerCase() === draft.liveWalletAddress!.toLowerCase()
+              );
+              if (userIdx === 9) {
+                const pick10Key = `promo-pick10:${draft.id}`;
+                if (!localStorage.getItem(pick10Key)) {
+                  localStorage.setItem(pick10Key, '1');
+                  fetch('/api/promos/pick10', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: user.id, draftId: draft.id, draftName: draft.contestName }),
+                  }).catch(() => {});
+                }
+              }
+            }
           }
 
           if (hasDraftStarted) {

@@ -893,3 +893,54 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
     return deepClone(promo);
   });
 }
+
+// ==================== PICK-10 PROMO: RECORD WHEN USER GETS PICK #10 ====================
+
+const PICK10_PROMO_ID = '2';
+
+/**
+ * Record a Pick 10 event — user got the 10th pick position in a draft.
+ * Adds to pick10History with status 'claim', increments claimCount.
+ * Idempotent per draftId.
+ */
+export async function recordPick10(userId: string, draftId: string, draftName: string): Promise<Promo | null> {
+  const db = getAdminFirestore();
+  await ensureUserSeeded(userId);
+
+  const promoRef = db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(PROMOS_SUBCOLLECTION)
+    .doc(PICK10_PROMO_ID);
+
+  return db.runTransaction(async (tx) => {
+    const promoSnap = await tx.get(promoRef);
+    if (!promoSnap.exists) return null;
+
+    const promo = deepClone(promoSnap.data() as Promo);
+    if (promo.type !== 'pick-10') return null;
+
+    const history = promo.modalContent.pick10History || [];
+
+    // Idempotency: don't double-count the same draft
+    if (history.some(h => h.draftName === draftId)) return promo;
+
+    // Add to history as claimable
+    history.unshift({
+      date: new Date().toISOString().split('T')[0],
+      draftName: draftId,
+      status: 'claim' as const,
+    });
+    promo.modalContent.pick10History = history;
+    promo.modalContent.totalPick10s = (promo.modalContent.totalPick10s || 0) + 1;
+
+    // Update claimability
+    const claimableCount = history.filter(h => h.status === 'claim').length;
+    promo.progressCurrent = 1;
+    promo.claimable = true;
+    promo.claimCount = claimableCount;
+
+    tx.set(promoRef, stripUndefined(promo), { merge: true });
+    return deepClone(promo);
+  });
+}

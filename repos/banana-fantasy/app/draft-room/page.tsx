@@ -1354,6 +1354,20 @@ function DraftRoomContent() {
       }
     }
 
+    // Track Pick 10 promo — if user got the 10th pick position (index 9)
+    if (id && promoUserId && userPos === 9) {
+      const pick10Key = `promo-pick10:${id}`;
+      if (!localStorage.getItem(pick10Key)) {
+        localStorage.setItem(pick10Key, '1');
+        console.log('[Promo] User got Pick 10!', { userId: promoUserId, draftId: id });
+        fetch('/api/promos/pick10', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: promoUserId, draftId: id, draftName: contestName }),
+        }).catch(() => {});
+      }
+    }
+
     // Draft type is assigned by the backend when draft fills (league.Level).
     // Fetch it now; fall back to stored type or 'pro' if unavailable.
     if (id && walletParam) {
