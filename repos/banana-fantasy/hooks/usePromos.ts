@@ -139,16 +139,17 @@ export function usePromos(opts?: { userId?: string }) {
 
   const refreshPromos = useCallback(() => swr.mutate(), [swr]);
 
-  // Refetch promos on window focus (catches updates from draft room/other pages)
+  // Refetch promos on window focus + poll every 10s for live updates
   useEffect(() => {
-    const onFocus = () => { swr.mutate(); };
-    window.addEventListener('focus', onFocus);
-    // Also listen for page navigation (Next.js client-side nav doesn't trigger focus)
-    const onVisibility = () => { if (document.visibilityState === 'visible') swr.mutate(); };
-    document.addEventListener('visibilitychange', onVisibility);
+    const refetch = () => { swr.mutate(); };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refetch();
+    });
+    const interval = setInterval(refetch, 10_000);
     return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', refetch);
+      clearInterval(interval);
     };
   }, [swr]);
 
