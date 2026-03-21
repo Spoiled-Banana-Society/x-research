@@ -206,11 +206,11 @@ export async function getPromos(userId: string): Promise<Promo[]> {
     if (promo.type === 'daily-drafts' && promo.timerEndTime && !promo.claimable) {
       if (new Date(promo.timerEndTime).getTime() < Date.now() && (promo.progressCurrent || 0) > 0) {
         promo.progressCurrent = 0;
-        promo.timerEndTime = undefined;
+        (promo as any).timerEndTime = null;
         promo.completedDraftIds = [];
         // Write cleanup back to Firestore (fire-and-forget)
         const promoRef = db.collection(USERS_COLLECTION).doc(userId).collection(PROMOS_SUBCOLLECTION).doc(promo.id);
-        promoRef.set(stripUndefined(promo), { merge: true }).catch(() => {});
+        promoRef.set({ progressCurrent: 0, timerEndTime: null, completedDraftIds: [] }, { merge: true }).catch(() => {});
       }
     }
   }
@@ -289,8 +289,10 @@ export async function claimPromo(userId: string, promoId: string) {
       promo.progressCurrent = 0;
     }
     // Daily-drafts: also clear timer and draft ID tracking for new cycle
+    // Use null (not undefined) — stripUndefined removes undefined keys,
+    // and merge:true would leave the old Firestore value intact.
     if (promo.type === 'daily-drafts') {
-      promo.timerEndTime = undefined;
+      (promo as any).timerEndTime = null;
       promo.completedDraftIds = [];
     }
 
@@ -854,7 +856,7 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
       const expired = new Date(promo.timerEndTime).getTime() < Date.now();
       if (expired && !promo.claimable) {
         promo.progressCurrent = 0;
-        promo.timerEndTime = undefined;
+        (promo as any).timerEndTime = null;
         promo.completedDraftIds = [];
       }
     }
@@ -873,7 +875,7 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
     if (promo.progressCurrent >= (promo.progressMax || 4)) {
       promo.claimable = true;
       promo.claimCount = (promo.claimCount || 0) + 1;
-      promo.timerEndTime = undefined;
+      (promo as any).timerEndTime = null;
     }
 
     tx.set(promoRef, stripUndefined(promo), { merge: true });
