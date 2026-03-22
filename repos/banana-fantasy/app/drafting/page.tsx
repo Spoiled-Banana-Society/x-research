@@ -1127,24 +1127,26 @@ export default function DraftingPage() {
 
       {/* Empty State - Full experience */}
       {activeDrafts.length === 0 && (
-        <div className="space-y-4">
-          {/* Hero CTA Card */}
+        <div className="space-y-3">
+          {/* Hero CTA — square-ish */}
           <div
-            className="rounded-2xl overflow-hidden border border-banana/10 relative"
+            className="rounded-2xl overflow-hidden border border-banana/10 relative aspect-[2.2/1]"
             style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10) 0%, rgba(251,191,36,0.03) 60%, transparent 100%)' }}
           >
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, rgba(251,191,36,0.5) 0%, transparent 50%)' }} />
-            <div className="relative p-5 flex items-center justify-between">
-              <div>
-                <span className="text-banana/60 text-[10px] font-semibold uppercase tracking-[0.2em]">Season 4</span>
-                <h2 className="text-xl font-bold text-white mt-0.5">Banana Best Ball</h2>
-                <p className="text-white/30 text-[11px] mt-1">10-player snake draft &middot; 15 rounds</p>
-              </div>
-              <div className="flex flex-col items-end gap-2.5">
+            <div className="relative h-full p-5 flex flex-col justify-between">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-banana/60 text-[10px] font-semibold uppercase tracking-[0.2em]">Season 4</span>
+                  <h2 className="text-xl font-bold text-white mt-0.5">Banana Best Ball</h2>
+                </div>
                 <div className="text-right">
                   <p className="text-3xl font-black text-banana leading-none">$100K</p>
                   <p className="text-white/25 text-[10px] uppercase tracking-wider mt-0.5">Prize Pool</p>
                 </div>
+              </div>
+              <div className="flex items-end justify-between">
+                <p className="text-white/30 text-[11px]">10-player snake draft &middot; 15 rounds</p>
                 {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                   <button
                     onClick={handleEnterDraft}
@@ -1164,70 +1166,78 @@ export default function DraftingPage() {
             </div>
           </div>
 
-          {/* How It Works — 2x2 grid */}
+          {/* How It Works — 2x2 square tiles */}
           <div>
             <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">How it works</h3>
             <div className="grid grid-cols-2 gap-2.5">
               {/* 10 Players */}
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+                <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">10 Players</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Join a lobby, draft starts instantly when full</p>
+                <div>
+                  <h4 className="text-white text-sm font-semibold">10 Players</h4>
+                  <p className="text-white/35 text-[11px] mt-1 leading-relaxed">Join a lobby, draft starts instantly when full</p>
+                </div>
               </div>
               {/* Snake Draft */}
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+                <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">Snake Draft</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Fast (30s) or slow (8hr) picks — your choice</p>
+                <div>
+                  <h4 className="text-white text-sm font-semibold">Snake Draft</h4>
+                  <p className="text-white/35 text-[11px] mt-1 leading-relaxed">Fast (30s) or slow (8hr) picks — your choice</p>
+                </div>
               </div>
               {/* Team Positions */}
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+                <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">Team Positions</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Draft <span className="text-white/50">KC QB</span>, <span className="text-white/50">DAL WR1</span> — not players. You get the top scorer each week. Injury? Auto-get the backup.</p>
+                <div>
+                  <h4 className="text-white text-sm font-semibold">Team Positions</h4>
+                  <p className="text-white/35 text-[11px] mt-1 leading-relaxed">Draft <span className="text-white/50">KC QB</span>, <span className="text-white/50">DAL WR1</span> — not players. Top scorer each week, auto-backup on injury.</p>
+                </div>
               </div>
               {/* Best Ball */}
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+                <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">Best Ball</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">No managing needed. Draft once, your best scorers are auto-selected each week. No lineups, no waivers, no trades.</p>
+                <div>
+                  <h4 className="text-white text-sm font-semibold">Best Ball</h4>
+                  <p className="text-white/35 text-[11px] mt-1 leading-relaxed">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Draft Types — 3 cards */}
+          {/* Draft Types — 3 square tiles */}
           <div>
             <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">Draft Types</h3>
             <div className="grid grid-cols-3 gap-2.5">
               {[
                 { type: 'pro', color: '#a855f7', odds: '94%', label: 'Pro', icon: (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path d="M11.983 1.907a.75.75 0 00-1.292-.657l-8.5 9.5A.75.75 0 002.75 12h6.572l-1.305 6.093a.75.75 0 001.292.657l8.5-9.5A.75.75 0 0017.25 8h-6.572l1.305-6.093z" />
                   </svg>
                 )},
                 { type: 'hof', color: '#D4AF37', odds: '5%', label: 'Hall of Fame', icon: (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M10 1c-1.828 0-3.623.149-5.371.435a.75.75 0 00-.629.74v.387c-.827.157-1.642.345-2.445.564a.75.75 0 00-.552.698 5 5 0 004.503 5.152 6 6 0 002.946 1.822A1.5 1.5 0 017 12.5v1.5H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H13v-1.5a1.5 1.5 0 01-1.452-1.202 6 6 0 002.946-1.822 5 5 0 004.503-5.152.75.75 0 00-.553-.698A31.804 31.804 0 0016 2.562v-.388a.75.75 0 00-.629-.74A33.227 33.227 0 0010 1zM4.5 5V2.875a31.5 31.5 0 00-2.062.457A3.5 3.5 0 005.5 6.98 6.032 6.032 0 014.5 5zm11 0c0 .717-.155 1.4-.432 2.012.07-.013.14-.027.21-.042A3.5 3.5 0 0017.562 3.3 31.5 31.5 0 0015.5 2.875V5z" clipRule="evenodd" />
                   </svg>
                 )},
                 { type: 'jackpot', color: '#ef4444', odds: '1%', label: 'Jackpot', icon: (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M13.5 4.938a7 7 0 11-9.006 1.737c.202-.257.59-.218.793.039.278.352.594.672.943.954.332.269.786-.049.773-.476a5.977 5.977 0 01.575-2.729 4.978 4.978 0 002.921 2.012c.456.148.868-.361.665-.787a4.985 4.985 0 01-.29-2.217 7.006 7.006 0 012.626 1.467z" clipRule="evenodd" />
                     <path d="M12.243 12.093a5.237 5.237 0 01-.1.418c-.332 1.162-1.353 1.989-2.57 1.989H10.5c-1.217 0-2.238-.827-2.57-1.989a5.26 5.26 0 01-.1-.418 2.167 2.167 0 001.742-.344l.428-.304.428.304a2.167 2.167 0 001.742.344l.073-.001z" />
                   </svg>
@@ -1235,19 +1245,19 @@ export default function DraftingPage() {
               ].map((item) => (
                 <div
                   key={item.type}
-                  className="rounded-xl p-4 border border-white/[0.05]"
+                  className="rounded-xl border border-white/[0.05] aspect-square p-4 flex flex-col justify-between"
                   style={{ background: `linear-gradient(145deg, ${item.color}0a 0%, transparent 70%)` }}
                 >
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span style={{ color: item.color }} className="opacity-50">{item.icon}</span>
-                    <span className="text-xl font-bold" style={{ color: item.color }}>{item.odds}</span>
+                  <span style={{ color: item.color }} className="opacity-50">{item.icon}</span>
+                  <div>
+                    <span className="text-2xl font-bold block" style={{ color: item.color }}>{item.odds}</span>
+                    <h4 className="text-white text-[13px] font-medium mt-0.5">{item.label}</h4>
                   </div>
-                  <h4 className="text-white text-[13px] font-medium">{item.label}</h4>
                 </div>
               ))}
             </div>
             <p className="text-white/20 text-[10px] text-center mt-2">
-              Type revealed before your draft begins. Every 100 drafts: 1 Jackpot, 5 HOF, 94 Pro — guaranteed.
+              Revealed before your draft begins &middot; 1 Jackpot, 5 HOF, 94 Pro per 100 drafts — guaranteed
             </p>
           </div>
         </div>
