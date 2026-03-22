@@ -1127,24 +1127,49 @@ export default function DraftingPage() {
 
       {/* Empty State - Full experience */}
       {activeDrafts.length === 0 && (
-        <div className="space-y-2">
-          {/* Hero CTA */}
+        <div className="space-y-3">
+          {/* Hero CTA Card */}
           <div
             className="rounded-2xl overflow-hidden border border-banana/10 relative"
             style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10) 0%, rgba(251,191,36,0.03) 60%, transparent 100%)' }}
           >
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, rgba(251,191,36,0.5) 0%, transparent 50%)' }} />
-            <div className="relative p-4 flex items-center justify-between">
-              <div>
-                <span className="text-banana/60 text-[10px] font-semibold uppercase tracking-[0.2em]">Season 4</span>
-                <h2 className="text-lg font-bold text-white mt-0.5">Banana Best Ball</h2>
-                <p className="text-white/30 text-[11px] mt-0.5">10-player snake draft &middot; 15 rounds</p>
-              </div>
-              <div className="flex flex-col items-end gap-2">
+            <div className="relative p-5">
+              {/* Top row: title + $100K */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-banana/60 text-[10px] font-semibold uppercase tracking-[0.2em]">Season 4</span>
+                  <h2 className="text-xl font-bold text-white mt-0.5">Banana Best Ball</h2>
+                </div>
                 <div className="text-right">
                   <p className="text-3xl font-black text-banana leading-none">$100K</p>
                   <p className="text-white/25 text-[10px] uppercase tracking-wider mt-0.5">Prize Pool</p>
                 </div>
+              </div>
+              {/* Middle: key stats */}
+              <div className="flex items-center gap-4 mt-4">
+                <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-banana/40">
+                    <path d="M8 8a3 3 0 100-6 3 3 0 000 6zM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 00-11.215 0c-.22.578.254 1.139.872 1.139h9.47z" />
+                  </svg>
+                  10 players
+                </div>
+                <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-banana/40">
+                    <path fillRule="evenodd" d="M1 8a7 7 0 1114 0A7 7 0 011 8zm7.75-4.25a.75.75 0 00-1.5 0V8c0 .414.336.75.75.75h3.25a.75.75 0 000-1.5h-2.5v-3.5z" clipRule="evenodd" />
+                  </svg>
+                  15-round snake draft
+                </div>
+                <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-banana/40">
+                    <path fillRule="evenodd" d="M8 1.75a.75.75 0 01.692.462l1.41 3.393 3.664.293a.75.75 0 01.428 1.317l-2.791 2.39.853 3.574a.75.75 0 01-1.12.791L8 11.722l-3.136 1.917a.75.75 0 01-1.12-.79l.853-3.575-2.79-2.39a.75.75 0 01.427-1.317l3.664-.293 1.41-3.393A.75.75 0 018 1.75z" clipRule="evenodd" />
+                  </svg>
+                  Best ball format
+                </div>
+              </div>
+              {/* Bottom row: button */}
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/[0.06]">
+                <p className="text-white/25 text-[11px]">Draft &amp; done — no weekly lineups</p>
                 {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                   <button
                     onClick={handleEnterDraft}
@@ -1164,94 +1189,87 @@ export default function DraftingPage() {
             </div>
           </div>
 
-          {/* All tiles — 4-col square grid */}
-          <div className="grid grid-cols-4 gap-2">
-            {/* Row 1: How it works */}
-            <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-3 flex flex-col justify-between">
-              <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
-                </svg>
+          {/* How It Works — 2x2 grid */}
+          <div>
+            <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">How it works</h3>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
+                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
+                  </svg>
+                </div>
+                <h4 className="text-white text-[13px] font-medium">10 Players</h4>
+                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Join a lobby, draft starts instantly when full</p>
               </div>
-              <div>
-                <h4 className="text-white text-[12px] font-semibold">10 Players</h4>
-                <p className="text-white/35 text-[10px] mt-0.5 leading-snug">Starts instantly when full</p>
+              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
+                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h4 className="text-white text-[13px] font-medium">Snake Draft</h4>
+                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Fast (30s) or slow (8hr) picks — your choice</p>
               </div>
-            </div>
-            <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-3 flex flex-col justify-between">
-              <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
-                </svg>
+              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
+                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h4 className="text-white text-[13px] font-medium">Team Positions</h4>
+                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Draft <span className="text-white/50">KC QB</span>, <span className="text-white/50">DAL WR1</span> — not players. Top scorer each week, auto-backup on injury.</p>
               </div>
-              <div>
-                <h4 className="text-white text-[12px] font-semibold">Snake Draft</h4>
-                <p className="text-white/35 text-[10px] mt-0.5 leading-snug">30s or 8hr picks</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-3 flex flex-col justify-between">
-              <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="text-white text-[12px] font-semibold">Team Positions</h4>
-                <p className="text-white/35 text-[10px] mt-0.5 leading-snug">Draft KC QB, not players. Auto-backup on injury.</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-3 flex flex-col justify-between">
-              <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="text-white text-[12px] font-semibold">Best Ball</h4>
-                <p className="text-white/35 text-[10px] mt-0.5 leading-snug">No managing. Best scorers auto-picked weekly.</p>
+              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
+                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h4 className="text-white text-[13px] font-medium">Best Ball</h4>
+                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
               </div>
             </div>
-            {/* Row 2: Draft types + guaranteed */}
-            <div
-              className="rounded-xl border border-white/[0.05] aspect-square p-3 flex flex-col justify-between"
-              style={{ background: 'linear-gradient(145deg, rgba(168,85,247,0.06) 0%, transparent 70%)' }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-pro/50">
-                <path d="M11.983 1.907a.75.75 0 00-1.292-.657l-8.5 9.5A.75.75 0 002.75 12h6.572l-1.305 6.093a.75.75 0 001.292.657l8.5-9.5A.75.75 0 0017.25 8h-6.572l1.305-6.093z" />
-              </svg>
-              <div>
-                <span className="text-xl font-bold text-pro block">94%</span>
-                <h4 className="text-white text-[12px] font-medium">Pro</h4>
-              </div>
+          </div>
+
+          {/* Draft Types — 3 cards */}
+          <div>
+            <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">Draft Types</h3>
+            <div className="grid grid-cols-3 gap-2.5">
+              {[
+                { type: 'pro', color: '#a855f7', odds: '94%', label: 'Pro', icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path d="M11.983 1.907a.75.75 0 00-1.292-.657l-8.5 9.5A.75.75 0 002.75 12h6.572l-1.305 6.093a.75.75 0 001.292.657l8.5-9.5A.75.75 0 0017.25 8h-6.572l1.305-6.093z" />
+                  </svg>
+                )},
+                { type: 'hof', color: '#D4AF37', odds: '5%', label: 'Hall of Fame', icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M10 1c-1.828 0-3.623.149-5.371.435a.75.75 0 00-.629.74v.387c-.827.157-1.642.345-2.445.564a.75.75 0 00-.552.698 5 5 0 004.503 5.152 6 6 0 002.946 1.822A1.5 1.5 0 017 12.5v1.5H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H13v-1.5a1.5 1.5 0 01-1.452-1.202 6 6 0 002.946-1.822 5 5 0 004.503-5.152.75.75 0 00-.553-.698A31.804 31.804 0 0016 2.562v-.388a.75.75 0 00-.629-.74A33.227 33.227 0 0010 1zM4.5 5V2.875a31.5 31.5 0 00-2.062.457A3.5 3.5 0 005.5 6.98 6.032 6.032 0 014.5 5zm11 0c0 .717-.155 1.4-.432 2.012.07-.013.14-.027.21-.042A3.5 3.5 0 0017.562 3.3 31.5 31.5 0 0015.5 2.875V5z" clipRule="evenodd" />
+                  </svg>
+                )},
+                { type: 'jackpot', color: '#ef4444', odds: '1%', label: 'Jackpot', icon: (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M13.5 4.938a7 7 0 11-9.006 1.737c.202-.257.59-.218.793.039.278.352.594.672.943.954.332.269.786-.049.773-.476a5.977 5.977 0 01.575-2.729 4.978 4.978 0 002.921 2.012c.456.148.868-.361.665-.787a4.985 4.985 0 01-.29-2.217 7.006 7.006 0 012.626 1.467z" clipRule="evenodd" />
+                    <path d="M12.243 12.093a5.237 5.237 0 01-.1.418c-.332 1.162-1.353 1.989-2.57 1.989H10.5c-1.217 0-2.238-.827-2.57-1.989a5.26 5.26 0 01-.1-.418 2.167 2.167 0 001.742-.344l.428-.304.428.304a2.167 2.167 0 001.742.344l.073-.001z" />
+                  </svg>
+                )},
+              ].map((item) => (
+                <div
+                  key={item.type}
+                  className="rounded-xl p-4 border border-white/[0.05]"
+                  style={{ background: `linear-gradient(145deg, ${item.color}0a 0%, transparent 70%)` }}
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span style={{ color: item.color }} className="opacity-50">{item.icon}</span>
+                    <span className="text-xl font-bold" style={{ color: item.color }}>{item.odds}</span>
+                  </div>
+                  <h4 className="text-white text-[13px] font-medium">{item.label}</h4>
+                </div>
+              ))}
             </div>
-            <div
-              className="rounded-xl border border-white/[0.05] aspect-square p-3 flex flex-col justify-between"
-              style={{ background: 'linear-gradient(145deg, rgba(212,175,55,0.06) 0%, transparent 70%)' }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-hof/50">
-                <path fillRule="evenodd" d="M10 1c-1.828 0-3.623.149-5.371.435a.75.75 0 00-.629.74v.387c-.827.157-1.642.345-2.445.564a.75.75 0 00-.552.698 5 5 0 004.503 5.152 6 6 0 002.946 1.822A1.5 1.5 0 017 12.5v1.5H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H13v-1.5a1.5 1.5 0 01-1.452-1.202 6 6 0 002.946-1.822 5 5 0 004.503-5.152.75.75 0 00-.553-.698A31.804 31.804 0 0016 2.562v-.388a.75.75 0 00-.629-.74A33.227 33.227 0 0010 1zM4.5 5V2.875a31.5 31.5 0 00-2.062.457A3.5 3.5 0 005.5 6.98 6.032 6.032 0 014.5 5zm11 0c0 .717-.155 1.4-.432 2.012.07-.013.14-.027.21-.042A3.5 3.5 0 0017.562 3.3 31.5 31.5 0 0015.5 2.875V5z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <span className="text-xl font-bold text-hof block">5%</span>
-                <h4 className="text-white text-[12px] font-medium">Hall of Fame</h4>
-              </div>
-            </div>
-            <div
-              className="rounded-xl border border-white/[0.05] aspect-square p-3 flex flex-col justify-between"
-              style={{ background: 'linear-gradient(145deg, rgba(239,68,68,0.06) 0%, transparent 70%)' }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-jackpot/50">
-                <path fillRule="evenodd" d="M13.5 4.938a7 7 0 11-9.006 1.737c.202-.257.59-.218.793.039.278.352.594.672.943.954.332.269.786-.049.773-.476a5.977 5.977 0 01.575-2.729 4.978 4.978 0 002.921 2.012c.456.148.868-.361.665-.787a4.985 4.985 0 01-.29-2.217 7.006 7.006 0 012.626 1.467z" clipRule="evenodd" />
-                <path d="M12.243 12.093a5.237 5.237 0 01-.1.418c-.332 1.162-1.353 1.989-2.57 1.989H10.5c-1.217 0-2.238-.827-2.57-1.989a5.26 5.26 0 01-.1-.418 2.167 2.167 0 001.742-.344l.428-.304.428.304a2.167 2.167 0 001.742.344l.073-.001z" />
-              </svg>
-              <div>
-                <span className="text-xl font-bold text-jackpot block">1%</span>
-                <h4 className="text-white text-[12px] font-medium">Jackpot</h4>
-              </div>
-            </div>
-            <div className="rounded-xl border border-white/[0.05] bg-white/[0.015] aspect-square p-3 flex items-center justify-center">
-              <p className="text-white/20 text-[10px] text-center leading-relaxed">Type revealed before draft &middot; Guaranteed distribution</p>
-            </div>
+            <p className="text-white/20 text-[10px] text-center mt-2">
+              Revealed before your draft begins &middot; 1 Jackpot, 5 HOF, 94 Pro per 100 — guaranteed
+            </p>
           </div>
         </div>
       )}
