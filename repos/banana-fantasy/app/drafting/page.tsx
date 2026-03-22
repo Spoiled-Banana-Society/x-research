@@ -1253,7 +1253,6 @@ export default function DraftingPage() {
               <p className="text-white/20 text-[10px] text-center leading-relaxed">Type revealed before draft &middot; Guaranteed distribution</p>
             </div>
           </div>
-          </div>
         </div>
       )}
         </div>
