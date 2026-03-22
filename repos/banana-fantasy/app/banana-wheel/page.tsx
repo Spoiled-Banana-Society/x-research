@@ -15,7 +15,7 @@ import { usePromos } from '@/hooks/usePromos';
 import { wheelSegments, type WheelSegment } from '@/lib/wheelConfig';
 
 export default function BananaWheelPage() {
-  const { user, updateUser, isLoading, isBalanceLoaded } = useAuth();
+  const { user, updateUser, isLoading, isBalanceLoaded, walletAddress } = useAuth();
   const wheelQuery = useWheel();
   const promosQuery = usePromos({ userId: user?.id });
   const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
@@ -59,7 +59,7 @@ export default function BananaWheelPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            wallet: user.walletAddress || user.id,
+            wallet: walletAddress || user.walletAddress || user.id,
             type: 'jackpot_queue',
             title: '🔥 You won a Jackpot Draft!',
             message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
@@ -72,7 +72,7 @@ export default function BananaWheelPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            wallet: user.walletAddress || user.id,
+            wallet: walletAddress || user.walletAddress || user.id,
             type: 'hof_queue',
             title: '🏆 You won a HOF Draft!',
             message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
@@ -81,7 +81,7 @@ export default function BananaWheelPage() {
         }).catch(() => {});
       }
     },
-    [updateUser, user],
+    [updateUser, user, walletAddress],
   );
 
   const handleSpecialDraftSpeed = useCallback(
