@@ -54,8 +54,31 @@ export default function BananaWheelPage() {
         updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
         updateUser({ jackpotEntries: (user.jackpotEntries || 0) + 1 });
+        // Send "pick your speed" notification in case they close the popup
+        fetch('/api/marketplace/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wallet: user.walletAddress || user.id,
+            type: 'jackpot_queue',
+            title: '🔥 You won a Jackpot Draft!',
+            message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
+            link: '/special-drafts',
+          }),
+        }).catch(() => {});
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
         updateUser({ hofEntries: (user.hofEntries || 0) + 1 });
+        fetch('/api/marketplace/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wallet: user.walletAddress || user.id,
+            type: 'hof_queue',
+            title: '🏆 You won a HOF Draft!',
+            message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
+            link: '/special-drafts',
+          }),
+        }).catch(() => {});
       }
     },
     [updateUser, user],
