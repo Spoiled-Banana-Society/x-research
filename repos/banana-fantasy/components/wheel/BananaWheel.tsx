@@ -9,6 +9,7 @@ interface BananaWheelProps {
   spinsAvailable: number;
   onSpin: () => Promise<WheelSpinOutcome | null>;
   onSpinComplete?: (outcome: WheelSpinOutcome, segment: WheelSegment | null) => void;
+  onSpecialDraftSpeed?: (type: 'jackpot' | 'hof', speed: 'fast' | 'slow' | 'any') => void;
 }
 
 function fireCelebration(segment: WheelSegment) {
@@ -77,7 +78,7 @@ function getPrizeMessage(segment: WheelSegment): string {
   return 'Added to your balance';
 }
 
-export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete }: BananaWheelProps) {
+export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialDraftSpeed }: BananaWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [wonSegment, setWonSegment] = useState<WheelSegment | null>(null);
@@ -384,6 +385,32 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete }: BananaWh
               >
                 {getPrizeMessage(wonSegment)}
               </p>
+
+              {/* Speed selection for Jackpot/HOF wins */}
+              {(wonSegment.id === 'jackpot' || wonSegment.id === 'hof') && onSpecialDraftSpeed && (
+                <div style={{ animation: 'fadeIn 0.6s ease-out 0.6s both' }}>
+                  <p className="text-white/60 text-xs uppercase tracking-wider mb-3">Pick your draft speed</p>
+                  <div className="flex gap-2 mb-2">
+                    {[
+                      { label: '⚡ 30 sec', value: 'fast' as const, desc: 'Live draft' },
+                      { label: '🕐 8 hour', value: 'slow' as const, desc: 'Draft over days' },
+                      { label: '🤷 Either', value: 'any' as const, desc: 'Fastest to fill' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          onSpecialDraftSpeed(wonSegment.id as 'jackpot' | 'hof', opt.value);
+                          setWonSegment(null);
+                        }}
+                        className="flex-1 py-3 px-2 rounded-xl text-sm font-semibold transition-all border border-white/20 hover:border-banana hover:bg-banana/10 text-white"
+                      >
+                        <span className="block text-base">{opt.label}</span>
+                        <span className="block text-[10px] text-white/40 mt-0.5">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
             </div>
           </div>

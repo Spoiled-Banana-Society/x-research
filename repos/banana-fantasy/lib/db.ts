@@ -24,6 +24,4 @@ export const getExposure = db.getExposure;
 export const getDraftHistory = db.getDraftHistory;
 export const getQueueStatus = db.getQueueStatus;
 export const joinQueue = db.joinQueue;
-export const leaveQueue = db.leaveQueue;
-export const voteQueueSpeed = db.voteQueueSpeed;
 export const resetQueue = db.resetQueue;

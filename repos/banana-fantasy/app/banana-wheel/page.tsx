@@ -9,6 +9,7 @@ const BananaWheel = dynamic(() => import('@/components/wheel/BananaWheel').then(
 });
 import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { useAuth } from '@/hooks/useAuth';
+import { fetchJson } from '@/lib/appApiClient';
 import { useWheel, type WheelSpinOutcome } from '@/hooks/useWheel';
 import { usePromos } from '@/hooks/usePromos';
 import { wheelSegments, type WheelSegment } from '@/lib/wheelConfig';
@@ -47,6 +48,27 @@ export default function BananaWheelPage() {
       }
     },
     [updateUser, user],
+  );
+
+  const handleSpecialDraftSpeed = useCallback(
+    async (type: 'jackpot' | 'hof', speed: 'fast' | 'slow' | 'any') => {
+      if (!user?.id) return;
+      try {
+        await fetchJson('/api/queues', {
+          method: 'POST',
+          body: JSON.stringify({ userId: user.id, queueType: type, speed }),
+        });
+        // Entry was consumed by queue join — decrement locally
+        if (type === 'jackpot') {
+          updateUser({ jackpotEntries: Math.max(0, (user.jackpotEntries || 0) - 1) });
+        } else {
+          updateUser({ hofEntries: Math.max(0, (user.hofEntries || 0) - 1) });
+        }
+      } catch (err) {
+        console.error('[Wheel] Failed to join queue:', err);
+      }
+    },
+    [user, updateUser],
   );
 
   const prizeSummary = useMemo(() => {
@@ -190,6 +212,7 @@ export default function BananaWheelPage() {
             spinsAvailable={spinsAvailable}
             onSpin={handleSpin}
             onSpinComplete={handleSpinComplete}
+            onSpecialDraftSpeed={handleSpecialDraftSpeed}
           />
         </div>
 
