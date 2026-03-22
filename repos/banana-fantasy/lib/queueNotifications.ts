@@ -1,18 +1,29 @@
 /**
  * Send notifications for special draft queue events.
- * Uses the marketplace notifications API (Firestore-backed).
+ * Writes directly to Firestore (server-side) — no HTTP needed.
  */
 
-const API_BASE = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_APP_URL || '');
+import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
+
+const COLLECTION = 'marketplace_notifications';
 
 async function sendNotification(wallet: string, type: string, title: string, message: string, link?: string) {
+  if (!isFirestoreConfigured()) return;
   try {
-    await fetch(`${API_BASE}/api/marketplace/notifications`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet, type, title, message, link: link || '/special-drafts' }),
+    const db = getAdminFirestore();
+    await db.collection(COLLECTION).add({
+      wallet: wallet.toLowerCase(),
+      type,
+      title,
+      message,
+      link: link || '/special-drafts',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
     });
-  } catch {}
+  } catch (err) {
+    console.error('[QueueNotif] Failed to send:', err);
+  }
 }
 
 /** Notify user they've been queued after picking speed */
@@ -23,11 +34,12 @@ export async function notifyQueueJoined(
   draftCount: number,
 ) {
   const label = type === 'jackpot' ? 'Jackpot' : 'HOF';
+  const emoji = type === 'jackpot' ? '🔥' : '🏆';
   const speedText = speed === 'any' ? 'either speed' : speed === 'fast' ? '30-second' : '8-hour';
   await sendNotification(
     wallet,
     `${type}_queue`,
-    `${type === 'jackpot' ? '🔥' : '🏆'} ${label} Draft Queued!`,
+    `${emoji} ${label} Draft Queued!`,
     `You're in ${draftCount} ${label} draft queue${draftCount !== 1 ? 's' : ''} (${speedText}). Once 10 winners fill a queue, the draft starts 48 hours later. We'll notify you!`,
   );
 }
@@ -40,6 +52,7 @@ export async function notifyQueueFilled(
   scheduledTime: number,
 ) {
   const label = type === 'jackpot' ? 'Jackpot' : 'HOF';
+  const emoji = type === 'jackpot' ? '🔥' : '🏆';
   const speedText = speed === 'fast' ? '30-second' : '8-hour';
   const dateStr = new Date(scheduledTime).toLocaleString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric',
@@ -50,7 +63,7 @@ export async function notifyQueueFilled(
     sendNotification(
       wallet,
       `${type}_queue`,
-      `${type === 'jackpot' ? '🔥' : '🏆'} ${label} Draft Scheduled!`,
+      `${emoji} ${label} Draft Scheduled!`,
       `10 winners are in! Your ${speedText} ${label} draft starts ${dateStr}. We'll remind you before it begins.`,
     )
   );
