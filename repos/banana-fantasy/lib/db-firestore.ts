@@ -881,23 +881,13 @@ export async function joinQueue(
     const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
     const availableEntries = (user as Record<string, unknown>)[entryField] as number || 0;
 
-    // Step 1: Count how many filling rounds this user is currently in (across both speeds)
-    let slotsToReclaim = 0;
-    for (const q of Object.values(both)) {
-      for (const r of q.rounds) {
-        if (r.status === 'filling' && r.members.some(m => m.wallet === userId)) {
-          slotsToReclaim++;
-        }
-      }
-    }
-    // For "don't care", each ENTRY is in both queues. So count unique entries, not slots.
-    // If in fast round 1 + slow round 1 = 1 entry (mirrored), not 2.
-    // Use: max(fastSlots, slowSlots) as actual entries queued
+    // If user has new entries, use exactly that count.
+    // If no new entries (just switching speed), reclaim from existing filling rounds.
     const fastSlots = fastQ.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
     const slowSlots = slowQ.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
     const entriesAlreadyQueued = Math.max(fastSlots, slowSlots);
 
-    const totalEntries = availableEntries + entriesAlreadyQueued;
+    const totalEntries = availableEntries > 0 ? availableEntries : entriesAlreadyQueued;
     if (totalEntries <= 0) {
       throw new ApiError(400, `No ${type} entries available`);
     }
