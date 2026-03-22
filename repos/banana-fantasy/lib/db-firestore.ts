@@ -928,16 +928,15 @@ export async function joinQueue(
         }
 
         targetRound.members.push({ wallet: userId, joinedAt: Date.now() });
-      }
 
-      // If round filled, schedule it
-      if (targetRound.members.length >= QUEUE_MAX) {
-        targetRound.status = 'scheduled';
-        targetRound.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
+        // If round filled, schedule it
+        if (targetRound.members.length >= QUEUE_MAX) {
+          targetRound.status = 'scheduled';
+          targetRound.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
 
-        // Remove these members from filling rounds in the OTHER speed queue
-        if (speed === 'any') {
-          const otherQ = queues[(entry % queues.length) === 0 ? 1 : 0];
+          // Remove these members from filling rounds in the OTHER speed queue
+          const otherSpeed = q.draftSpeed === 'fast' ? 'slow' : 'fast';
+          const otherQ = allQueues[otherSpeed as 'fast' | 'slow'];
           if (otherQ) {
             const filledWallets = new Set(targetRound.members.map(m => m.wallet));
             for (const r of otherQ.rounds) {
@@ -948,8 +947,6 @@ export async function joinQueue(
           }
         }
       }
-
-      placed++;
     }
 
     // Write BOTH queue docs back (even if only one speed was targeted,
