@@ -9,6 +9,7 @@ import type {
   Contest,
   DraftQueue,
   LeaderboardEntry,
+  QueueRound,
   Promo,
   PrizeWithdrawal,
   Purchase,
@@ -798,8 +799,6 @@ export async function getDraftHistory(userId: string): Promise<CompletedDraft[]>
 // Each queue (e.g. jackpot-fast) has multiple ROUNDS. A user with N entries
 // gets placed in N separate rounds (never twice in the same round).
 // When a round fills to 10, it schedules 48hrs out.
-
-import type { QueueRound } from '@/types';
 
 const QUEUES_COLLECTION = 'v2_queues';
 const QUEUE_MAX = 10;
