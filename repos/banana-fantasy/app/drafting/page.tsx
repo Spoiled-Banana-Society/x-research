@@ -1134,42 +1134,10 @@ export default function DraftingPage() {
             style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10) 0%, rgba(251,191,36,0.03) 60%, transparent 100%)' }}
           >
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, rgba(251,191,36,0.5) 0%, transparent 50%)' }} />
-            <div className="relative p-5">
-              {/* Top row: title + $100K */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-banana/60 text-[10px] font-semibold uppercase tracking-[0.2em]">Season 4</span>
-                  <h2 className="text-xl font-bold text-white mt-0.5">Banana Best Ball</h2>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-black text-banana leading-none">$100K</p>
-                  <p className="text-white/25 text-[10px] uppercase tracking-wider mt-0.5">Prize Pool</p>
-                </div>
-              </div>
-              {/* Middle: key stats */}
-              <div className="flex items-center gap-4 mt-4">
-                <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-banana/40">
-                    <path d="M8 8a3 3 0 100-6 3 3 0 000 6zM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 00-11.215 0c-.22.578.254 1.139.872 1.139h9.47z" />
-                  </svg>
-                  10 players
-                </div>
-                <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-banana/40">
-                    <path fillRule="evenodd" d="M1 8a7 7 0 1114 0A7 7 0 011 8zm7.75-4.25a.75.75 0 00-1.5 0V8c0 .414.336.75.75.75h3.25a.75.75 0 000-1.5h-2.5v-3.5z" clipRule="evenodd" />
-                  </svg>
-                  15-round snake draft
-                </div>
-                <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-banana/40">
-                    <path fillRule="evenodd" d="M8 1.75a.75.75 0 01.692.462l1.41 3.393 3.664.293a.75.75 0 01.428 1.317l-2.791 2.39.853 3.574a.75.75 0 01-1.12.791L8 11.722l-3.136 1.917a.75.75 0 01-1.12-.79l.853-3.575-2.79-2.39a.75.75 0 01.427-1.317l3.664-.293 1.41-3.393A.75.75 0 018 1.75z" clipRule="evenodd" />
-                  </svg>
-                  Best ball format
-                </div>
-              </div>
-              {/* Bottom row: button */}
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/[0.06]">
-                <p className="text-white/25 text-[11px]">Draft &amp; done — no weekly lineups</p>
+            <div className="relative px-5 py-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Banana Best Ball IV</h2>
+              <div className="flex items-center gap-4">
+                <p className="text-white/40 text-sm">$100K Prize Pool</p>
                 {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                   <button
                     onClick={handleEnterDraft}
