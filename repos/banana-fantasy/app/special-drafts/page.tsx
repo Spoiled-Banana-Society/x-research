@@ -5,10 +5,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue } from '@/types';
 
-function JoinSection({ type, entries, userId, onJoined }: {
+function JoinSection({ type, entries, userId, queues, onJoined }: {
   type: 'jackpot' | 'hof';
   entries: number;
   userId: string;
+  queues: Record<string, DraftQueue>;
   onJoined: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -16,7 +17,13 @@ function JoinSection({ type, entries, userId, onJoined }: {
   const color = isJackpot ? '#ef4444' : '#D4AF37';
   const label = isJackpot ? 'Jackpot' : 'HOF';
 
+  // Determine current selection from queue membership
+  const inFast = queues[`${type}-fast`]?.members.some(m => m.wallet === userId) ?? false;
+  const inSlow = queues[`${type}-slow`]?.members.some(m => m.wallet === userId) ?? false;
+  const currentSpeed: 'fast' | 'slow' | 'any' | null = inFast && inSlow ? 'any' : inFast ? 'fast' : inSlow ? 'slow' : null;
+
   const handleJoin = async (speed: 'fast' | 'slow' | 'any') => {
+    if (speed === currentSpeed) return; // Already selected
     setLoading(true);
     try {
       await fetchJson('/api/queues', {
@@ -31,6 +38,12 @@ function JoinSection({ type, entries, userId, onJoined }: {
     }
   };
 
+  const options = [
+    { label: '⚡ 30 sec', value: 'fast' as const, desc: 'Live draft' },
+    { label: '🕐 8 hour', value: 'slow' as const, desc: 'Draft over days' },
+    { label: '🤷 Don\'t care', value: 'any' as const, desc: 'Joins both — you draft in whichever fills first' },
+  ];
+
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
       <div className="flex items-center gap-2 mb-3">
@@ -38,23 +51,34 @@ function JoinSection({ type, entries, userId, onJoined }: {
         <span className="font-bold" style={{ color }}>{label}</span>
         <span className="text-white/40 text-sm">— {entries} {entries === 1 ? 'entry' : 'entries'} available</span>
       </div>
-      <p className="text-white/50 text-sm mb-3">Pick your draft speed to join a queue:</p>
+      <p className="text-white/50 text-sm mb-3">
+        {currentSpeed ? 'Change your draft speed:' : 'Pick your draft speed to join a queue:'}
+      </p>
       <div className="flex gap-2">
-        {[
-          { label: '⚡ 30 sec', value: 'fast' as const },
-          { label: '🕐 8 hour', value: 'slow' as const },
-          { label: '🤷 Either', value: 'any' as const },
-        ].map(opt => (
-          <button
-            key={opt.value}
-            onClick={() => handleJoin(opt.value)}
-            disabled={loading}
-            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all border border-white/20 hover:border-banana hover:bg-banana/10 text-white disabled:opacity-50"
-          >
-            {opt.label}
-          </button>
-        ))}
+        {options.map(opt => {
+          const isSelected = currentSpeed === opt.value;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => handleJoin(opt.value)}
+              disabled={loading || isSelected}
+              className={`flex-1 py-3 px-2 rounded-xl text-sm font-semibold transition-all border ${
+                isSelected
+                  ? 'border-banana bg-banana/15 text-banana'
+                  : 'border-white/20 hover:border-banana hover:bg-banana/10 text-white'
+              } disabled:opacity-70`}
+            >
+              <span className="block">{opt.label}</span>
+              <span className="block text-[10px] mt-0.5 font-normal text-white/40">{opt.desc}</span>
+            </button>
+          );
+        })}
       </div>
+      {currentSpeed === 'any' && (
+        <p className="text-white/30 text-xs mt-2 text-center">
+          You're in both queues but will only draft in one — whichever fills to 10 first.
+        </p>
+      )}
     </div>
   );
 }
@@ -156,11 +180,11 @@ export default function SpecialDraftsPage() {
         {/* Join buttons for users with entries */}
         {isLoggedIn && user && ((user.jackpotEntries || 0) > 0 || (user.hofEntries || 0) > 0) && (
           <div className="space-y-4 mb-8">
-            {(user.jackpotEntries || 0) > 0 && (
-              <JoinSection type="jackpot" entries={user.jackpotEntries || 0} userId={user.id} onJoined={fetchQueues} />
+            {(user.jackpotEntries || 0) > 0 && queues && (
+              <JoinSection type="jackpot" entries={user.jackpotEntries || 0} userId={user.id} queues={queues} onJoined={fetchQueues} />
             )}
-            {(user.hofEntries || 0) > 0 && (
-              <JoinSection type="hof" entries={user.hofEntries || 0} userId={user.id} onJoined={fetchQueues} />
+            {(user.hofEntries || 0) > 0 && queues && (
+              <JoinSection type="hof" entries={user.hofEntries || 0} userId={user.id} queues={queues} onJoined={fetchQueues} />
             )}
           </div>
         )}

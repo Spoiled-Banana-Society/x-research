@@ -846,13 +846,30 @@ export async function joinQueue(
     const user = userSnap.data() as User;
     const queueSnaps = await Promise.all(queueRefs.map(r => tx.get(r)));
 
-    // Validate entry
-    const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
-    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
-    if (entries <= 0) throw new ApiError(400, `No ${type} entries available`);
+    // Check if already in any queue for this type (switching speed)
+    const allSpeedRefs = ['fast', 'slow'].map(s => db.collection(QUEUES_COLLECTION).doc(queueId(type, s as 'fast' | 'slow')));
+    const allSnaps = await Promise.all(allSpeedRefs.map(r => tx.get(r)));
+    const alreadyQueued = allSnaps.some(s => s.exists && (s.data() as DraftQueue).members.some(m => m.wallet === userId));
 
-    // Consume one entry
-    tx.set(userRef, { [entryField]: entries - 1 }, { merge: true });
+    if (!alreadyQueued) {
+      // New join — validate and consume entry
+      const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
+      const entries = (user as Record<string, unknown>)[entryField] as number || 0;
+      if (entries <= 0) throw new ApiError(400, `No ${type} entries available`);
+      tx.set(userRef, { [entryField]: entries - 1 }, { merge: true });
+    } else {
+      // Switching speed — remove from all existing queues first (no entry cost)
+      for (const snap of allSnaps) {
+        if (!snap.exists) continue;
+        const q = snap.data() as DraftQueue;
+        if (q.status !== 'filling') continue; // Can't leave scheduled/drafting queues
+        const idx = q.members.findIndex(m => m.wallet === userId);
+        if (idx !== -1) {
+          q.members.splice(idx, 1);
+          tx.set(snap.ref, q);
+        }
+      }
+    }
 
     const result: Record<string, DraftQueue> = {};
 
