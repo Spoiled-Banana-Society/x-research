@@ -62,32 +62,46 @@ Richard's commits have REPEATEDLY overwritten Boris's work because of stale loca
 3. **BEFORE pushing, verify:** `git diff --stat HEAD~1` — if you see files you didn't touch, STOP. You're about to overwrite someone else's work. Unstage those files and re-commit.
 4. **If pushing to sbs-frontend-v2 (banana-fantasy remote), pull there too:** `cd ~/banana-fantasy && git pull origin main` before committing.
 
-### Pre-Push Hook (RECOMMENDED — Set Up On First Session)
-Boris has a pre-push hook that blocks pushes if the sync hasn't been done recently. Richard should set up the same thing. Run this ONCE:
+### Pre-Push Hook (MANDATORY — Set Up On First Session)
+Both Boris and Richard have pre-push hooks that block pushes unless the other person's latest commits have been synced. The marker file must contain the actual commit hash — cannot be faked with `touch`. Run this ONCE:
 
 ```bash
-# Create the pre-push hook
-cat > ~/banana-fantasy/.git/hooks/pre-push << 'HOOKEOF'
+# Create the pre-push hook (Richard's version checks origin/boris, Boris's checks origin/richard)
+# Replace YOUR_BRANCH with "boris" if you're Richard, or "richard" if you're Boris
+OTHER_BRANCH="boris"  # Richard checks Boris's branch; Boris checks Richard's branch
+
+cat > ~/banana-fantasy/.git/hooks/pre-push << HOOKEOF
 #!/bin/bash
+SHARED=~/sbs-claude-shared-workspace
 MARKER=~/banana-fantasy/.last-richard-sync
-MAX_AGE=600
-if [ ! -f "$MARKER" ]; then
-  echo ""; echo "⛔ PUSH BLOCKED — You haven't synced with the shared workspace!"
-  echo "Pull latest, merge, then: touch ~/banana-fantasy/.last-richard-sync"; echo ""
+LATEST=\$(cd "\$SHARED" && git fetch origin --quiet 2>/dev/null && git rev-parse origin/${OTHER_BRANCH} 2>/dev/null)
+if [ -z "\$LATEST" ]; then
+  echo ""; echo "⛔ PUSH BLOCKED — Could not fetch origin/${OTHER_BRANCH} from shared workspace."
+  echo "Run: cd ~/sbs-claude-shared-workspace && git fetch origin"; echo ""
   exit 1
 fi
-AGE=$(( $(date +%s) - $(stat -f %m "$MARKER") ))
-if [ "$AGE" -gt "$MAX_AGE" ]; then
-  echo ""; echo "⛔ PUSH BLOCKED — Sync is stale ($(( AGE / 60 ))m ago). Re-sync first."
-  echo "touch ~/banana-fantasy/.last-richard-sync"; echo ""
+if [ ! -f "\$MARKER" ]; then
+  echo ""; echo "⛔ PUSH BLOCKED — You haven't synced! Latest ${OTHER_BRANCH}: \$LATEST"
+  echo "Run the full sync, then set marker."; echo ""
   exit 1
 fi
-echo "✓ Sync is fresh ($(( AGE / 60 ))m ago) — push allowed."
+SYNCED=\$(cat "\$MARKER" 2>/dev/null)
+if [ "\$SYNCED" != "\$LATEST" ]; then
+  echo ""; echo "⛔ PUSH BLOCKED — ${OTHER_BRANCH} pushed new commits since your last sync!"
+  echo "Your sync:  \$SYNCED"; echo "Latest:     \$LATEST"; echo ""
+  exit 1
+fi
+echo "✓ Sync verified (\${LATEST:0:7}) — push allowed."
 HOOKEOF
 chmod +x ~/banana-fantasy/.git/hooks/pre-push
 ```
 
-After syncing with the shared workspace, always run: `touch ~/banana-fantasy/.last-richard-sync`
+After syncing, set the marker with the actual commit hash (NOT `touch`):
+```bash
+cd ~/sbs-claude-shared-workspace && git rev-parse origin/boris > ~/banana-fantasy/.last-richard-sync
+# Or for Boris:
+cd ~/sbs-claude-shared-workspace && git rev-parse origin/richard > ~/banana-fantasy/.last-richard-sync
+```
 
 ## Company Overview
 - **Company:** Spoiled Banana Society (SBS)
