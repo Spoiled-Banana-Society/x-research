@@ -911,23 +911,24 @@ export async function joinQueue(
     // Build target queues array
     const queues = targetSpeeds.map(s => allQueues[s]);
 
-    // Distribute entries across rounds (round-robin across speeds if 'any')
-    let placed = 0;
+    // Distribute entries across rounds.
+    // 'any' = each entry goes in BOTH fast and slow (user drafts in whichever fills first).
+    // 'fast'/'slow' = each entry goes in one queue only.
     for (let entry = 0; entry < totalToPlace; entry++) {
-      const q = queues[entry % queues.length]; // Round-robin for 'any'
+      for (const q of queues) {
+        // Find first filling round where user isn't already in
+        let targetRound = q.rounds.find(
+          r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
+        );
 
-      // Find first filling round where user isn't already in
-      let targetRound = q.rounds.find(
-        r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
-      );
+        // No suitable round — create one
+        if (!targetRound) {
+          targetRound = newRound(q.nextRoundId++);
+          q.rounds.push(targetRound);
+        }
 
-      // No suitable round — create one
-      if (!targetRound) {
-        targetRound = newRound(q.nextRoundId++);
-        q.rounds.push(targetRound);
+        targetRound.members.push({ wallet: userId, joinedAt: Date.now() });
       }
-
-      targetRound.members.push({ wallet: userId, joinedAt: Date.now() });
 
       // If round filled, schedule it
       if (targetRound.members.length >= QUEUE_MAX) {
