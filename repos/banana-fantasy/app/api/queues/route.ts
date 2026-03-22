@@ -10,8 +10,9 @@ export async function GET() {
     return json(status, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error(err);
-    return jsonError('Internal Server Error', 500);
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    console.error('[Queue API]', msg);
+    return jsonError(msg, 500);
   }
 }
 
@@ -35,7 +36,8 @@ export async function POST(req: Request) {
     return json({ queues: result }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error(err);
-    return jsonError('Internal Server Error', 500);
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    console.error('[Queue API]', msg);
+    return jsonError(msg, 500);
   }
 }
