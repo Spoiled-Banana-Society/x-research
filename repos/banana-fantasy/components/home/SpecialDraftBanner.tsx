@@ -15,15 +15,20 @@ export function SpecialDraftBanner() {
     if (!isLoggedIn || !user?.id) return;
     fetchJson<Record<string, DraftQueue>>('/api/queues')
       .then(queues => {
-        let count = 0;
-        for (const q of Object.values(queues)) {
-          for (const r of q.rounds || []) {
-            if (r.status === 'filling' || r.status === 'scheduled') {
-              if (r.members.some(m => m.wallet === user.id)) count++;
-            }
-          }
+        // Count unique drafts per type (max of fast/slow, since "don't care" mirrors)
+        const types = new Set(Object.values(queues).map(q => q.type));
+        let total = 0;
+        for (const t of types) {
+          const typeQueues = Object.values(queues).filter(q => q.type === t);
+          const counts = typeQueues.map(q =>
+            (q.rounds || []).filter(r =>
+              (r.status === 'filling' || r.status === 'scheduled') &&
+              r.members.some(m => m.wallet === user.id)
+            ).length
+          );
+          total += Math.max(...counts, 0);
         }
-        setQueuedCount(count);
+        setQueuedCount(total);
       })
       .catch(() => {});
   }, [isLoggedIn, user?.id]);
@@ -56,7 +61,7 @@ export function SpecialDraftBanner() {
                 </p>
               ) : (
                 <p className="text-white font-semibold text-sm sm:text-base">
-                  You're in <span className="text-banana">{queuedCount}</span> special draft queue{queuedCount !== 1 ? 's' : ''}
+                  You have <span className="text-banana">{queuedCount}</span> special draft{queuedCount !== 1 ? 's' : ''} queued
                 </p>
               )}
               <p className="text-white/40 text-xs sm:text-sm">
