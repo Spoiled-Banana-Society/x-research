@@ -28,3 +28,21 @@ export async function POST(req: Request) {
     return jsonError('Internal Server Error', 500);
   }
 }
+
+// Also handle queue reset
+export async function DELETE(req: Request) {
+  try {
+    const { getAdminFirestore } = await import('@/lib/firebaseAdmin');
+    const db = getAdminFirestore();
+    const ids = ['jackpot-fast', 'jackpot-slow', 'hof-fast', 'hof-slow'];
+    for (const id of ids) {
+      const [type, speed] = id.split('-');
+      await db.collection('v2_queues').doc(id).set({
+        type, draftSpeed: speed, rounds: [], nextRoundId: 1,
+      });
+    }
+    return new Response(JSON.stringify({ success: true, reset: ids }), { status: 200 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+  }
+}
