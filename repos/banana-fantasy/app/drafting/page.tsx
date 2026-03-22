@@ -1130,7 +1130,7 @@ export default function DraftingPage() {
         <div className="space-y-3">
           {/* Hero CTA — square-ish */}
           <div
-            className="rounded-2xl overflow-hidden border border-banana/10 relative aspect-[2.2/1]"
+            className="rounded-2xl overflow-hidden border border-banana/10 relative"
             style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10) 0%, rgba(251,191,36,0.03) 60%, transparent 100%)' }}
           >
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, rgba(251,191,36,0.5) 0%, transparent 50%)' }} />
@@ -1171,7 +1171,7 @@ export default function DraftingPage() {
             <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">How it works</h3>
             <div className="grid grid-cols-2 gap-2.5">
               {/* 10 Players */}
-              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3.5 flex flex-col justify-between">
                 <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
@@ -1183,7 +1183,7 @@ export default function DraftingPage() {
                 </div>
               </div>
               {/* Snake Draft */}
-              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3.5 flex flex-col justify-between">
                 <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
@@ -1195,7 +1195,7 @@ export default function DraftingPage() {
                 </div>
               </div>
               {/* Team Positions */}
-              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3.5 flex flex-col justify-between">
                 <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
@@ -1207,7 +1207,7 @@ export default function DraftingPage() {
                 </div>
               </div>
               {/* Best Ball */}
-              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] aspect-square p-4 flex flex-col justify-between">
+              <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3.5 flex flex-col justify-between">
                 <div className="w-8 h-8 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
                     <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
@@ -1245,7 +1245,7 @@ export default function DraftingPage() {
               ].map((item) => (
                 <div
                   key={item.type}
-                  className="rounded-xl border border-white/[0.05] aspect-square p-4 flex flex-col justify-between"
+                  className="rounded-xl border border-white/[0.05] p-3.5 flex flex-col justify-between"
                   style={{ background: `linear-gradient(145deg, ${item.color}0a 0%, transparent 70%)` }}
                 >
                   <span style={{ color: item.color }} className="opacity-50">{item.icon}</span>
