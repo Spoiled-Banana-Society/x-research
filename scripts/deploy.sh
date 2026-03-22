@@ -17,8 +17,11 @@ fi
 cd "$DEPLOY_REPO"
 git pull origin main
 
-# Touch sync marker for pre-push hook
-touch "$HOME/sbs-claude-shared-workspace/.last-richard-sync"
+# Write sync marker with Boris's latest commit hash (for pre-push hook)
+BORIS_HASH=$(cd "$HOME/sbs-claude-shared-workspace" && git fetch origin --quiet 2>/dev/null && git rev-parse origin/boris 2>/dev/null)
+if [ -n "$BORIS_HASH" ]; then
+  echo "$BORIS_HASH" > "$HOME/sbs-claude-shared-workspace/.last-richard-sync"
+fi
 
 # 2. Find which files changed in the shared workspace (compared to main)
 cd "$HOME/sbs-claude-shared-workspace"
