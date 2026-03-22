@@ -65,7 +65,9 @@ export function SpecialDraftBanner() {
                 </p>
               )}
               <p className="text-white/40 text-xs sm:text-sm">
-                {hasEntries ? 'Pick your speed and join the queue' : 'Check queue status and countdown'}
+                {hasEntries
+                  ? 'Pick your speed and join the queue'
+                  : 'Waiting for 10 winners to fill · Draft starts 48hrs after · Change speed anytime'}
               </p>
             </div>
           </div>

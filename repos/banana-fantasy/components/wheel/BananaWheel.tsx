@@ -386,11 +386,11 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
                 {getPrizeMessage(wonSegment)}
               </p>
 
-              {/* Speed selection for Jackpot/HOF wins */}
+              {/* Speed selection + info for Jackpot/HOF wins */}
               {(wonSegment.id === 'jackpot' || wonSegment.id === 'hof') && onSpecialDraftSpeed && (
                 <div style={{ animation: 'fadeIn 0.6s ease-out 0.6s both' }}>
                   <p className="text-white/60 text-xs uppercase tracking-wider mb-3">Pick your draft speed</p>
-                  <div className="flex gap-2 mb-2">
+                  <div className="flex gap-2 mb-4">
                     {[
                       { label: '⚡ 30 sec', value: 'fast' as const, desc: 'Live draft' },
                       { label: '🕐 8 hour', value: 'slow' as const, desc: 'Draft over days' },
@@ -408,6 +408,14 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
                         <span className="block text-[10px] text-white/40 mt-0.5">{opt.desc}</span>
                       </button>
                     ))}
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-left space-y-1.5" style={{ animation: 'fadeIn 0.6s ease-out 0.8s both' }}>
+                    <p className="text-white/50 text-xs">
+                      <span className="text-white/70 font-medium">How it works:</span> Once 10 {wonSegment.id === 'jackpot' ? 'Jackpot' : 'HOF'} winners pick the same speed, the draft starts <span className="text-banana font-medium">48 hours</span> later.
+                    </p>
+                    <p className="text-white/40 text-[11px]">
+                      You'll be notified when the queue fills and when the draft is about to start. You can change your speed anytime on the Special Drafts page.
+                    </p>
                   </div>
                 </div>
               )}

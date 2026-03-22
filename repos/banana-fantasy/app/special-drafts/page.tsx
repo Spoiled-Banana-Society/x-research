@@ -134,6 +134,11 @@ function RoundRow({ round, userId, queueLabel }: { round: QueueRound; userId?: s
           }}
         />
       </div>
+      <p className="text-white/30 text-[10px] mt-1">
+        {round.status === 'filling' && `Waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''} · Draft starts 48hrs after filling`}
+        {round.status === 'scheduled' && round.scheduledTime && `Draft scheduled for ${new Date(round.scheduledTime).toLocaleString()} · You'll be notified`}
+        {round.status === 'drafting' && 'Draft is live! Join now'}
+      </p>
     </div>
   );
 }
