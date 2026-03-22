@@ -1186,7 +1186,7 @@ export default function DraftingPage() {
                   </svg>
                 </div>
                 <h4 className="text-white text-[13px] font-medium">Team Positions</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Draft <span className="text-white/50">KC QB</span>, <span className="text-white/50">DAL WR1</span> — not players. Top scorer each week, auto-backup on injury.</p>
+                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Draft <span className="text-white/60 font-medium">KC QB</span> or <span className="text-white/60 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week. Starter gets hurt? You auto-get the backup&apos;s points.</p>
               </div>
               <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
                 <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
