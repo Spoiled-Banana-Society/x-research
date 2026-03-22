@@ -5,6 +5,60 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue } from '@/types';
 
+function JoinSection({ type, entries, userId, onJoined }: {
+  type: 'jackpot' | 'hof';
+  entries: number;
+  userId: string;
+  onJoined: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const isJackpot = type === 'jackpot';
+  const color = isJackpot ? '#ef4444' : '#D4AF37';
+  const label = isJackpot ? 'Jackpot' : 'HOF';
+
+  const handleJoin = async (speed: 'fast' | 'slow' | 'any') => {
+    setLoading(true);
+    try {
+      await fetchJson('/api/queues', {
+        method: 'POST',
+        body: JSON.stringify({ userId, queueType: type, speed }),
+      });
+      onJoined();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to join');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xl">{isJackpot ? '🔥' : '🏆'}</span>
+        <span className="font-bold" style={{ color }}>{label}</span>
+        <span className="text-white/40 text-sm">— {entries} {entries === 1 ? 'entry' : 'entries'} available</span>
+      </div>
+      <p className="text-white/50 text-sm mb-3">Pick your draft speed to join a queue:</p>
+      <div className="flex gap-2">
+        {[
+          { label: '⚡ 30 sec', value: 'fast' as const },
+          { label: '🕐 8 hour', value: 'slow' as const },
+          { label: '🤷 Either', value: 'any' as const },
+        ].map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => handleJoin(opt.value)}
+            disabled={loading}
+            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all border border-white/20 hover:border-banana hover:bg-banana/10 text-white disabled:opacity-50"
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function QueueCard({ queue, userId }: { queue: DraftQueue; userId: string | undefined }) {
   const isJackpot = queue.type === 'jackpot';
   const color = isJackpot ? '#ef4444' : '#D4AF37';
@@ -98,6 +152,18 @@ export default function SpecialDraftsPage() {
           Win Jackpot or HOF on the Banana Wheel → pick your speed → auto-queued.
           Once 10 winners fill a queue, the draft is scheduled 48 hours out.
         </p>
+
+        {/* Join buttons for users with entries */}
+        {isLoggedIn && user && ((user.jackpotEntries || 0) > 0 || (user.hofEntries || 0) > 0) && (
+          <div className="space-y-4 mb-8">
+            {(user.jackpotEntries || 0) > 0 && (
+              <JoinSection type="jackpot" entries={user.jackpotEntries || 0} userId={user.id} onJoined={fetchQueues} />
+            )}
+            {(user.hofEntries || 0) > 0 && (
+              <JoinSection type="hof" entries={user.hofEntries || 0} userId={user.id} onJoined={fetchQueues} />
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-4">
