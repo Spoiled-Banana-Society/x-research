@@ -19,6 +19,17 @@ export default function BananaWheelPage() {
   const wheelQuery = useWheel();
   const promosQuery = usePromos({ userId: user?.id });
   const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
+  // Load spin history from Firestore on mount
+  React.useEffect(() => {
+    if (!user?.id) return;
+    fetchJson<Array<{ spinId: string; date: string; result: string }>>(`/api/wheel/history?userId=${encodeURIComponent(user.id)}`)
+      .then(history => {
+        if (Array.isArray(history) && history.length > 0) {
+          setSpinHistory(history.map(h => ({ id: h.spinId, date: h.date, result: h.result })));
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
   // Track spin-count offset locally so we can decrement immediately on spin
   // without waiting for a server round-trip, while still syncing to the
   // authoritative value from useAuth once it loads.
