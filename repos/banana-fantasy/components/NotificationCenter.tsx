@@ -64,6 +64,19 @@ function saveNotifications(notifs: Notification[]) {
   } catch { /* quota */ }
 }
 
+/** Add a notification from anywhere (no hook needed). Updates localStorage + triggers sync. */
+export function pushNotification(notif: { type: NotificationType; title: string; message: string; link?: string }) {
+  if (typeof window === 'undefined') return;
+  const existing = loadNotifications();
+  const newNotif: Notification = {
+    ...notif,
+    id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+  saveNotifications([newNotif, ...existing]);
+}
+
 function getDefaultNotifications(): Notification[] {
   const now = Date.now();
   return [

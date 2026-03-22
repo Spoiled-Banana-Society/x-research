@@ -10,6 +10,7 @@ const BananaWheel = dynamic(() => import('@/components/wheel/BananaWheel').then(
 import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
+import { pushNotification } from '@/components/NotificationCenter';
 import { useWheel, type WheelSpinOutcome } from '@/hooks/useWheel';
 import { usePromos } from '@/hooks/usePromos';
 import { wheelSegments, type WheelSegment } from '@/lib/wheelConfig';
@@ -25,7 +26,12 @@ export default function BananaWheelPage() {
     fetchJson<Array<{ spinId: string; date: string; result: string }>>(`/api/wheel/history?userId=${encodeURIComponent(user.id)}`)
       .then(history => {
         if (Array.isArray(history) && history.length > 0) {
-          setSpinHistory(history.map(h => ({ id: h.spinId, date: h.date, result: h.result })));
+          // Filter out entries with no result (seeded mock data)
+          setSpinHistory(
+            history
+              .filter(h => h.result && h.spinId)
+              .map(h => ({ id: h.spinId, date: h.date, result: h.result }))
+          );
         }
       })
       .catch(() => {});
@@ -54,31 +60,20 @@ export default function BananaWheelPage() {
         updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
         updateUser({ jackpotEntries: (user.jackpotEntries || 0) + 1 });
-        // Send "pick your speed" notification in case they close the popup
-        fetch('/api/marketplace/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            wallet: walletAddress || user.walletAddress || user.id,
-            type: 'jackpot_queue',
-            title: '🔥 You won a Jackpot Draft!',
-            message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
-            link: '/special-drafts',
-          }),
-        }).catch(() => {});
+        pushNotification({
+          type: 'jackpot_queue',
+          title: '🔥 You won a Jackpot Draft!',
+          message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
+          link: '/special-drafts',
+        });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
         updateUser({ hofEntries: (user.hofEntries || 0) + 1 });
-        fetch('/api/marketplace/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            wallet: walletAddress || user.walletAddress || user.id,
-            type: 'hof_queue',
-            title: '🏆 You won a HOF Draft!',
-            message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
-            link: '/special-drafts',
-          }),
-        }).catch(() => {});
+        pushNotification({
+          type: 'hof_queue',
+          title: '🏆 You won a HOF Draft!',
+          message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
+          link: '/special-drafts',
+        });
       }
     },
     [updateUser, user, walletAddress],
