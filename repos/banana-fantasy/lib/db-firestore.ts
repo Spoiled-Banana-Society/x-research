@@ -868,96 +868,94 @@ export async function joinQueue(
     ]);
     const user = userSnap.data() as User;
 
-    // Migrate old format if needed
     const fastQ: DraftQueue = fastSnap.exists
       ? migrateQueue(fastSnap.data() as Record<string, unknown>, type, 'fast')
       : emptyQueueDoc(type, 'fast');
     const slowQ: DraftQueue = slowSnap.exists
       ? migrateQueue(slowSnap.data() as Record<string, unknown>, type, 'slow')
       : emptyQueueDoc(type, 'slow');
-    const allQueues: Record<'fast' | 'slow', DraftQueue> = { fast: fastQ, slow: slowQ };
+    if (!fastQ.rounds) fastQ.rounds = [];
+    if (!slowQ.rounds) slowQ.rounds = [];
+    const both: Record<'fast' | 'slow', DraftQueue> = { fast: fastQ, slow: slowQ };
 
     const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
-    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
+    const availableEntries = (user as Record<string, unknown>)[entryField] as number || 0;
 
-    // Count existing filling slots for this user
-    let existingSlots = 0;
-    for (const q of Object.values(allQueues)) {
-      existingSlots += (q.rounds || []).filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
+    // Step 1: Count how many filling rounds this user is currently in (across both speeds)
+    let slotsToReclaim = 0;
+    for (const q of Object.values(both)) {
+      for (const r of q.rounds) {
+        if (r.status === 'filling' && r.members.some(m => m.wallet === userId)) {
+          slotsToReclaim++;
+        }
+      }
     }
+    // For "don't care", each ENTRY is in both queues. So count unique entries, not slots.
+    // If in fast round 1 + slow round 1 = 1 entry (mirrored), not 2.
+    // Use: max(fastSlots, slowSlots) as actual entries queued
+    const fastSlots = fastQ.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
+    const slowSlots = slowQ.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
+    const entriesAlreadyQueued = Math.max(fastSlots, slowSlots);
 
-    if (entries <= 0 && existingSlots === 0) {
+    const totalEntries = availableEntries + entriesAlreadyQueued;
+    if (totalEntries <= 0) {
       throw new ApiError(400, `No ${type} entries available`);
     }
 
-    // Remove from all filling rounds (for switching speed or fresh placement)
-    for (const q of Object.values(allQueues)) {
-      if (!q.rounds) { q.rounds = []; continue; }
-      for (const round of q.rounds) {
-        if (round.status !== 'filling') continue;
-        const idx = round.members.findIndex(m => m.wallet === userId);
-        if (idx !== -1) round.members.splice(idx, 1);
+    // Step 2: Remove this user from ALL filling rounds in both queues (clean slate)
+    for (const q of Object.values(both)) {
+      for (const r of q.rounds) {
+        if (r.status !== 'filling') continue;
+        r.members = r.members.filter(m => m.wallet !== userId);
       }
+      // Remove empty filling rounds
       q.rounds = q.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
     }
 
-    const totalToPlace = entries + existingSlots;
-
-    // Consume all remaining entries
-    if (entries > 0) {
+    // Step 3: Consume all available entries (set to 0)
+    if (availableEntries > 0) {
       tx.set(userRef, { [entryField]: 0 }, { merge: true });
     }
 
-    // Build target queues array
-    const queues = targetSpeeds.map(s => allQueues[s]);
+    // Step 4: Place totalEntries into the target queue(s)
+    const targets = targetSpeeds.map(s => both[s]);
 
-    // Distribute entries across rounds.
-    // 'any' = each entry goes in BOTH fast and slow (user drafts in whichever fills first).
-    // 'fast'/'slow' = each entry goes in one queue only.
-    for (let entry = 0; entry < totalToPlace; entry++) {
-      for (const q of queues) {
-        // Find first filling round where user isn't already in
-        let targetRound = q.rounds.find(
+    for (let i = 0; i < totalEntries; i++) {
+      // For each target speed queue, place one slot
+      for (const q of targets) {
+        let round = q.rounds.find(
           r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
         );
-
-        // No suitable round — create one
-        if (!targetRound) {
-          targetRound = newRound(q.nextRoundId++);
-          q.rounds.push(targetRound);
+        if (!round) {
+          round = newRound(q.nextRoundId++);
+          q.rounds.push(round);
         }
+        round.members.push({ wallet: userId, joinedAt: Date.now() });
 
-        targetRound.members.push({ wallet: userId, joinedAt: Date.now() });
-
-        // If round filled, schedule it
-        if (targetRound.members.length >= QUEUE_MAX) {
-          targetRound.status = 'scheduled';
-          targetRound.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
-
-          // Remove these members from filling rounds in the OTHER speed queue
-          const otherSpeed = q.draftSpeed === 'fast' ? 'slow' : 'fast';
-          const otherQ = allQueues[otherSpeed as 'fast' | 'slow'];
-          if (otherQ) {
-            const filledWallets = new Set(targetRound.members.map(m => m.wallet));
-            for (const r of otherQ.rounds) {
-              if (r.status !== 'filling') continue;
-              r.members = r.members.filter(m => !filledWallets.has(m.wallet));
-            }
-            otherQ.rounds = otherQ.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
+        // If full, schedule and clean mirrors
+        if (round.members.length >= QUEUE_MAX) {
+          round.status = 'scheduled';
+          round.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
+          const otherKey = q.draftSpeed === 'fast' ? 'slow' : 'fast';
+          const otherQ = both[otherKey as 'fast' | 'slow'];
+          const filled = new Set(round.members.map(m => m.wallet));
+          for (const r of otherQ.rounds) {
+            if (r.status !== 'filling') continue;
+            r.members = r.members.filter(m => !filled.has(m.wallet));
           }
+          otherQ.rounds = otherQ.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
         }
       }
     }
 
-    // Write BOTH queue docs back (even if only one speed was targeted,
-    // the other may have been modified by dedup/switching)
-    tx.set(fastRef, allQueues.fast);
-    tx.set(slowRef, allQueues.slow);
+    // Step 5: Write both docs
+    tx.set(fastRef, both.fast);
+    tx.set(slowRef, both.slow);
 
-    const result: Record<string, DraftQueue> = {};
-    result[queueId(type, 'fast')] = allQueues.fast;
-    result[queueId(type, 'slow')] = allQueues.slow;
-    return result;
+    return {
+      [queueId(type, 'fast')]: both.fast,
+      [queueId(type, 'slow')]: both.slow,
+    };
   });
 }
 

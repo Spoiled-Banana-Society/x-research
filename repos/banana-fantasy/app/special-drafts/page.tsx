@@ -144,7 +144,12 @@ function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string })
   const label = isJackpot ? 'Jackpot' : 'HOF';
   const speedLabel = queue.draftSpeed === 'fast' ? '30 sec' : '8 hour';
   const speedIcon = queue.draftSpeed === 'fast' ? '⚡' : '🕐';
-  const activeRounds = queue.rounds?.filter(r => r.status !== 'completed') || [];
+  // Only show rounds the user is in (or scheduled/drafting rounds they're in)
+  const activeRounds = (queue.rounds || []).filter(r =>
+    r.status !== 'completed' && (
+      r.members.some(m => m.wallet === userId) || r.status === 'scheduled' || r.status === 'drafting'
+    )
+  );
 
   if (activeRounds.length === 0) return null;
 
