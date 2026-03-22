@@ -816,6 +816,21 @@ function newRound(roundId: number): QueueRound {
   return { roundId, members: [], status: 'filling', scheduledTime: null, draftId: null };
 }
 
+/** Migrate old single-member format to rounds format if needed */
+function migrateQueue(data: Record<string, unknown>, type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): DraftQueue {
+  // New format already has rounds array
+  if (Array.isArray(data.rounds)) return data as unknown as DraftQueue;
+  // Old format had members[] directly — migrate to a single round
+  if (Array.isArray(data.members) && data.members.length > 0) {
+    return {
+      type, draftSpeed: speed,
+      rounds: [{ roundId: 1, members: data.members, status: 'filling' as const, scheduledTime: null, draftId: null }],
+      nextRoundId: 2,
+    };
+  }
+  return emptyQueueDoc(type, speed);
+}
+
 export async function getQueueStatus(): Promise<Record<string, DraftQueue>> {
   const db = getAdminFirestore();
   const ids = ['jackpot-fast', 'jackpot-slow', 'hof-fast', 'hof-slow'];
@@ -823,7 +838,7 @@ export async function getQueueStatus(): Promise<Record<string, DraftQueue>> {
   const result: Record<string, DraftQueue> = {};
   for (let i = 0; i < ids.length; i++) {
     const [type, speed] = ids[i].split('-') as ['jackpot' | 'hof', 'fast' | 'slow'];
-    result[ids[i]] = snaps[i].exists ? (snaps[i].data() as DraftQueue) : emptyQueueDoc(type, speed);
+    result[ids[i]] = snaps[i].exists ? migrateQueue(snaps[i].data() as Record<string, unknown>, type, speed) : emptyQueueDoc(type, speed);
   }
   return result;
 }
@@ -861,6 +876,7 @@ export async function joinQueue(
     for (const snap of allSnaps) {
       if (!snap.exists) continue;
       const q = snap.data() as DraftQueue;
+      if (!q.rounds) continue;
       existingSlots += q.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
     }
 
@@ -875,6 +891,7 @@ export async function joinQueue(
       for (const snap of allSnaps) {
         if (!snap.exists) continue;
         const q = snap.data() as DraftQueue;
+        if (!q.rounds) continue;
         let changed = false;
         for (const round of q.rounds) {
           if (round.status !== 'filling') continue;
