@@ -138,10 +138,29 @@ export async function POST(req: Request) {
     const { segments, segmentAngle } = await getWheelConfig();
     const seed = generateSeed();
     const nonce = generateNonce();
-    const { value: segment, index } = pickWeighted(
-      segments.map((s) => ({ value: s, probability: s.probability })),
-      seed,
-    );
+
+    // Staging: allow forcing a specific result for testing
+    const forceResult = typeof body.forceResult === 'string' ? body.forceResult : null;
+    let segment: typeof segments[number];
+    let index: number;
+
+    if (forceResult) {
+      const forcedIdx = segments.findIndex(s => s.id === forceResult);
+      if (forcedIdx >= 0) {
+        segment = segments[forcedIdx];
+        index = forcedIdx;
+      } else {
+        ({ value: segment, index } = pickWeighted(
+          segments.map((s) => ({ value: s, probability: s.probability })),
+          seed,
+        ));
+      }
+    } else {
+      ({ value: segment, index } = pickWeighted(
+        segments.map((s) => ({ value: s, probability: s.probability })),
+        seed,
+      ));
+    }
 
     const segmentCenter = index * segmentAngle + segmentAngle / 2;
     const angle = (360 - segmentCenter + 360) % 360;

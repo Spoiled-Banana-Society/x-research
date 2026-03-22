@@ -26,10 +26,15 @@ export function useWheel(opts?: { userId?: string }) {
     const token = await privy.getAccessToken();
     if (!token) throw new Error('Missing Privy access token');
 
+    // Staging: check URL for ?forceWheel=jackpot (or hof) to force result
+    const forceResult = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('forceWheel')
+      : null;
+
     const res = await fetchJson<WheelSpinOutcome>('/api/wheel/spin', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ userId, ...(forceResult ? { forceResult } : {}) }),
     });
 
     setHistory((prev) => [res, ...prev]);
