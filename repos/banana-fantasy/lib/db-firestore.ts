@@ -857,74 +857,59 @@ export async function joinQueue(
   await ensureUserSeeded(userId);
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
 
-  const speeds: Array<'fast' | 'slow'> = speed === 'any' ? ['fast', 'slow'] : [speed];
-  const queueRefs = speeds.map(s => db.collection(QUEUES_COLLECTION).doc(queueId(type, s)));
+  const targetSpeeds: Array<'fast' | 'slow'> = speed === 'any' ? ['fast', 'slow'] : [speed];
+  // Always read BOTH speed docs for this type (needed for switching + dedup)
+  const fastRef = db.collection(QUEUES_COLLECTION).doc(queueId(type, 'fast'));
+  const slowRef = db.collection(QUEUES_COLLECTION).doc(queueId(type, 'slow'));
 
   return db.runTransaction(async (tx) => {
-    const userSnap = await tx.get(userRef);
+    const [userSnap, fastSnap, slowSnap] = await Promise.all([
+      tx.get(userRef), tx.get(fastRef), tx.get(slowRef),
+    ]);
     const user = userSnap.data() as User;
-    const queueSnaps = await Promise.all(queueRefs.map(r => tx.get(r)));
 
-    // Count how many entries to consume
+    // Migrate old format if needed
+    const fastQ: DraftQueue = fastSnap.exists
+      ? migrateQueue(fastSnap.data() as Record<string, unknown>, type, 'fast')
+      : emptyQueueDoc(type, 'fast');
+    const slowQ: DraftQueue = slowSnap.exists
+      ? migrateQueue(slowSnap.data() as Record<string, unknown>, type, 'slow')
+      : emptyQueueDoc(type, 'slow');
+    const allQueues: Record<'fast' | 'slow', DraftQueue> = { fast: fastQ, slow: slowQ };
+
     const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
     const entries = (user as Record<string, unknown>)[entryField] as number || 0;
 
-    // Also count how many rounds this user is ALREADY in (across all speeds for this type)
-    const allRefs = ['fast', 'slow'].map(s => db.collection(QUEUES_COLLECTION).doc(queueId(type, s as 'fast' | 'slow')));
-    const allSnaps = await Promise.all(allRefs.map(r => tx.get(r)));
+    // Count existing filling slots for this user
     let existingSlots = 0;
-    for (const snap of allSnaps) {
-      if (!snap.exists) continue;
-      const q = snap.data() as DraftQueue;
-      if (!q.rounds) continue;
-      existingSlots += q.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
+    for (const q of Object.values(allQueues)) {
+      existingSlots += (q.rounds || []).filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
     }
 
-    // Total entries to place = available entries (not yet queued)
-    const entriesToPlace = entries; // All remaining entries
-    if (entriesToPlace <= 0 && existingSlots === 0) {
+    if (entries <= 0 && existingSlots === 0) {
       throw new ApiError(400, `No ${type} entries available`);
     }
 
-    // If switching speed, remove from all filling rounds first and reclaim those slots
-    if (existingSlots > 0) {
-      for (const snap of allSnaps) {
-        if (!snap.exists) continue;
-        const q = snap.data() as DraftQueue;
-        if (!q.rounds) continue;
-        let changed = false;
-        for (const round of q.rounds) {
-          if (round.status !== 'filling') continue;
-          const idx = round.members.findIndex(m => m.wallet === userId);
-          if (idx !== -1) {
-            round.members.splice(idx, 1);
-            changed = true;
-          }
-        }
-        // Clean up empty rounds
-        q.rounds = q.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
-        if (changed) tx.set(snap.ref, q);
+    // Remove from all filling rounds (for switching speed or fresh placement)
+    for (const q of Object.values(allQueues)) {
+      if (!q.rounds) { q.rounds = []; continue; }
+      for (const round of q.rounds) {
+        if (round.status !== 'filling') continue;
+        const idx = round.members.findIndex(m => m.wallet === userId);
+        if (idx !== -1) round.members.splice(idx, 1);
       }
+      q.rounds = q.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
     }
 
-    const totalToPlace = entriesToPlace + existingSlots;
-    if (totalToPlace <= 0) throw new ApiError(400, `No ${type} entries available`);
+    const totalToPlace = entries + existingSlots;
 
     // Consume all remaining entries
-    if (entriesToPlace > 0) {
+    if (entries > 0) {
       tx.set(userRef, { [entryField]: 0 }, { merge: true });
     }
 
-    // Load/init queues for the target speed(s)
-    const queues: DraftQueue[] = [];
-    for (let i = 0; i < speeds.length; i++) {
-      const s = speeds[i];
-      queues.push(
-        queueSnaps[i].exists
-          ? (queueSnaps[i].data() as DraftQueue)
-          : emptyQueueDoc(type, s),
-      );
-    }
+    // Build target queues array
+    const queues = targetSpeeds.map(s => allQueues[s]);
 
     // Distribute entries across rounds (round-robin across speeds if 'any')
     let placed = 0;
@@ -966,13 +951,14 @@ export async function joinQueue(
       placed++;
     }
 
-    // Write all queues back
-    const result: Record<string, DraftQueue> = {};
-    for (let i = 0; i < speeds.length; i++) {
-      tx.set(queueRefs[i], queues[i]);
-      result[queueId(type, speeds[i])] = queues[i];
-    }
+    // Write BOTH queue docs back (even if only one speed was targeted,
+    // the other may have been modified by dedup/switching)
+    tx.set(fastRef, allQueues.fast);
+    tx.set(slowRef, allQueues.slow);
 
+    const result: Record<string, DraftQueue> = {};
+    result[queueId(type, 'fast')] = allQueues.fast;
+    result[queueId(type, 'slow')] = allQueues.slow;
     return result;
   });
 }
