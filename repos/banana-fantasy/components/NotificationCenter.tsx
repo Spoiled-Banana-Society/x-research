@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
-export type NotificationType = 'draft_starting' | 'draft_results' | 'promo' | 'referral' | 'jackpot' | 'hof' | 'system' | 'offer_received' | 'offer_accepted' | 'purchase_complete' | 'sale_complete' | 'listing_created';
+export type NotificationType = 'draft_starting' | 'draft_results' | 'promo' | 'referral' | 'jackpot' | 'hof' | 'jackpot_queue' | 'hof_queue' | 'system' | 'offer_received' | 'offer_accepted' | 'purchase_complete' | 'sale_complete' | 'listing_created';
 
 export interface Notification {
   id: string;
@@ -29,6 +29,8 @@ const TYPE_CONFIG: Record<NotificationType, { emoji: string; color: string }> = 
   referral: { emoji: '🔗', color: '#a855f7' },
   jackpot: { emoji: '🎰', color: '#ef4444' },
   hof: { emoji: '🏆', color: '#d4af37' },
+  jackpot_queue: { emoji: '🔥', color: '#ef4444' },
+  hof_queue: { emoji: '🏆', color: '#d4af37' },
   system: { emoji: '📢', color: '#6b7280' },
   offer_received: { emoji: '💰', color: '#22c55e' },
   offer_accepted: { emoji: '✅', color: '#3b82f6' },

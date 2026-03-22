@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { getQueueStatus, joinQueue } from '@/lib/db';
+import { notifyQueueJoined, notifyQueueFilled } from '@/lib/queueNotifications';
 
 export async function GET() {
   try {
@@ -33,6 +34,31 @@ export async function POST(req: Request) {
     }
 
     const result = await joinQueue(userId, queueType, speed);
+
+    // Send notifications (fire-and-forget, don't block response)
+    const speeds = speed === 'any' ? ['fast', 'slow'] : [speed] as Array<'fast' | 'slow'>;
+    let userDraftCount = 0;
+    for (const s of speeds) {
+      const q = result[`${queueType}-${s}`];
+      if (!q?.rounds) continue;
+      userDraftCount = Math.max(userDraftCount,
+        q.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length
+      );
+      // Notify all members of any rounds that just filled
+      for (const r of q.rounds) {
+        if (r.status === 'scheduled' && r.members.length >= 10 && r.scheduledTime) {
+          notifyQueueFilled(
+            r.members.map(m => m.wallet),
+            queueType, s as 'fast' | 'slow',
+            r.scheduledTime,
+          ).catch(() => {});
+        }
+      }
+    }
+    if (userDraftCount > 0) {
+      notifyQueueJoined(userId, queueType, speed, userDraftCount).catch(() => {});
+    }
+
     return json({ queues: result }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
