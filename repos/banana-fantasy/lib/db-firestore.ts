@@ -795,20 +795,26 @@ export async function getDraftHistory(userId: string): Promise<CompletedDraft[]>
 }
 
 // ==================== SPECIAL DRAFT QUEUES (Jackpot / HOF) ====================
-// Queues are per type AND speed: jackpot-fast, jackpot-slow, hof-fast, hof-slow.
-// "Any" preference players join BOTH speed queues for their type.
-// When a queue fills to 10, it schedules 48hrs out.
+// Each queue (e.g. jackpot-fast) has multiple ROUNDS. A user with N entries
+// gets placed in N separate rounds (never twice in the same round).
+// When a round fills to 10, it schedules 48hrs out.
+
+import type { QueueRound } from '@/types';
 
 const QUEUES_COLLECTION = 'v2_queues';
 const QUEUE_MAX = 10;
 const SCHEDULE_LEAD_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-function emptyQueue(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): DraftQueue {
-  return { type, members: [], status: 'filling', scheduledTime: null, draftSpeed: speed, draftId: null, votingDeadline: null };
-}
-
 function queueId(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): string {
   return `${type}-${speed}`;
+}
+
+function emptyQueueDoc(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): DraftQueue {
+  return { type, draftSpeed: speed, rounds: [], nextRoundId: 1 };
+}
+
+function newRound(roundId: number): QueueRound {
+  return { roundId, members: [], status: 'filling', scheduledTime: null, draftId: null };
 }
 
 export async function getQueueStatus(): Promise<Record<string, DraftQueue>> {
@@ -818,15 +824,15 @@ export async function getQueueStatus(): Promise<Record<string, DraftQueue>> {
   const result: Record<string, DraftQueue> = {};
   for (let i = 0; i < ids.length; i++) {
     const [type, speed] = ids[i].split('-') as ['jackpot' | 'hof', 'fast' | 'slow'];
-    result[ids[i]] = snaps[i].exists ? (snaps[i].data() as DraftQueue) : emptyQueue(type, speed);
+    result[ids[i]] = snaps[i].exists ? (snaps[i].data() as DraftQueue) : emptyQueueDoc(type, speed);
   }
   return result;
 }
 
 /**
- * Join queue(s) when a user wins JP/HOF on the wheel.
- * speed='any' joins both fast and slow queues for that type.
- * Consumes one entry from the user.
+ * Join queue(s) with ALL available entries for a type.
+ * Each entry goes to a separate round (user never appears twice in same round).
+ * speed='any' distributes entries across both fast and slow queues.
  */
 export async function joinQueue(
   userId: string,
@@ -837,7 +843,6 @@ export async function joinQueue(
   await ensureUserSeeded(userId);
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
 
-  // Determine which queue(s) to join
   const speeds: Array<'fast' | 'slow'> = speed === 'any' ? ['fast', 'slow'] : [speed];
   const queueRefs = speeds.map(s => db.collection(QUEUES_COLLECTION).doc(queueId(type, s)));
 
@@ -846,72 +851,110 @@ export async function joinQueue(
     const user = userSnap.data() as User;
     const queueSnaps = await Promise.all(queueRefs.map(r => tx.get(r)));
 
-    // Check if already in any queue for this type (switching speed)
-    const allSpeedRefs = ['fast', 'slow'].map(s => db.collection(QUEUES_COLLECTION).doc(queueId(type, s as 'fast' | 'slow')));
-    const allSnaps = await Promise.all(allSpeedRefs.map(r => tx.get(r)));
-    const alreadyQueued = allSnaps.some(s => s.exists && (s.data() as DraftQueue).members.some(m => m.wallet === userId));
+    // Count how many entries to consume
+    const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
+    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
 
-    if (!alreadyQueued) {
-      // New join — validate and consume entry
-      const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
-      const entries = (user as Record<string, unknown>)[entryField] as number || 0;
-      if (entries <= 0) throw new ApiError(400, `No ${type} entries available`);
-      tx.set(userRef, { [entryField]: entries - 1 }, { merge: true });
-    } else {
-      // Switching speed — remove from all existing queues first (no entry cost)
+    // Also count how many rounds this user is ALREADY in (across all speeds for this type)
+    const allRefs = ['fast', 'slow'].map(s => db.collection(QUEUES_COLLECTION).doc(queueId(type, s as 'fast' | 'slow')));
+    const allSnaps = await Promise.all(allRefs.map(r => tx.get(r)));
+    let existingSlots = 0;
+    for (const snap of allSnaps) {
+      if (!snap.exists) continue;
+      const q = snap.data() as DraftQueue;
+      existingSlots += q.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
+    }
+
+    // Total entries to place = available entries (not yet queued)
+    const entriesToPlace = entries; // All remaining entries
+    if (entriesToPlace <= 0 && existingSlots === 0) {
+      throw new ApiError(400, `No ${type} entries available`);
+    }
+
+    // If switching speed, remove from all filling rounds first and reclaim those slots
+    if (existingSlots > 0) {
       for (const snap of allSnaps) {
         if (!snap.exists) continue;
         const q = snap.data() as DraftQueue;
-        if (q.status !== 'filling') continue; // Can't leave scheduled/drafting queues
-        const idx = q.members.findIndex(m => m.wallet === userId);
-        if (idx !== -1) {
-          q.members.splice(idx, 1);
-          tx.set(snap.ref, q);
+        let changed = false;
+        for (const round of q.rounds) {
+          if (round.status !== 'filling') continue;
+          const idx = round.members.findIndex(m => m.wallet === userId);
+          if (idx !== -1) {
+            round.members.splice(idx, 1);
+            changed = true;
+          }
         }
+        // Clean up empty rounds
+        q.rounds = q.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
+        if (changed) tx.set(snap.ref, q);
       }
     }
 
-    const result: Record<string, DraftQueue> = {};
+    const totalToPlace = entriesToPlace + existingSlots;
+    if (totalToPlace <= 0) throw new ApiError(400, `No ${type} entries available`);
 
+    // Consume all remaining entries
+    if (entriesToPlace > 0) {
+      tx.set(userRef, { [entryField]: 0 }, { merge: true });
+    }
+
+    // Load/init queues for the target speed(s)
+    const queues: DraftQueue[] = [];
     for (let i = 0; i < speeds.length; i++) {
       const s = speeds[i];
-      const queue: DraftQueue = queueSnaps[i].exists
-        ? (queueSnaps[i].data() as DraftQueue)
-        : emptyQueue(type, s);
+      queues.push(
+        queueSnaps[i].exists
+          ? (queueSnaps[i].data() as DraftQueue)
+          : emptyQueueDoc(type, s),
+      );
+    }
 
-      // Skip if queue already full/scheduled/drafting
-      if (queue.status !== 'filling' || queue.members.length >= QUEUE_MAX) {
-        result[queueId(type, s)] = queue;
-        continue;
+    // Distribute entries across rounds (round-robin across speeds if 'any')
+    let placed = 0;
+    for (let entry = 0; entry < totalToPlace; entry++) {
+      const q = queues[entry % queues.length]; // Round-robin for 'any'
+
+      // Find first filling round where user isn't already in
+      let targetRound = q.rounds.find(
+        r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
+      );
+
+      // No suitable round — create one
+      if (!targetRound) {
+        targetRound = newRound(q.nextRoundId++);
+        q.rounds.push(targetRound);
       }
 
-      // Skip if already in this queue
-      if (queue.members.some(m => m.wallet === userId)) {
-        result[queueId(type, s)] = queue;
-        continue;
-      }
+      targetRound.members.push({ wallet: userId, joinedAt: Date.now() });
 
-      queue.members.push({ wallet: userId, joinedAt: Date.now(), vote: null });
+      // If round filled, schedule it
+      if (targetRound.members.length >= QUEUE_MAX) {
+        targetRound.status = 'scheduled';
+        targetRound.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
 
-      // If full, schedule the draft
-      if (queue.members.length >= QUEUE_MAX) {
-        queue.status = 'scheduled';
-        queue.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
-
-        // Remove these members from the OTHER speed queue (if they were "any" preference)
-        const otherSpeed = s === 'fast' ? 'slow' : 'fast';
-        const otherRef = db.collection(QUEUES_COLLECTION).doc(queueId(type, otherSpeed));
-        const otherSnap = await tx.get(otherRef);
-        if (otherSnap.exists) {
-          const otherQueue = otherSnap.data() as DraftQueue;
-          const filledWallets = new Set(queue.members.map(m => m.wallet));
-          otherQueue.members = otherQueue.members.filter(m => !filledWallets.has(m.wallet));
-          tx.set(otherRef, otherQueue);
+        // Remove these members from filling rounds in the OTHER speed queue
+        if (speed === 'any') {
+          const otherQ = queues[(entry % queues.length) === 0 ? 1 : 0];
+          if (otherQ) {
+            const filledWallets = new Set(targetRound.members.map(m => m.wallet));
+            for (const r of otherQ.rounds) {
+              if (r.status !== 'filling') continue;
+              r.members = r.members.filter(m => !filledWallets.has(m.wallet));
+            }
+            otherQ.rounds = otherQ.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
+          }
         }
       }
 
-      tx.set(queueRefs[i], queue);
-      result[queueId(type, s)] = queue;
+      placed++;
+    }
+
+    // Write all queues back
+    const result: Record<string, DraftQueue> = {};
+    for (let i = 0; i < speeds.length; i++) {
+      tx.set(queueRefs[i], queues[i]);
+      result[queueId(type, speeds[i])] = queues[i];
     }
 
     return result;
@@ -920,5 +963,5 @@ export async function joinQueue(
 
 export async function resetQueue(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): Promise<void> {
   const db = getAdminFirestore();
-  await db.collection(QUEUES_COLLECTION).doc(queueId(type, speed)).set(emptyQueue(type, speed));
+  await db.collection(QUEUES_COLLECTION).doc(queueId(type, speed)).set(emptyQueueDoc(type, speed));
 }
