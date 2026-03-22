@@ -1134,26 +1134,24 @@ export default function DraftingPage() {
             style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10) 0%, rgba(251,191,36,0.03) 60%, transparent 100%)' }}
           >
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, rgba(251,191,36,0.5) 0%, transparent 50%)' }} />
-            <div className="relative px-5 py-4 flex items-center justify-between">
+            <div className="relative px-6 py-5 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Banana Best Ball IV</h2>
-              <div className="flex items-center gap-4">
-                <p className="text-white/40 text-sm">$100K Prize Pool</p>
-                {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
-                  <button
-                    onClick={handleEnterDraft}
-                    className="px-5 py-2 bg-banana text-black font-bold text-xs rounded-lg hover:brightness-110 transition-all"
-                  >
-                    Enter Draft <span className="opacity-60 ml-0.5">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => router.push('/buy-drafts')}
-                    className="px-5 py-2 bg-banana text-black font-bold text-xs rounded-lg hover:brightness-110 transition-all"
-                  >
-                    Get Pass — $25
-                  </button>
-                )}
-              </div>
+              <p className="text-2xl font-black text-banana">$100K <span className="text-sm font-semibold text-white/40">Prize Pool</span></p>
+              {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
+                <button
+                  onClick={handleEnterDraft}
+                  className="px-5 py-2.5 bg-banana text-black font-bold text-xs rounded-lg hover:brightness-110 transition-all"
+                >
+                  Enter Draft <span className="opacity-60 ml-0.5">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push('/buy-drafts')}
+                  className="px-5 py-2.5 bg-banana text-black font-bold text-xs rounded-lg hover:brightness-110 transition-all"
+                >
+                  Get Pass — $25
+                </button>
+              )}
             </div>
           </div>
 
