@@ -1131,30 +1131,37 @@ export default function DraftingPage() {
           {/* Hero CTA Card */}
           <div
             className="rounded-2xl overflow-hidden relative"
-            style={{ background: 'linear-gradient(180deg, rgba(251,191,36,0.06) 0%, rgba(251,191,36,0.01) 100%)' }}
+            style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(251,191,36,0.015) 50%, transparent 100%)' }}
           >
-            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(251,191,36,0.08) 0%, transparent 60%)' }} />
-            <div className="relative px-6 pt-6 pb-5 flex flex-col items-center">
-              <h2 className="text-xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
-              <div className="flex items-center gap-3 mt-4">
-                <span className="text-[12px] font-medium text-banana/70 bg-banana/[0.08] px-3 py-1.5 rounded-full">$100K Prize Pool</span>
-                <span className="text-[12px] font-medium text-white/50 bg-white/[0.05] px-3 py-1.5 rounded-full">$25K 1st Place</span>
-                {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
-                  <button
-                    onClick={handleEnterDraft}
-                    className="px-5 py-1.5 bg-banana text-black font-semibold text-[12px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
-                  >
-                    Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => router.push('/buy-drafts')}
-                    className="px-5 py-1.5 bg-banana text-black font-semibold text-[12px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
-                  >
-                    Get Pass — $25
-                  </button>
-                )}
+            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(251,191,36,0.05) 0%, transparent 40%)' }} />
+            <div className="relative px-6 py-5 flex items-center">
+              <h2 className="text-[16px] font-semibold text-white tracking-tight">Banana Best Ball IV</h2>
+              <div className="w-px h-8 bg-white/[0.08] mx-5" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-bold text-banana">$100K</span>
+                <span className="text-[11px] text-white/30">Prize Pool</span>
               </div>
+              <span className="text-white/10 mx-3">&middot;</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-bold text-white/80">$25K</span>
+                <span className="text-[11px] text-white/30">1st Place</span>
+              </div>
+              <div className="flex-1" />
+              {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
+                <button
+                  onClick={handleEnterDraft}
+                  className="px-5 py-2 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all shrink-0"
+                >
+                  Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push('/buy-drafts')}
+                  className="px-5 py-2 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all shrink-0"
+                >
+                  Get Pass — $25
+                </button>
+              )}
             </div>
           </div>
 
