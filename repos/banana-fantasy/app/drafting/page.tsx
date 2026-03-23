@@ -20,7 +20,6 @@ import * as draftApi from '@/lib/draftApi';
 import { leaveDraft } from '@/lib/api/leagues';
 import { useContests } from '@/hooks/useContests';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
-import { mockFAQSections } from '@/lib/faqContent';
 
 type Draft = DraftState;
 
@@ -1175,11 +1174,11 @@ export default function DraftingPage() {
           <div>
             <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">How it works</h3>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setInfoTopic('drafts')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
+              <button onClick={() => setInfoTopic('10-players')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">10 Players</h4>
                 <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
               </button>
-              <button onClick={() => setInfoTopic('drafts')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
+              <button onClick={() => setInfoTopic('snake-draft')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Snake Draft</h4>
                 <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
               </button>
@@ -1200,7 +1199,7 @@ export default function DraftingPage() {
             <div className="grid grid-cols-3 gap-3">
               {/* Pro */}
               <button
-                onClick={() => setInfoTopic('drafts')}
+                onClick={() => setInfoTopic('pro')}
                 className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors text-left cursor-pointer"
                 style={{ background: 'linear-gradient(160deg, rgba(168,85,247,0.06) 0%, transparent 60%)' }}
               >
@@ -1426,8 +1425,66 @@ export default function DraftingPage() {
 
       {/* Info Topic Modal */}
       {infoTopic && (() => {
-        const section = mockFAQSections.find(s => s.id === infoTopic);
-        if (!section) return null;
+        const topics: Record<string, { title: string; items: { q: string; a: string }[] }> = {
+          '10-players': {
+            title: '10 Players',
+            items: [
+              { q: 'How does a draft lobby work?', a: 'You join a draft room that fills up to 10 players. Once the room is full, the draft starts immediately — no scheduled times, no waiting.' },
+              { q: 'What happens when 10 players join?', a: 'A 60-second countdown starts and your draft type is revealed slot machine style — Jackpot (1%), HOF (5%), or Pro (94%). Then you draft!' },
+              { q: 'How many teams can I draft?', a: 'As many as you want. Each draft is a separate 10-person league. Draft multiple teams to increase your chances at the prize pool.' },
+            ],
+          },
+          'snake-draft': {
+            title: 'Snake Draft',
+            items: [
+              { q: 'What is a snake draft?', a: 'Pick order reverses each round. If you pick 1st in round 1, you pick 10th in round 2, then 1st again in round 3. This keeps things fair for everyone.' },
+              { q: 'How long do I have to pick?', a: 'Fast drafts give you 30 seconds per pick — the whole draft takes about 15-20 minutes. Slow drafts give you 8 hours per pick, perfect if you want to draft over a few days.' },
+              { q: 'What if I run out of time?', a: 'If the timer expires, the best available player is auto-picked for you based on rankings.' },
+              { q: 'How many rounds?', a: '15 rounds. You draft a full roster: 1 QB, 2 RB, 3 WR, 1 TE, 2 FLEX, 1 K, 1 DEF, plus bench spots.' },
+            ],
+          },
+          'team-positions': {
+            title: 'Team Positions',
+            items: [
+              { q: 'What are Team Positions?', a: 'Instead of drafting individual players like Patrick Mahomes, you draft Team Positions like "KC QB". Each week, you automatically get the points from the highest-scoring player at that position for that team.' },
+              { q: 'How does this protect against injuries?', a: 'In traditional fantasy, one injury can destroy your season. With Team Positions, if a starter gets hurt, you automatically get points from whoever replaces them. Your team stays competitive all season regardless of injuries.' },
+              { q: 'Can you give an example?', a: 'Draft "KC QB" and you get whoever scores most — Mahomes, the backup, whoever plays. Draft "DAL WR1" and you get the top-scoring Dallas wide receiver each week, no matter who it is.' },
+            ],
+          },
+          'best-ball': {
+            title: 'Best Ball',
+            items: [
+              { q: 'What is Best Ball?', a: 'Best Ball is a set-it-and-forget-it format. After you draft your team, the platform automatically starts your highest-scoring players each week. No lineup management, no waivers, no trades — just draft and watch.' },
+              { q: 'How does scoring work?', a: 'Each week, your best players at each position are automatically selected based on their actual performance. Your weekly score is the sum of your best performers according to your roster requirements.' },
+              { q: 'Can I trade or drop players?', a: 'No trades or waivers in Best Ball — that\'s the beauty of it! However, your teams are tradeable digital assets, so you can sell your entire team on our marketplace at any time.' },
+            ],
+          },
+          'pro': {
+            title: 'Pro Draft',
+            items: [
+              { q: 'What is a Pro Draft?', a: 'Pro is the standard draft type, making up 94% of all drafts. Compete against 9 other players for your share of the prize pool.' },
+              { q: 'How do I win?', a: 'Top finishers in your 10-person league advance through the playoffs to compete for the grand prize pool. The better you finish, the further you go.' },
+              { q: 'How is the distribution guaranteed?', a: 'Every 100 drafts contains exactly 94 Pro, 5 HOF, and 1 Jackpot. The order is randomized but the distribution is guaranteed — it\'s not random odds.' },
+            ],
+          },
+          'hof': {
+            title: 'Hall of Fame',
+            items: [
+              { q: 'What is a Hall of Fame Draft?', a: 'HOF Drafts are premium draft rooms making up 5% of all drafts. Your team competes for a separate bonus prize pool on top of the regular tournament prizes.' },
+              { q: 'How is HOF different from Jackpot?', a: 'Jackpot winners skip straight to the finals (advancement perk). HOF leagues compete for additional bonus prizes on top of regular rewards (prize perk). You can win both regular and HOF prizes.' },
+            ],
+          },
+          'jackpot': {
+            title: 'Jackpot',
+            items: [
+              { q: 'What is a Jackpot Draft?', a: 'Jackpot Drafts are the rarest and most valuable draft type — only 1% of all drafts. If you win your league in a Jackpot draft, you skip straight to the finals, bypassing two weeks of playoffs.' },
+              { q: 'How do I get into a Jackpot Draft?', a: 'Every draft has a chance to become a Jackpot. When your draft room fills to 10 players, the slot machine reveals your draft type. You can also win guaranteed Jackpot entries on the Banana Wheel.' },
+              { q: 'What exactly happens if I win?', a: 'Win your 10-person Jackpot league during the regular season (Weeks 1-14) and you advance directly to the Week 17 finals, skipping the Week 15 and Week 16 playoff rounds entirely.' },
+            ],
+          },
+        };
+        const topic = topics[infoTopic];
+        if (!topic) return null;
         return (
           <div
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -1438,7 +1495,7 @@ export default function DraftingPage() {
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-xl font-bold text-white">{section.title}</h3>
+                <h3 className="text-xl font-bold text-white">{topic.title}</h3>
                 <button onClick={() => setInfoTopic(null)} className="text-white/30 hover:text-white/60 transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                     <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -1446,10 +1503,10 @@ export default function DraftingPage() {
                 </button>
               </div>
               <div className="space-y-4">
-                {section.items.map((item, i) => (
+                {topic.items.map((item, i) => (
                   <div key={i}>
-                    <h4 className="text-white text-[14px] font-semibold">{item.question}</h4>
-                    <p className="text-white/50 text-[13px] mt-1.5 leading-[1.7]">{item.answer}</p>
+                    <h4 className="text-white text-[14px] font-semibold">{item.q}</h4>
+                    <p className="text-white/50 text-[13px] mt-1.5 leading-[1.7]">{item.a}</p>
                   </div>
                 ))}
               </div>
