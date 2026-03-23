@@ -1,6 +1,6 @@
 /**
  * Send notifications for special draft queue events.
- * Writes directly to Firestore (server-side) — no HTTP needed.
+ * Writes directly to Firestore (server-side).
  */
 
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
@@ -26,45 +26,28 @@ async function sendNotification(wallet: string, type: string, title: string, mes
   }
 }
 
-/** Notify user they've been queued after picking speed */
-export async function notifyQueueJoined(
-  wallet: string,
-  type: 'jackpot' | 'hof',
-  speed: 'fast' | 'slow' | 'any',
-  draftCount: number,
-) {
+/** Notify user they've been queued */
+export async function notifyQueueJoined(wallet: string, type: 'jackpot' | 'hof', draftCount: number) {
   const label = type === 'jackpot' ? 'Jackpot' : 'HOF';
   const emoji = type === 'jackpot' ? '🔥' : '🏆';
-  const speedText = speed === 'any' ? 'either speed' : speed === 'fast' ? '30-second' : '8-hour';
   await sendNotification(
     wallet,
     `${type}_queue`,
     `${emoji} ${label} Draft Queued!`,
-    `You're in ${draftCount} ${label} draft queue${draftCount !== 1 ? 's' : ''} (${speedText}). Once 10 winners fill a queue, the draft starts 48 hours later. We'll notify you!`,
+    `You're in ${draftCount} ${label} draft queue${draftCount !== 1 ? 's' : ''} (8-hour picks). The draft starts as soon as 10 winners fill the queue!`,
   );
 }
 
-/** Notify ALL members of a round that it filled and is scheduled */
-export async function notifyQueueFilled(
-  wallets: string[],
-  type: 'jackpot' | 'hof',
-  speed: 'fast' | 'slow',
-  scheduledTime: number,
-) {
+/** Notify ALL members that a round is full — draft starting now */
+export async function notifyQueueFilled(wallets: string[], type: 'jackpot' | 'hof') {
   const label = type === 'jackpot' ? 'Jackpot' : 'HOF';
   const emoji = type === 'jackpot' ? '🔥' : '🏆';
-  const speedText = speed === 'fast' ? '30-second' : '8-hour';
-  const dateStr = new Date(scheduledTime).toLocaleString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  });
-
   const promises = wallets.map(wallet =>
     sendNotification(
       wallet,
       `${type}_queue`,
-      `${emoji} ${label} Draft Scheduled!`,
-      `10 winners are in! Your ${speedText} ${label} draft starts ${dateStr}. We'll remind you before it begins.`,
+      `${emoji} ${label} Draft Starting!`,
+      `10 winners are in! Your ${label} draft is starting now. 8-hour picks — draft at your own pace.`,
     )
   );
   await Promise.allSettled(promises);

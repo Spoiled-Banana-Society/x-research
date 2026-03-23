@@ -34,11 +34,10 @@ export async function DELETE(req: Request) {
   try {
     const { getAdminFirestore } = await import('@/lib/firebaseAdmin');
     const db = getAdminFirestore();
-    const ids = ['jackpot-fast', 'jackpot-slow', 'hof-fast', 'hof-slow'];
+    const ids = ['jackpot', 'hof'];
     for (const id of ids) {
-      const [type, speed] = id.split('-');
       await db.collection('v2_queues').doc(id).set({
-        type, draftSpeed: speed, rounds: [], nextRoundId: 1,
+        type: id, rounds: [], nextRoundId: 1,
       });
     }
     return new Response(JSON.stringify({ success: true, reset: ids }), { status: 200 });

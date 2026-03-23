@@ -796,160 +796,88 @@ export async function getDraftHistory(userId: string): Promise<CompletedDraft[]>
 }
 
 // ==================== SPECIAL DRAFT QUEUES (Jackpot / HOF) ====================
-// Each queue (e.g. jackpot-fast) has multiple ROUNDS. A user with N entries
-// gets placed in N separate rounds (never twice in the same round).
-// When a round fills to 10, it schedules 48hrs out.
+// All special drafts are slow (8-hour). One queue per type.
+// When a round fills to 10, draft starts immediately.
 
 const QUEUES_COLLECTION = 'v2_queues';
 const QUEUE_MAX = 10;
-const SCHEDULE_LEAD_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-function queueId(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): string {
-  return `${type}-${speed}`;
-}
-
-function emptyQueueDoc(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): DraftQueue {
-  return { type, draftSpeed: speed, rounds: [], nextRoundId: 1 };
+function emptyQueueDoc(type: 'jackpot' | 'hof'): DraftQueue {
+  return { type, rounds: [], nextRoundId: 1 };
 }
 
 function newRound(roundId: number): QueueRound {
-  return { roundId, members: [], status: 'filling', scheduledTime: null, draftId: null };
-}
-
-/** Migrate old single-member format to rounds format if needed */
-function migrateQueue(data: Record<string, unknown>, type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): DraftQueue {
-  // New format already has rounds array
-  if (Array.isArray(data.rounds)) return data as unknown as DraftQueue;
-  // Old format had members[] directly — migrate to a single round
-  if (Array.isArray(data.members) && data.members.length > 0) {
-    return {
-      type, draftSpeed: speed,
-      rounds: [{ roundId: 1, members: data.members, status: 'filling' as const, scheduledTime: null, draftId: null }],
-      nextRoundId: 2,
-    };
-  }
-  return emptyQueueDoc(type, speed);
+  return { roundId, members: [], status: 'filling', draftId: null };
 }
 
 export async function getQueueStatus(): Promise<Record<string, DraftQueue>> {
   const db = getAdminFirestore();
-  const ids = ['jackpot-fast', 'jackpot-slow', 'hof-fast', 'hof-slow'];
+  const ids = ['jackpot', 'hof'] as const;
   const snaps = await Promise.all(ids.map(id => db.collection(QUEUES_COLLECTION).doc(id).get()));
   const result: Record<string, DraftQueue> = {};
   for (let i = 0; i < ids.length; i++) {
-    const [type, speed] = ids[i].split('-') as ['jackpot' | 'hof', 'fast' | 'slow'];
-    result[ids[i]] = snaps[i].exists ? migrateQueue(snaps[i].data() as Record<string, unknown>, type, speed) : emptyQueueDoc(type, speed);
+    if (snaps[i].exists) {
+      const data = snaps[i].data() as DraftQueue;
+      if (!data.rounds) data.rounds = [];
+      result[ids[i]] = data;
+    } else {
+      result[ids[i]] = emptyQueueDoc(ids[i]);
+    }
   }
   return result;
 }
 
 /**
- * Join queue(s) with ALL available entries for a type.
- * Each entry goes to a separate round (user never appears twice in same round).
- * speed='any' distributes entries across both fast and slow queues.
+ * Join queue with ALL available entries for a type.
+ * Each entry goes to a separate round (user never twice in same round).
+ * Called automatically when user wins JP/HOF on the wheel.
+ * When a round fills to 10, status changes to 'ready' (draft starts immediately).
  */
 export async function joinQueue(
   userId: string,
   type: 'jackpot' | 'hof',
-  speed: 'fast' | 'slow' | 'any',
-): Promise<Record<string, DraftQueue>> {
+): Promise<DraftQueue> {
   const db = getAdminFirestore();
   await ensureUserSeeded(userId);
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
-
-  const targetSpeeds: Array<'fast' | 'slow'> = speed === 'any' ? ['fast', 'slow'] : [speed];
-  // Always read BOTH speed docs for this type (needed for switching + dedup)
-  const fastRef = db.collection(QUEUES_COLLECTION).doc(queueId(type, 'fast'));
-  const slowRef = db.collection(QUEUES_COLLECTION).doc(queueId(type, 'slow'));
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(type);
 
   return db.runTransaction(async (tx) => {
-    const [userSnap, fastSnap, slowSnap] = await Promise.all([
-      tx.get(userRef), tx.get(fastRef), tx.get(slowRef),
-    ]);
+    const [userSnap, queueSnap] = await Promise.all([tx.get(userRef), tx.get(queueRef)]);
     const user = userSnap.data() as User;
-
-    const fastQ: DraftQueue = fastSnap.exists
-      ? migrateQueue(fastSnap.data() as Record<string, unknown>, type, 'fast')
-      : emptyQueueDoc(type, 'fast');
-    const slowQ: DraftQueue = slowSnap.exists
-      ? migrateQueue(slowSnap.data() as Record<string, unknown>, type, 'slow')
-      : emptyQueueDoc(type, 'slow');
-    if (!fastQ.rounds) fastQ.rounds = [];
-    if (!slowQ.rounds) slowQ.rounds = [];
-    const both: Record<'fast' | 'slow', DraftQueue> = { fast: fastQ, slow: slowQ };
+    const queue: DraftQueue = queueSnap.exists ? (queueSnap.data() as DraftQueue) : emptyQueueDoc(type);
+    if (!queue.rounds) queue.rounds = [];
 
     const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
-    const availableEntries = (user as Record<string, unknown>)[entryField] as number || 0;
+    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
+    if (entries <= 0) throw new ApiError(400, `No ${type} entries available`);
 
-    // If user has new entries, use exactly that count.
-    // If no new entries (just switching speed), reclaim from existing filling rounds.
-    const fastSlots = fastQ.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
-    const slowSlots = slowQ.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
-    const entriesAlreadyQueued = Math.max(fastSlots, slowSlots);
+    // Consume entries
+    tx.set(userRef, { [entryField]: 0 }, { merge: true });
 
-    const totalEntries = availableEntries > 0 ? availableEntries : entriesAlreadyQueued;
-    if (totalEntries <= 0) {
-      throw new ApiError(400, `No ${type} entries available`);
-    }
-
-    // Step 2: Remove this user from ALL filling rounds in both queues (clean slate)
-    for (const q of Object.values(both)) {
-      for (const r of q.rounds) {
-        if (r.status !== 'filling') continue;
-        r.members = r.members.filter(m => m.wallet !== userId);
+    // Add new entries to next available rounds (don't touch existing rounds)
+    for (let i = 0; i < entries; i++) {
+      let round = queue.rounds.find(
+        r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
+      );
+      if (!round) {
+        round = newRound(queue.nextRoundId++);
+        queue.rounds.push(round);
       }
-      // Remove empty filling rounds
-      q.rounds = q.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
-    }
+      round.members.push({ wallet: userId, joinedAt: Date.now() });
 
-    // Step 3: Consume all available entries (set to 0)
-    if (availableEntries > 0) {
-      tx.set(userRef, { [entryField]: 0 }, { merge: true });
-    }
-
-    // Step 4: Place totalEntries into the target queue(s)
-    const targets = targetSpeeds.map(s => both[s]);
-
-    for (let i = 0; i < totalEntries; i++) {
-      // For each target speed queue, place one slot
-      for (const q of targets) {
-        let round = q.rounds.find(
-          r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
-        );
-        if (!round) {
-          round = newRound(q.nextRoundId++);
-          q.rounds.push(round);
-        }
-        round.members.push({ wallet: userId, joinedAt: Date.now() });
-
-        // If full, schedule and clean mirrors
-        if (round.members.length >= QUEUE_MAX) {
-          round.status = 'scheduled';
-          round.scheduledTime = Date.now() + SCHEDULE_LEAD_MS;
-          const otherKey = q.draftSpeed === 'fast' ? 'slow' : 'fast';
-          const otherQ = both[otherKey as 'fast' | 'slow'];
-          const filled = new Set(round.members.map(m => m.wallet));
-          for (const r of otherQ.rounds) {
-            if (r.status !== 'filling') continue;
-            r.members = r.members.filter(m => !filled.has(m.wallet));
-          }
-          otherQ.rounds = otherQ.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
-        }
+      // Full! Draft starts immediately
+      if (round.members.length >= QUEUE_MAX) {
+        round.status = 'ready';
       }
     }
 
-    // Step 5: Write both docs
-    tx.set(fastRef, both.fast);
-    tx.set(slowRef, both.slow);
-
-    return {
-      [queueId(type, 'fast')]: both.fast,
-      [queueId(type, 'slow')]: both.slow,
-    };
+    tx.set(queueRef, queue);
+    return queue;
   });
 }
 
-export async function resetQueue(type: 'jackpot' | 'hof', speed: 'fast' | 'slow'): Promise<void> {
+export async function resetQueue(type: 'jackpot' | 'hof'): Promise<void> {
   const db = getAdminFirestore();
-  await db.collection(QUEUES_COLLECTION).doc(queueId(type, speed)).set(emptyQueueDoc(type, speed));
+  await db.collection(QUEUES_COLLECTION).doc(type).set(emptyQueueDoc(type));
 }

@@ -9,7 +9,7 @@ interface BananaWheelProps {
   spinsAvailable: number;
   onSpin: () => Promise<WheelSpinOutcome | null>;
   onSpinComplete?: (outcome: WheelSpinOutcome, segment: WheelSegment | null) => void;
-  onSpecialDraftSpeed?: (type: 'jackpot' | 'hof', speed: 'fast' | 'slow' | 'any') => void;
+  onSpecialDraftWin?: (type: 'jackpot' | 'hof') => void;
 }
 
 function fireCelebration(segment: WheelSegment) {
@@ -78,7 +78,7 @@ function getPrizeMessage(segment: WheelSegment): string {
   return 'Added to your balance';
 }
 
-export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialDraftSpeed }: BananaWheelProps) {
+export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialDraftWin }: BananaWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [wonSegment, setWonSegment] = useState<WheelSegment | null>(null);
@@ -386,37 +386,16 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
                 {getPrizeMessage(wonSegment)}
               </p>
 
-              {/* Speed selection + info for Jackpot/HOF wins */}
-              {(wonSegment.id === 'jackpot' || wonSegment.id === 'hof') && onSpecialDraftSpeed && (
-                <div style={{ animation: 'fadeIn 0.6s ease-out 0.6s both' }}>
-                  <p className="text-white/60 text-xs uppercase tracking-wider mb-3">Pick your draft speed</p>
-                  <div className="flex gap-2 mb-4">
-                    {[
-                      { label: '⚡ 30 sec', value: 'fast' as const, desc: 'Live draft' },
-                      { label: '🕐 8 hour', value: 'slow' as const, desc: 'Draft over days' },
-                      { label: '🤷 Either', value: 'any' as const, desc: 'Fastest to fill' },
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => {
-                          onSpecialDraftSpeed(wonSegment.id as 'jackpot' | 'hof', opt.value);
-                          setWonSegment(null);
-                        }}
-                        className="flex-1 py-3 px-2 rounded-xl text-sm font-semibold transition-all border border-white/20 hover:border-banana hover:bg-banana/10 text-white"
-                      >
-                        <span className="block text-base">{opt.label}</span>
-                        <span className="block text-[10px] text-white/40 mt-0.5">{opt.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-left space-y-1.5" style={{ animation: 'fadeIn 0.6s ease-out 0.8s both' }}>
-                    <p className="text-white/50 text-xs">
-                      <span className="text-white/70 font-medium">How it works:</span> Once 10 {wonSegment.id === 'jackpot' ? 'Jackpot' : 'HOF'} winners pick the same speed, the draft starts <span className="text-banana font-medium">48 hours</span> later.
-                    </p>
-                    <p className="text-white/40 text-[11px]">
-                      You'll be notified when the queue fills and when the draft is about to start. You can change your speed anytime on the Special Drafts page.
-                    </p>
-                  </div>
+              {/* Info for Jackpot/HOF wins — auto-queued */}
+              {(wonSegment.id === 'jackpot' || wonSegment.id === 'hof') && (
+                <div className="bg-white/5 rounded-xl p-4 text-center space-y-2" style={{ animation: 'fadeIn 0.6s ease-out 0.6s both' }}>
+                  <p className="text-white/70 text-sm font-medium">You've been added to the {wonSegment.id === 'jackpot' ? 'Jackpot' : 'HOF'} draft queue!</p>
+                  <p className="text-white/40 text-xs">
+                    8-hour picks · Draft starts as soon as 10 winners fill the queue · We'll notify you!
+                  </p>
+                  <a href="/special-drafts" className="inline-block mt-2 text-banana text-xs font-semibold hover:underline">
+                    View Queue Status →
+                  </a>
                 </div>
               )}
 
