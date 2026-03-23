@@ -15,18 +15,12 @@ export function SpecialDraftBanner() {
     if (!isLoggedIn || !user?.id) return;
     fetchJson<Record<string, DraftQueue>>('/api/queues')
       .then(queues => {
-        // Count unique drafts per type (max of fast/slow, since "don't care" mirrors)
-        const types = new Set(Object.values(queues).map(q => q.type));
         let total = 0;
-        for (const t of types) {
-          const typeQueues = Object.values(queues).filter(q => q.type === t);
-          const counts = typeQueues.map(q =>
-            (q.rounds || []).filter(r =>
-              (r.status === 'filling' || r.status === 'scheduled') &&
-              r.members.some(m => m.wallet === user.id)
-            ).length
-          );
-          total += Math.max(...counts, 0);
+        for (const q of Object.values(queues)) {
+          total += (q.rounds || []).filter(r =>
+            (r.status === 'filling' || r.status === 'ready') &&
+            r.members.some(m => m.wallet === user.id)
+          ).length;
         }
         setQueuedCount(total);
       })
@@ -66,8 +60,8 @@ export function SpecialDraftBanner() {
               )}
               <p className="text-white/40 text-xs sm:text-sm">
                 {hasEntries
-                  ? 'Pick your speed and join the queue'
-                  : 'Waiting for 10 winners to fill · Draft starts 48hrs after · Change speed anytime'}
+                  ? 'Spin the wheel to queue up'
+                  : 'Waiting for 10 winners · Draft starts immediately when full'}
               </p>
             </div>
           </div>

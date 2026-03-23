@@ -60,44 +60,32 @@ export default function BananaWheelPage() {
         updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
         updateUser({ jackpotEntries: (user.jackpotEntries || 0) + 1 });
+        // Auto-queue for jackpot draft
+        fetchJson('/api/queues', {
+          method: 'POST',
+          body: JSON.stringify({ userId: user.id, queueType: 'jackpot' }),
+        }).catch(() => {});
         pushNotification({
           type: 'jackpot_queue',
-          title: '🔥 You won a Jackpot Draft!',
-          message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
+          title: '🔥 Jackpot Draft Queued!',
+          message: 'You\'re in the Jackpot queue (8-hour picks). Draft starts as soon as 10 winners join!',
           link: '/special-drafts',
         });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
         updateUser({ hofEntries: (user.hofEntries || 0) + 1 });
+        fetchJson('/api/queues', {
+          method: 'POST',
+          body: JSON.stringify({ userId: user.id, queueType: 'hof' }),
+        }).catch(() => {});
         pushNotification({
           type: 'hof_queue',
-          title: '🏆 You won a HOF Draft!',
-          message: 'Pick your draft speed (30 sec, 8 hour, or either) to join the queue. Tap to choose.',
+          title: '🏆 HOF Draft Queued!',
+          message: 'You\'re in the HOF queue (8-hour picks). Draft starts as soon as 10 winners join!',
           link: '/special-drafts',
         });
       }
     },
     [updateUser, user, walletAddress],
-  );
-
-  const handleSpecialDraftSpeed = useCallback(
-    async (type: 'jackpot' | 'hof', speed: 'fast' | 'slow' | 'any') => {
-      if (!user?.id) return;
-      try {
-        await fetchJson('/api/queues', {
-          method: 'POST',
-          body: JSON.stringify({ userId: user.id, queueType: type, speed }),
-        });
-        // Entry was consumed by queue join — decrement locally
-        if (type === 'jackpot') {
-          updateUser({ jackpotEntries: Math.max(0, (user.jackpotEntries || 0) - 1) });
-        } else {
-          updateUser({ hofEntries: Math.max(0, (user.hofEntries || 0) - 1) });
-        }
-      } catch (err) {
-        console.error('[Wheel] Failed to join queue:', err);
-      }
-    },
-    [user, updateUser],
   );
 
   const prizeSummary = useMemo(() => {
@@ -241,7 +229,6 @@ export default function BananaWheelPage() {
             spinsAvailable={spinsAvailable}
             onSpin={handleSpin}
             onSpinComplete={handleSpinComplete}
-            onSpecialDraftSpeed={handleSpecialDraftSpeed}
           />
         </div>
 

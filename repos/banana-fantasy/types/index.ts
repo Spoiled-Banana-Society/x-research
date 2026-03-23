@@ -278,7 +278,7 @@ export interface Promo {
 
 // Special draft queue types
 export type QueueType = 'jackpot' | 'hof';
-export type RoundStatus = 'filling' | 'scheduled' | 'drafting' | 'completed';
+export type RoundStatus = 'filling' | 'ready' | 'drafting' | 'completed';
 
 export interface QueueMember {
   wallet: string;
@@ -289,13 +289,11 @@ export interface QueueRound {
   roundId: number;
   members: QueueMember[];
   status: RoundStatus;
-  scheduledTime: number | null;
   draftId: string | null;
 }
 
 export interface DraftQueue {
   type: QueueType;
-  draftSpeed: 'fast' | 'slow';
   rounds: QueueRound[];
   nextRoundId: number;
 }
