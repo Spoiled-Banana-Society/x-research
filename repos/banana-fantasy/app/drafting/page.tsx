@@ -1129,21 +1129,27 @@ export default function DraftingPage() {
       {activeDrafts.length === 0 && (
         <div className="space-y-4">
           {/* Hero — no card, just typography */}
-          <div className="text-center py-6">
-            <h2 className="text-2xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
-            <p className="text-white/30 text-[13px] mt-2 tracking-wide">$100K Prize Pool &nbsp;&middot;&nbsp; $25K 1st Place</p>
-            <div className="mt-4">
+          <div className="text-center py-10">
+            <h2 className="text-3xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
+            <p className="text-[15px] mt-3">
+              <span className="font-bold text-banana">$100K</span>
+              <span className="text-white/30 font-medium"> Prize Pool</span>
+              <span className="text-white/15 mx-3">&middot;</span>
+              <span className="font-bold text-white">$25K</span>
+              <span className="text-white/30 font-medium"> 1st Place</span>
+            </p>
+            <div className="mt-6">
               {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                 <button
                   onClick={handleEnterDraft}
-                  className="px-7 py-2.5 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
+                  className="px-8 py-3 bg-banana text-black font-semibold text-[14px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
                 >
                   Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
                 </button>
               ) : (
                 <button
                   onClick={() => router.push('/buy-drafts')}
-                  className="px-7 py-2.5 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
+                  className="px-8 py-3 bg-banana text-black font-semibold text-[14px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
                 >
                   Get Pass — $25
                 </button>
