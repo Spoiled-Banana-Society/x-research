@@ -1134,14 +1134,13 @@ export default function DraftingPage() {
             style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(251,191,36,0.015) 50%, transparent 100%)' }}
           >
             <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 15% 50%, rgba(251,191,36,0.06) 0%, transparent 40%), radial-gradient(circle at 85% 50%, rgba(251,191,36,0.03) 0%, transparent 40%)' }} />
-            <div className="relative px-6 py-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-[17px] font-semibold text-white tracking-tight">Banana Best Ball IV</h2>
-                <div className="flex items-center gap-3 mt-2">
-                  <span className="text-[12px] font-medium text-banana/70 bg-banana/[0.08] px-2.5 py-1 rounded-full">$100K Prize Pool</span>
-                  <span className="text-[12px] font-medium text-white/50 bg-white/[0.05] px-2.5 py-1 rounded-full">$25K 1st Place</span>
-                </div>
+            <div className="relative px-6 py-5 flex items-center gap-4">
+              <h2 className="text-[17px] font-semibold text-white tracking-tight shrink-0">Banana Best Ball IV</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-medium text-banana/70 bg-banana/[0.08] px-2.5 py-1 rounded-full whitespace-nowrap">$100K Prize Pool</span>
+                <span className="text-[12px] font-medium text-white/50 bg-white/[0.05] px-2.5 py-1 rounded-full whitespace-nowrap">$25K 1st Place</span>
               </div>
+              <div className="flex-1" />
               {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                 <button
                   onClick={handleEnterDraft}
