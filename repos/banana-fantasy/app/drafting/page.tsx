@@ -1139,21 +1139,12 @@ export default function DraftingPage() {
               <span className="text-white/30 font-medium"> 1st Place</span>
             </p>
             <div className="mt-6">
-              {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
-                <button
-                  onClick={handleEnterDraft}
-                  className="px-8 py-3 bg-banana text-black font-semibold text-[14px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
-                >
-                  Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => router.push('/buy-drafts')}
-                  className="px-8 py-3 bg-banana text-black font-semibold text-[14px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
-                >
-                  Get Pass — $25
-                </button>
-              )}
+              <button
+                onClick={handleEnterDraft}
+                className="px-8 py-3 bg-banana text-black font-semibold text-[14px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
+              >
+                Enter Draft
+              </button>
             </div>
           </div>
 
