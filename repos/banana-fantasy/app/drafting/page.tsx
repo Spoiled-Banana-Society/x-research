@@ -1127,27 +1127,27 @@ export default function DraftingPage() {
 
       {/* Empty State - Full experience */}
       {activeDrafts.length === 0 && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {/* Hero CTA Card */}
           <div
-            className="rounded-2xl overflow-hidden border border-banana/10 relative"
-            style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10) 0%, rgba(251,191,36,0.03) 60%, transparent 100%)' }}
+            className="rounded-2xl overflow-hidden relative"
+            style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(251,191,36,0.02) 60%, transparent 100%)' }}
           >
-            <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, rgba(251,191,36,0.5) 0%, transparent 50%)' }} />
+            <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 70% 40%, rgba(251,191,36,0.6) 0%, transparent 50%)' }} />
             <div className="relative px-6 py-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Banana Best Ball IV</h2>
-              <p className="text-2xl font-black text-banana">$100K <span className="text-sm font-semibold text-white/40">Prize Pool</span></p>
+              <h2 className="text-[17px] font-semibold text-white tracking-tight">Banana Best Ball IV</h2>
+              <p className="text-xl font-bold text-banana tracking-tight">$100K <span className="text-[13px] font-medium text-white/30">Prize Pool</span></p>
               {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                 <button
                   onClick={handleEnterDraft}
-                  className="px-5 py-2.5 bg-banana text-black font-bold text-xs rounded-lg hover:brightness-110 transition-all"
+                  className="px-5 py-2 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
                 >
-                  Enter Draft <span className="opacity-60 ml-0.5">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
+                  Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
                 </button>
               ) : (
                 <button
                   onClick={() => router.push('/buy-drafts')}
-                  className="px-5 py-2.5 bg-banana text-black font-bold text-xs rounded-lg hover:brightness-110 transition-all"
+                  className="px-5 py-2 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
                 >
                   Get Pass — $25
                 </button>
@@ -1157,51 +1157,51 @@ export default function DraftingPage() {
 
           {/* How It Works — 2x2 grid */}
           <div>
-            <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">How it works</h3>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">How it works</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                     <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">10 Players</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Join a lobby, draft starts instantly when full</p>
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">10 Players</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
               </div>
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">Snake Draft</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Fast (30s) or slow (8hr) picks — your choice</p>
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">Snake Draft</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
               </div>
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                     <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">Team Positions</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">Draft <span className="text-white/60 font-medium">KC QB</span> or <span className="text-white/60 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week. Starter gets hurt? You auto-get the backup&apos;s points.</p>
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">Team Positions</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week. Starter gets hurt? You auto-get the backup&apos;s points.</p>
               </div>
-              <div className="rounded-xl p-3.5 border border-white/[0.05] bg-white/[0.02]">
-                <div className="w-7 h-7 rounded-lg bg-banana/10 text-banana/60 flex items-center justify-center mb-2">
+              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                     <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h4 className="text-white text-[13px] font-medium">Best Ball</h4>
-                <p className="text-white/35 text-[11px] mt-0.5 leading-relaxed">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">Best Ball</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
               </div>
             </div>
           </div>
 
           {/* Draft Types — 3 cards */}
           <div>
-            <h3 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-2.5">Draft Types</h3>
-            <div className="grid grid-cols-3 gap-2.5">
+            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types</h3>
+            <div className="grid grid-cols-3 gap-3">
               {[
                 { type: 'pro', color: '#a855f7', odds: '94%', label: 'Pro', icon: (
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -1222,19 +1222,21 @@ export default function DraftingPage() {
               ].map((item) => (
                 <div
                   key={item.type}
-                  className="rounded-xl p-4 border border-white/[0.05]"
-                  style={{ background: `linear-gradient(145deg, ${item.color}0a 0%, transparent 70%)` }}
+                  className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+                  style={{ background: `linear-gradient(160deg, ${item.color}08 0%, transparent 60%)` }}
                 >
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span style={{ color: item.color }} className="opacity-50">{item.icon}</span>
-                    <span className="text-xl font-bold" style={{ color: item.color }}>{item.odds}</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-8 h-8 rounded-[10px] flex items-center justify-center" style={{ backgroundColor: `${item.color}10` }}>
+                      <span style={{ color: item.color }} className="opacity-60">{item.icon}</span>
+                    </div>
+                    <span className="text-xl font-bold tracking-tight" style={{ color: item.color }}>{item.odds}</span>
                   </div>
-                  <h4 className="text-white text-[13px] font-medium">{item.label}</h4>
+                  <h4 className="text-white text-[13px] font-semibold tracking-tight">{item.label}</h4>
                 </div>
               ))}
             </div>
-            <p className="text-white/20 text-[10px] text-center mt-2">
-              Revealed before your draft begins &middot; 1 Jackpot, 5 HOF, 94 Pro per 100 — guaranteed
+            <p className="text-white/15 text-[10px] text-center mt-3 px-1">
+              Type revealed before your draft begins &middot; Guaranteed: 1 Jackpot, 5 HOF, 94 Pro per 100 drafts
             </p>
           </div>
         </div>
