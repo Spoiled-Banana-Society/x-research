@@ -1184,7 +1184,8 @@ export default function DraftingPage() {
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
-                  <span className="text-sm font-bold tracking-tight text-pro">94%</span>
+                  <span className="text-white/15">&middot;</span>
+                  <span className="text-[15px] font-bold tracking-tight text-pro">94%</span>
                 </div>
                 <p className="text-white/30 text-[11px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
               </div>
@@ -1195,7 +1196,8 @@ export default function DraftingPage() {
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
-                  <span className="text-sm font-bold tracking-tight text-hof">5%</span>
+                  <span className="text-white/15">&middot;</span>
+                  <span className="text-[15px] font-bold tracking-tight text-hof">5%</span>
                 </div>
                 <p className="text-white/30 text-[11px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
               </div>
@@ -1206,7 +1208,8 @@ export default function DraftingPage() {
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <h4 className="text-white text-[13px] font-semibold tracking-tight">Jackpot</h4>
-                  <span className="text-sm font-bold tracking-tight text-jackpot">1%</span>
+                  <span className="text-white/15">&middot;</span>
+                  <span className="text-[15px] font-bold tracking-tight text-jackpot">1%</span>
                 </div>
                 <p className="text-white/30 text-[11px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
               </div>
