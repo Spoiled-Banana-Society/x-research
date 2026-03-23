@@ -941,19 +941,21 @@ export default function DraftingPage() {
         </div>
         <div className="flex items-center gap-2">
           {activeDrafts.length > 0 && (
-            <button
-              onClick={handleEnterDraft}
-              className="w-28 py-2 text-sm font-semibold border-2 border-banana text-banana rounded-lg hover:bg-banana hover:text-black hover:scale-105 transition-all"
-            >
-              New Draft
-            </button>
+            <>
+              <button
+                onClick={handleEnterDraft}
+                className="w-28 py-2 text-sm font-semibold border-2 border-banana text-banana rounded-lg hover:bg-banana hover:text-black hover:scale-105 transition-all"
+              >
+                New Draft
+              </button>
+              <button
+                onClick={() => router.push('/buy-drafts')}
+                className="w-28 py-2 text-sm font-semibold bg-banana text-black border-2 border-banana rounded-lg hover:scale-105 transition-all"
+              >
+                Buy Drafts
+              </button>
+            </>
           )}
-          <button
-            onClick={() => router.push('/buy-drafts')}
-            className="w-28 py-2 text-sm font-semibold bg-banana text-black border-2 border-banana rounded-lg hover:scale-105 transition-all"
-          >
-            Buy Drafts
-          </button>
         </div>
       </div>
 
