@@ -1156,19 +1156,19 @@ export default function DraftingPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">10 Players</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
+                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Snake Draft</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
+                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Team Positions</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
+                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Best Ball</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
+                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
               </div>
             </div>
           </div>
@@ -1187,7 +1187,7 @@ export default function DraftingPage() {
                   <span className="text-white/15">&middot;</span>
                   <span className="text-[15px] font-bold tracking-tight text-pro">94%</span>
                 </div>
-                <p className="text-white/30 text-[11px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
+                <p className="text-white/50 text-[11px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
               </div>
               {/* Hall of Fame */}
               <div
@@ -1199,7 +1199,7 @@ export default function DraftingPage() {
                   <span className="text-white/15">&middot;</span>
                   <span className="text-[15px] font-bold tracking-tight text-hof">5%</span>
                 </div>
-                <p className="text-white/30 text-[11px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
+                <p className="text-white/50 text-[11px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
               </div>
               {/* Jackpot */}
               <div
@@ -1211,7 +1211,7 @@ export default function DraftingPage() {
                   <span className="text-white/15">&middot;</span>
                   <span className="text-[15px] font-bold tracking-tight text-jackpot">1%</span>
                 </div>
-                <p className="text-white/30 text-[11px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
+                <p className="text-white/50 text-[11px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
               </div>
             </div>
           </div>
