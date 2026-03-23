@@ -1128,38 +1128,26 @@ export default function DraftingPage() {
       {/* Empty State - Full experience */}
       {activeDrafts.length === 0 && (
         <div className="space-y-4">
-          {/* Hero CTA Card */}
-          <div
-            className="rounded-2xl overflow-hidden relative"
-            style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(251,191,36,0.015) 50%, transparent 100%)' }}
-          >
-            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(251,191,36,0.05) 0%, transparent 40%)' }} />
-            <div className="relative px-4 py-5 grid grid-cols-3 gap-0">
-              <div className="text-center border-r border-white/[0.06] px-3">
-                <p className="text-xl font-bold text-banana tracking-tight">$100K</p>
-                <p className="text-[10px] text-white/30 uppercase tracking-wider mt-0.5">Prize Pool</p>
-              </div>
-              <div className="text-center border-r border-white/[0.06] px-3">
-                <p className="text-xl font-bold text-white tracking-tight">$25K</p>
-                <p className="text-[10px] text-white/30 uppercase tracking-wider mt-0.5">1st Place</p>
-              </div>
-              <div className="flex items-center justify-center px-3">
-                {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
-                  <button
-                    onClick={handleEnterDraft}
-                    className="px-6 py-2.5 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all w-full"
-                  >
-                    Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => router.push('/buy-drafts')}
-                    className="px-6 py-2.5 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all w-full"
-                  >
-                    Get Pass — $25
-                  </button>
-                )}
-              </div>
+          {/* Hero — no card, just typography */}
+          <div className="text-center py-6">
+            <h2 className="text-2xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
+            <p className="text-white/30 text-[13px] mt-2 tracking-wide">$100K Prize Pool &nbsp;&middot;&nbsp; $25K 1st Place</p>
+            <div className="mt-4">
+              {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
+                <button
+                  onClick={handleEnterDraft}
+                  className="px-7 py-2.5 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
+                >
+                  Enter Draft <span className="opacity-50">({(user?.draftPasses || 0) + (user?.freeDrafts || 0)})</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push('/buy-drafts')}
+                  className="px-7 py-2.5 bg-banana text-black font-semibold text-[13px] rounded-full hover:brightness-110 active:scale-[0.98] transition-all"
+                >
+                  Get Pass — $25
+                </button>
+              )}
             </div>
           </div>
 
