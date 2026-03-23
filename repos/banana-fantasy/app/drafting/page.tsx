@@ -1203,7 +1203,7 @@ export default function DraftingPage() {
                 style={{ background: 'linear-gradient(160deg, rgba(168,85,247,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-2xl">🍌</span>
+                  <span className="text-[28px] leading-none">🍌</span>
                   <span className="text-xl font-bold tracking-tight text-pro">94%</span>
                 </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
@@ -1215,7 +1215,7 @@ export default function DraftingPage() {
                 style={{ background: 'linear-gradient(160deg, rgba(212,175,55,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <img src="/hof-logo.jpg" alt="Hall of Fame" className="w-8 h-auto hof-gold-filter" />
+                  <img src="/hof-logo.jpg" alt="Hall of Fame" className="w-8 h-8 object-contain hof-gold-filter" />
                   <span className="text-xl font-bold tracking-tight text-hof">5%</span>
                 </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
