@@ -1195,7 +1195,7 @@ export default function DraftingPage() {
 
           {/* Draft Types — 3 cards */}
           <div>
-            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types <span className="normal-case tracking-normal text-white/15">&middot; revealed before each draft</span></h3>
+            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types <span className="normal-case tracking-normal text-white/15">&middot; revealed before each draft &middot; 1 Jackpot, 5 HOF, 94 Pro per 100</span></h3>
             <div className="grid grid-cols-3 gap-3">
               {/* Pro */}
               <div
@@ -1234,9 +1234,6 @@ export default function DraftingPage() {
                 <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
               </div>
             </div>
-            <p className="text-white/15 text-[10px] text-center mt-3 px-1">
-              Every 100 drafts: 1 Jackpot, 5 HOF, 94 Pro — guaranteed
-            </p>
           </div>
         </div>
       )}
