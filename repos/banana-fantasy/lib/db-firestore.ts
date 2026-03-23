@@ -850,26 +850,13 @@ export async function joinQueue(
 
     const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
     const entries = (user as Record<string, unknown>)[entryField] as number || 0;
-
-    // Count existing filling slots
-    const existingSlots = queue.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === userId)).length;
-    const totalEntries = entries > 0 ? entries : existingSlots;
-    if (totalEntries <= 0) throw new ApiError(400, `No ${type} entries available`);
-
-    // Remove from all filling rounds (clean slate)
-    for (const r of queue.rounds) {
-      if (r.status !== 'filling') continue;
-      r.members = r.members.filter(m => m.wallet !== userId);
-    }
-    queue.rounds = queue.rounds.filter(r => r.members.length > 0 || r.status !== 'filling');
+    if (entries <= 0) throw new ApiError(400, `No ${type} entries available`);
 
     // Consume entries
-    if (entries > 0) {
-      tx.set(userRef, { [entryField]: 0 }, { merge: true });
-    }
+    tx.set(userRef, { [entryField]: 0 }, { merge: true });
 
-    // Place into rounds
-    for (let i = 0; i < totalEntries; i++) {
+    // Add new entries to next available rounds (don't touch existing rounds)
+    for (let i = 0; i < entries; i++) {
       let round = queue.rounds.find(
         r => r.status === 'filling' && r.members.length < QUEUE_MAX && !r.members.some(m => m.wallet === userId),
       );
