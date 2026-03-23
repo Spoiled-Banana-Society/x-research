@@ -67,15 +67,19 @@ export function ContestDetailsModal({
           </div>
         </div>
 
-        {/* JP/HOF Percentages */}
+        {/* Draft Type Odds */}
         <div className="flex gap-4">
-          <div className="flex-1 bg-jackpot/10 rounded-xl p-4 border border-jackpot/20">
-            <p className="text-sm text-jackpot">Jackpot Chance</p>
-            <p className="text-3xl font-bold text-jackpot">{contest.jpPercent}%</p>
+          <div className="flex-1 bg-pro/10 rounded-xl p-4 border border-pro/20">
+            <p className="text-sm text-pro">Pro</p>
+            <p className="text-3xl font-bold text-pro">94%</p>
           </div>
           <div className="flex-1 bg-hof/10 rounded-xl p-4 border border-hof/20">
-            <p className="text-sm text-hof">HOF Chance</p>
-            <p className="text-3xl font-bold text-hof">{contest.hofPercent}%</p>
+            <p className="text-sm text-hof">Hall of Fame</p>
+            <p className="text-3xl font-bold text-hof">5%</p>
+          </div>
+          <div className="flex-1 bg-jackpot/10 rounded-xl p-4 border border-jackpot/20">
+            <p className="text-sm text-jackpot">Jackpot</p>
+            <p className="text-3xl font-bold text-jackpot">1%</p>
           </div>
         </div>
 
