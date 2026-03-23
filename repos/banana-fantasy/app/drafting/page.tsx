@@ -1155,38 +1155,18 @@ export default function DraftingPage() {
             <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">How it works</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
-                  </svg>
-                </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">10 Players</h4>
                 <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
-                  </svg>
-                </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Snake Draft</h4>
                 <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path fillRule="evenodd" d="M5.5 3A2.5 2.5 0 003 5.5v2.879a2.5 2.5 0 00.732 1.767l6.5 6.5a2.5 2.5 0 003.536 0l2.878-2.878a2.5 2.5 0 000-3.536l-6.5-6.5A2.5 2.5 0 008.38 3H5.5zM6 7a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  </svg>
-                </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Team Positions</h4>
                 <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
-                  </svg>
-                </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Best Ball</h4>
                 <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
               </div>
@@ -1202,36 +1182,33 @@ export default function DraftingPage() {
                 className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
                 style={{ background: 'linear-gradient(160deg, rgba(168,85,247,0.06) 0%, transparent 60%)' }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[20px] leading-none">🍌</span>
-                  <span className="text-xl font-bold tracking-tight text-pro">94%</span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
+                  <span className="text-sm font-bold tracking-tight text-pro">94%</span>
                 </div>
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
+                <p className="text-white/30 text-[11px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
               </div>
               {/* Hall of Fame */}
               <div
                 className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
                 style={{ background: 'linear-gradient(160deg, rgba(212,175,55,0.06) 0%, transparent 60%)' }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <img src="/hof-logo.jpg" alt="Hall of Fame" className="w-8 h-8 object-contain hof-gold-filter" />
-                  <span className="text-xl font-bold tracking-tight text-hof">5%</span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
+                  <span className="text-sm font-bold tracking-tight text-hof">5%</span>
                 </div>
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
+                <p className="text-white/30 text-[11px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
               </div>
               {/* Jackpot */}
               <div
                 className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
                 style={{ background: 'linear-gradient(160deg, rgba(239,68,68,0.06) 0%, transparent 60%)' }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <img src="/jackpot-logo.png" alt="Jackpot" className="w-10 h-auto" />
-                  <span className="text-xl font-bold tracking-tight text-jackpot">1%</span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h4 className="text-white text-[13px] font-semibold tracking-tight">Jackpot</h4>
+                  <span className="text-sm font-bold tracking-tight text-jackpot">1%</span>
                 </div>
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">Jackpot</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
+                <p className="text-white/30 text-[11px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
               </div>
             </div>
           </div>
