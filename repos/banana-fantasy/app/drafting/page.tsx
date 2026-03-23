@@ -1137,7 +1137,7 @@ export default function DraftingPage() {
               <span className="font-bold text-banana">$100K</span>
               <span className="text-white/30 font-medium"> Prize Pool</span>
               <span className="text-white/15 mx-1.5">&middot;</span>
-              <span className="font-bold text-white">$25K</span>
+              <span className="font-semibold text-white/70">$25K</span>
               <span className="text-white/30 font-medium"> 1st Place</span>
             </p>
             <div className="mt-6">
