@@ -1137,6 +1137,7 @@ export default function DraftingPage() {
             <div className="relative px-6 py-5 flex items-center justify-between">
               <h2 className="text-[17px] font-semibold text-white tracking-tight">Banana Best Ball IV</h2>
               <p className="text-xl font-bold text-banana tracking-tight">$100K <span className="text-[13px] font-medium text-white/30">Prize Pool</span></p>
+              <p className="text-lg font-bold text-white/80 tracking-tight">$25K <span className="text-[13px] font-medium text-white/30">1st Place</span></p>
               {((user?.draftPasses || 0) + (user?.freeDrafts || 0)) > 0 ? (
                 <button
                   onClick={handleEnterDraft}
@@ -1184,7 +1185,7 @@ export default function DraftingPage() {
                   </svg>
                 </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Team Positions</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week. Starter gets hurt? You auto-get the backup&apos;s points.</p>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
               </div>
               <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                 <div className="w-8 h-8 rounded-[10px] bg-banana/[0.08] text-banana/50 flex items-center justify-center mb-3">
@@ -1202,38 +1203,42 @@ export default function DraftingPage() {
           <div>
             <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types</h3>
             <div className="grid grid-cols-3 gap-3">
-              {[
-                { type: 'pro', color: '#a855f7', odds: '94%', label: 'Pro', icon: (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path d="M11.983 1.907a.75.75 0 00-1.292-.657l-8.5 9.5A.75.75 0 002.75 12h6.572l-1.305 6.093a.75.75 0 001.292.657l8.5-9.5A.75.75 0 0017.25 8h-6.572l1.305-6.093z" />
-                  </svg>
-                )},
-                { type: 'hof', color: '#D4AF37', odds: '5%', label: 'Hall of Fame', icon: (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path fillRule="evenodd" d="M10 1c-1.828 0-3.623.149-5.371.435a.75.75 0 00-.629.74v.387c-.827.157-1.642.345-2.445.564a.75.75 0 00-.552.698 5 5 0 004.503 5.152 6 6 0 002.946 1.822A1.5 1.5 0 017 12.5v1.5H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H13v-1.5a1.5 1.5 0 01-1.452-1.202 6 6 0 002.946-1.822 5 5 0 004.503-5.152.75.75 0 00-.553-.698A31.804 31.804 0 0016 2.562v-.388a.75.75 0 00-.629-.74A33.227 33.227 0 0010 1zM4.5 5V2.875a31.5 31.5 0 00-2.062.457A3.5 3.5 0 005.5 6.98 6.032 6.032 0 014.5 5zm11 0c0 .717-.155 1.4-.432 2.012.07-.013.14-.027.21-.042A3.5 3.5 0 0017.562 3.3 31.5 31.5 0 0015.5 2.875V5z" clipRule="evenodd" />
-                  </svg>
-                )},
-                { type: 'jackpot', color: '#ef4444', odds: '1%', label: 'Jackpot', icon: (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path fillRule="evenodd" d="M13.5 4.938a7 7 0 11-9.006 1.737c.202-.257.59-.218.793.039.278.352.594.672.943.954.332.269.786-.049.773-.476a5.977 5.977 0 01.575-2.729 4.978 4.978 0 002.921 2.012c.456.148.868-.361.665-.787a4.985 4.985 0 01-.29-2.217 7.006 7.006 0 012.626 1.467z" clipRule="evenodd" />
-                    <path d="M12.243 12.093a5.237 5.237 0 01-.1.418c-.332 1.162-1.353 1.989-2.57 1.989H10.5c-1.217 0-2.238-.827-2.57-1.989a5.26 5.26 0 01-.1-.418 2.167 2.167 0 001.742-.344l.428-.304.428.304a2.167 2.167 0 001.742.344l.073-.001z" />
-                  </svg>
-                )},
-              ].map((item) => (
-                <div
-                  key={item.type}
-                  className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
-                  style={{ background: `linear-gradient(160deg, ${item.color}08 0%, transparent 60%)` }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-8 h-8 rounded-[10px] flex items-center justify-center" style={{ backgroundColor: `${item.color}10` }}>
-                      <span style={{ color: item.color }} className="opacity-60">{item.icon}</span>
-                    </div>
-                    <span className="text-xl font-bold tracking-tight" style={{ color: item.color }}>{item.odds}</span>
-                  </div>
-                  <h4 className="text-white text-[13px] font-semibold tracking-tight">{item.label}</h4>
+              {/* Pro */}
+              <div
+                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+                style={{ background: 'linear-gradient(160deg, rgba(168,85,247,0.06) 0%, transparent 60%)' }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-2xl">🍌</span>
+                  <span className="text-xl font-bold tracking-tight text-pro">94%</span>
                 </div>
-              ))}
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Standard competition. Win your league to advance to the playoffs.</p>
+              </div>
+              {/* Hall of Fame */}
+              <div
+                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+                style={{ background: 'linear-gradient(160deg, rgba(212,175,55,0.06) 0%, transparent 60%)' }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <img src="/hof-logo.jpg" alt="Hall of Fame" className="w-8 h-auto hof-gold-filter" />
+                  <span className="text-xl font-bold tracking-tight text-hof">5%</span>
+                </div>
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Bonus prize pool on top of standard prizes. Same format, bigger rewards.</p>
+              </div>
+              {/* Jackpot */}
+              <div
+                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+                style={{ background: 'linear-gradient(160deg, rgba(239,68,68,0.06) 0%, transparent 60%)' }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <img src="/jackpot-logo.png" alt="Jackpot" className="w-10 h-auto" />
+                  <span className="text-xl font-bold tracking-tight text-jackpot">1%</span>
+                </div>
+                <h4 className="text-white text-[13px] font-semibold tracking-tight">Jackpot</h4>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
+              </div>
             </div>
             <p className="text-white/15 text-[10px] text-center mt-3 px-1">
               Type revealed before your draft begins &middot; Guaranteed: 1 Jackpot, 5 HOF, 94 Pro per 100 drafts
