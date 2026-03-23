@@ -1195,7 +1195,7 @@ export default function DraftingPage() {
 
           {/* Draft Types — 3 cards */}
           <div>
-            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types <span className="normal-case tracking-normal text-white/15">&middot; revealed before each draft &middot; guaranteed 1 Jackpot, 5 HOF, 94 Pro per 100 drafts</span></h3>
+            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types</h3>
             <div className="grid grid-cols-3 gap-3">
               {/* Pro */}
               <div
