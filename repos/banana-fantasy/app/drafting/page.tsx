@@ -1129,7 +1129,7 @@ export default function DraftingPage() {
       {activeDrafts.length === 0 && (
         <div className="space-y-4">
           {/* Hero — no card, just typography */}
-          <div className="text-center py-10">
+          <div className="text-center pt-10 pb-4">
             <h2 className="text-3xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
             <p className="text-[15px] mt-3">
               <span className="font-bold text-banana">$100K</span>
