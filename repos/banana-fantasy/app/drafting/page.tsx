@@ -20,6 +20,7 @@ import * as draftApi from '@/lib/draftApi';
 import { leaveDraft } from '@/lib/api/leagues';
 import { useContests } from '@/hooks/useContests';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
+import { mockFAQSections } from '@/lib/faqContent';
 
 type Draft = DraftState;
 
@@ -90,6 +91,7 @@ export default function DraftingPage() {
   const contestsQuery = useContests();
   const contest = contestsQuery.data?.[0] ?? null;
   const [showContestDetails, setShowContestDetails] = useState(false);
+  const [infoTopic, setInfoTopic] = useState<string | null>(null);
   const promosQuery = usePromos({ userId: user?.id });
   const promos = promosQuery.promos ?? [];
   const promoCount = promos.length;
@@ -1173,22 +1175,22 @@ export default function DraftingPage() {
           <div>
             <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">How it works</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+              <button onClick={() => setInfoTopic('drafts')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">10 Players</h4>
                 <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
-              </div>
-              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+              </button>
+              <button onClick={() => setInfoTopic('drafts')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Snake Draft</h4>
                 <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
-              </div>
-              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+              </button>
+              <button onClick={() => setInfoTopic('team-positions')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Team Positions</h4>
                 <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
-              </div>
-              <div className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+              </button>
+              <button onClick={() => setInfoTopic('best-ball')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Best Ball</h4>
                 <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -1197,8 +1199,9 @@ export default function DraftingPage() {
             <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types</h3>
             <div className="grid grid-cols-3 gap-3">
               {/* Pro */}
-              <div
-                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+              <button
+                onClick={() => setInfoTopic('drafts')}
+                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors text-left cursor-pointer"
                 style={{ background: 'linear-gradient(160deg, rgba(168,85,247,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
@@ -1207,10 +1210,11 @@ export default function DraftingPage() {
                   <span className="text-[15px] font-bold tracking-tight text-pro">94%</span>
                 </div>
                 <p className="text-white/50 text-[11px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
-              </div>
+              </button>
               {/* Hall of Fame */}
-              <div
-                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+              <button
+                onClick={() => setInfoTopic('hof')}
+                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors text-left cursor-pointer"
                 style={{ background: 'linear-gradient(160deg, rgba(212,175,55,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
@@ -1219,10 +1223,11 @@ export default function DraftingPage() {
                   <span className="text-[15px] font-bold tracking-tight text-hof">5%</span>
                 </div>
                 <p className="text-white/50 text-[11px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
-              </div>
+              </button>
               {/* Jackpot */}
-              <div
-                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors"
+              <button
+                onClick={() => setInfoTopic('jackpot')}
+                className="rounded-2xl p-4 hover:bg-white/[0.02] transition-colors text-left cursor-pointer"
                 style={{ background: 'linear-gradient(160deg, rgba(239,68,68,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
@@ -1231,7 +1236,7 @@ export default function DraftingPage() {
                   <span className="text-[15px] font-bold tracking-tight text-jackpot">1%</span>
                 </div>
                 <p className="text-white/50 text-[11px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -1418,6 +1423,40 @@ export default function DraftingPage() {
         paidPasses={user?.draftPasses || 0}
         freePasses={user?.freeDrafts || 0}
       />
+
+      {/* Info Topic Modal */}
+      {infoTopic && (() => {
+        const section = mockFAQSections.find(s => s.id === infoTopic);
+        if (!section) return null;
+        return (
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setInfoTopic(null)}
+          >
+            <div
+              className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto cursor-default"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-xl font-bold text-white">{section.title}</h3>
+                <button onClick={() => setInfoTopic(null)} className="text-white/30 hover:text-white/60 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                {section.items.map((item, i) => (
+                  <div key={i}>
+                    <h4 className="text-white text-[14px] font-semibold">{item.question}</h4>
+                    <p className="text-white/50 text-[13px] mt-1.5 leading-[1.7]">{item.answer}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Contest Details Modal */}
       {contest && (
