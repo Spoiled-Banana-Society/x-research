@@ -1152,9 +1152,6 @@ export default function DraftingPage() {
                 </button>
               </Tooltip>
             </div>
-            {contest && (
-              <p className="text-white/20 text-[11px] mt-1">{contest.currentEntries.toLocaleString()} entries</p>
-            )}
             <p className="text-[15px] mt-3">
               <span className="font-bold text-banana">$100K</span>
               <span className="text-white/30 font-medium"> Prize Pool</span>
