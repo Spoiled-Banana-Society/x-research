@@ -18,6 +18,8 @@ import type { ApiDraftToken } from '@/lib/api/owner';
 import { DRAFT_PLAYERS } from '@/lib/draftRoomConstants';
 import * as draftApi from '@/lib/draftApi';
 import { leaveDraft } from '@/lib/api/leagues';
+import { useContests } from '@/hooks/useContests';
+import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
 
 type Draft = DraftState;
 
@@ -85,6 +87,9 @@ function getBarTimers(): Map<string, number> {
 export default function DraftingPage() {
   const router = useRouter();
   const { isLoggedIn, user, setShowLoginModal, updateUser } = useAuth();
+  const contestsQuery = useContests();
+  const contest = contestsQuery.data?.[0] ?? null;
+  const [showContestDetails, setShowContestDetails] = useState(false);
   const promosQuery = usePromos({ userId: user?.id });
   const promos = promosQuery.promos ?? [];
   const promoCount = promos.length;
@@ -1132,7 +1137,24 @@ export default function DraftingPage() {
         <div className="space-y-4">
           {/* Hero — no card, just typography */}
           <div className="text-center pt-10 pb-4">
-            <h2 className="text-3xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
+            <div className="flex items-center justify-center gap-2.5">
+              <h2 className="text-3xl font-bold text-white tracking-tight">Banana Best Ball IV</h2>
+              <Tooltip content="Contest Details">
+                <button
+                  onClick={() => setShowContestDetails(true)}
+                  className="text-white/25 hover:text-white/50 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </button>
+              </Tooltip>
+            </div>
+            {contest && (
+              <p className="text-white/20 text-[11px] mt-1">{contest.currentEntries.toLocaleString()} entries</p>
+            )}
             <p className="text-[15px] mt-3">
               <span className="font-bold text-banana">$100K</span>
               <span className="text-white/30 font-medium"> Prize Pool</span>
@@ -1399,6 +1421,19 @@ export default function DraftingPage() {
         paidPasses={user?.draftPasses || 0}
         freePasses={user?.freeDrafts || 0}
       />
+
+      {/* Contest Details Modal */}
+      {contest && (
+        <ContestDetailsModal
+          isOpen={showContestDetails}
+          onClose={() => setShowContestDetails(false)}
+          contest={contest}
+          onEnter={() => {
+            setShowContestDetails(false);
+            handleEnterDraft();
+          }}
+        />
+      )}
 
       {/* Promo Detail Modal */}
       <PromoModal
