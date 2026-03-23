@@ -1195,7 +1195,7 @@ export default function DraftingPage() {
 
           {/* Draft Types — 3 cards */}
           <div>
-            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types</h3>
+            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types <span className="normal-case tracking-normal text-white/15">&middot; revealed before each draft</span></h3>
             <div className="grid grid-cols-3 gap-3">
               {/* Pro */}
               <div
@@ -1207,7 +1207,7 @@ export default function DraftingPage() {
                   <span className="text-xl font-bold tracking-tight text-pro">94%</span>
                 </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Standard competition. Win your league to advance to the playoffs.</p>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
               </div>
               {/* Hall of Fame */}
               <div
@@ -1219,7 +1219,7 @@ export default function DraftingPage() {
                   <span className="text-xl font-bold tracking-tight text-hof">5%</span>
                 </div>
                 <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
-                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Bonus prize pool on top of standard prizes. Same format, bigger rewards.</p>
+                <p className="text-white/30 text-[11px] mt-1 leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
               </div>
               {/* Jackpot */}
               <div
@@ -1235,7 +1235,7 @@ export default function DraftingPage() {
               </div>
             </div>
             <p className="text-white/15 text-[10px] text-center mt-3 px-1">
-              Type revealed before your draft begins &middot; Guaranteed: 1 Jackpot, 5 HOF, 94 Pro per 100 drafts
+              Every 100 drafts: 1 Jackpot, 5 HOF, 94 Pro — guaranteed
             </p>
           </div>
         </div>
