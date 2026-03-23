@@ -44,24 +44,21 @@ export function SpecialDraftBanner() {
       <div className="relative overflow-hidden rounded-2xl border border-banana/30 bg-gradient-to-r from-banana/10 via-banana/5 to-transparent p-4 sm:p-5 transition-all hover:border-banana/50 hover:shadow-[0_0_20px_rgba(251,191,36,0.15)]">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">{jpEntries > 0 ? '🔥' : hasQueues ? '⏳' : '🏆'}</span>
+            <span className="text-2xl">{hasQueues ? '⏳' : jpEntries > 0 ? '🔥' : '🏆'}</span>
             <div>
-              {hasEntries ? (
-                <p className="text-white font-semibold text-sm sm:text-base">
-                  You have {jpEntries > 0 && <span className="text-red-400">{jpEntries} Jackpot</span>}
-                  {jpEntries > 0 && hofEntries > 0 && ' & '}
-                  {hofEntries > 0 && <span className="text-yellow-400">{hofEntries} HOF</span>}
-                  {' '}{(jpEntries + hofEntries) === 1 ? 'entry' : 'entries'}!
-                </p>
-              ) : (
-                <p className="text-white font-semibold text-sm sm:text-base">
-                  You have <span className="text-banana">{queuedCount}</span> special draft{queuedCount !== 1 ? 's' : ''} queued
-                </p>
-              )}
+              <p className="text-white font-semibold text-sm sm:text-base">
+                {hasQueues
+                  ? <>You have <span className="text-banana">{queuedCount}</span> special draft{queuedCount !== 1 ? 's' : ''} queued</>
+                  : <>You have {jpEntries > 0 && <span className="text-red-400">{jpEntries} Jackpot</span>}
+                    {jpEntries > 0 && hofEntries > 0 && ' & '}
+                    {hofEntries > 0 && <span className="text-yellow-400">{hofEntries} HOF</span>}
+                    {' '}{(jpEntries + hofEntries) === 1 ? 'entry' : 'entries'}!</>
+                }
+              </p>
               <p className="text-white/40 text-xs sm:text-sm">
-                {hasEntries
-                  ? 'Spin the wheel to queue up'
-                  : 'Waiting for 10 winners · Draft starts immediately when full'}
+                {hasQueues
+                  ? 'Waiting for 10 winners · Draft starts immediately when full'
+                  : 'Spin the wheel to queue up'}
               </p>
             </div>
           </div>

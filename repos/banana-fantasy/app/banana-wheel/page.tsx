@@ -19,6 +19,21 @@ export default function BananaWheelPage() {
   const { user, updateUser, isLoading, isBalanceLoaded, walletAddress } = useAuth();
   const wheelQuery = useWheel();
   const promosQuery = usePromos({ userId: user?.id });
+  const [queuedJP, setQueuedJP] = React.useState(0);
+  const [queuedHOF, setQueuedHOF] = React.useState(0);
+  React.useEffect(() => {
+    if (!user?.id) return;
+    fetchJson<Record<string, { rounds?: Array<{ status: string; members: Array<{ wallet: string }> }> }>>('/api/queues')
+      .then(queues => {
+        const countQueued = (type: string) => {
+          const q = queues[type];
+          if (!q?.rounds) return 0;
+          return q.rounds.filter(r => r.status === 'filling' && r.members.some(m => m.wallet === user.id)).length;
+        };
+        setQueuedJP(countQueued('jackpot'));
+        setQueuedHOF(countQueued('hof'));
+      }).catch(() => {});
+  }, [user?.id]);
   const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
   // Load spin history from Firestore on mount
   React.useEffect(() => {
@@ -179,11 +194,11 @@ export default function BananaWheelPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white text-[14px] font-medium">Jackpot</span>
-                <span className="text-[#ff6b6b] font-semibold text-[16px]">{user?.jackpotEntries || 0}</span>
+                <span className="text-[#ff6b6b] font-semibold text-[16px]">{(user?.jackpotEntries || 0) + queuedJP}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white text-[14px] font-medium">HOF</span>
-                <span className="text-[#ffd60a] font-semibold text-[16px]">{user?.hofEntries || 0}</span>
+                <span className="text-[#ffd60a] font-semibold text-[16px]">{(user?.hofEntries || 0) + queuedHOF}</span>
               </div>
             </div>
           </div>
