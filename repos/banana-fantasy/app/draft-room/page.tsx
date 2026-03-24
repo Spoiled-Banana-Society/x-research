@@ -229,8 +229,9 @@ function DraftRoomContent() {
     return 60;
   });
   const [draftType, setDraftType] = useState<DraftType | null>(() => {
-    if (stored?.draftType) return stored.draftType;
+    // Special drafts: URL param is source of truth for type (localStorage may be stale)
     if (specialTypeParam) return specialTypeParam;
+    if (stored?.draftType) return stored.draftType;
     return null;
   });
 
