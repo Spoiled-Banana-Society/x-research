@@ -3,6 +3,13 @@
 
 export type DraftType = 'jackpot' | 'hof' | 'pro';
 
+// Drafting closes at NFL Season kickoff: Sept 4, 2026 at 4:20 PM PST (UTC: 11:20 PM)
+export const DRAFTING_CLOSES_AT = new Date('2026-09-04T23:20:00Z');
+
+export function isDraftingOpen(): boolean {
+  return Date.now() < DRAFTING_CLOSES_AT.getTime();
+}
+
 export const DRAFT_TYPE_COLORS = {
   jackpot: {
     primary: '#ef4444',

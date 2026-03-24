@@ -40,6 +40,9 @@ export interface DraftState {
   // Slot machine was dismissed (don't re-show on re-entry)
   slotDismissed?: boolean;
 
+  // Pass type used to enter this draft
+  passType?: 'paid' | 'free';
+
   // Engine state for resuming mid-draft
   enginePicks?: Array<{
     pickNumber: number; round: number; pickInRound: number;

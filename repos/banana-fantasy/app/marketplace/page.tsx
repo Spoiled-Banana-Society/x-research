@@ -11,6 +11,7 @@ import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
 import type { MarketplaceTeam } from '@/lib/opensea';
+import { isDraftingOpen } from '@/lib/draftTypes';
 
 function CardSkeleton() {
   return (
@@ -548,6 +549,12 @@ export default function MarketplacePage() {
   const handleList = useCallback(async () => {
     if (!selectedTeam || !walletAddress || !listPrice) return;
     setTxError(null);
+
+    // Block free-pass teams during draft season
+    if (selectedTeam.passType === 'free' && isDraftingOpen()) {
+      setTxError('Free draft teams can only be listed after the draft season closes.');
+      return;
+    }
 
     try {
       const { createListing } = await import('@/lib/marketplace/sell');
@@ -1457,6 +1464,14 @@ export default function MarketplacePage() {
                             {cancellingTokenId === team.tokenId ? 'Cancelling...' : 'Delist'}
                           </button>
                         </>
+                      ) : team.passType === 'free' && isDraftingOpen() ? (
+                        <button
+                          disabled
+                          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-white/10 text-white/30 cursor-not-allowed"
+                          title="Free draft teams can be listed after the draft season closes"
+                        >
+                          Available After Season
+                        </button>
                       ) : (
                         <button
                           onClick={() => openSellModal(team)}

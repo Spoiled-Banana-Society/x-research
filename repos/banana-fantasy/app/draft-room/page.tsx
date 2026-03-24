@@ -130,7 +130,7 @@ function DraftRoomContent() {
         try {
           const { joinDraft } = await import('@/lib/api/leagues');
           const promoType = searchParams?.get('promoType') as 'jackpot' | 'hof' | 'pro' | null;
-          const draftRoom = await joinDraft(walletParam, speedParam || 'fast', 1, promoType ?? undefined);
+          const draftRoom = await joinDraft(walletParam, speedParam || 'fast', 1, promoType ?? undefined, passTypeParam || 'paid');
           if (!draftRoom?.id) throw new Error('Join failed: no draft ID');
 
           const newId = draftRoom.id;

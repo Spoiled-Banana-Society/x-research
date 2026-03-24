@@ -68,6 +68,7 @@ export interface ApiDraftToken {
   seasonScore?: string;
   weekScore?: string;
   prizes?: { USDC?: number; [k: string]: unknown };
+  passType?: string;
   [k: string]: unknown;
 }
 
