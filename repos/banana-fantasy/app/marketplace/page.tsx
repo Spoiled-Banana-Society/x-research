@@ -92,6 +92,7 @@ export default function MarketplacePage() {
   const [selectedTeam, setSelectedTeam] = useState<MarketplaceTeam | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
+  const [showFreePassInfo, setShowFreePassInfo] = useState<'team' | 'pass' | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successType, setSuccessType] = useState<'buy' | 'sell' | 'list'>('buy');
   const [listPrice, setListPrice] = useState('');
@@ -552,7 +553,8 @@ export default function MarketplacePage() {
 
     // Block free-pass teams during draft season
     if (selectedTeam.passType === 'free' && isDraftingOpen()) {
-      setTxError('Free draft teams can only be listed after the draft season closes.');
+      setShowSellModal(false);
+      setShowFreePassInfo('team');
       return;
     }
 
@@ -1466,9 +1468,8 @@ export default function MarketplacePage() {
                         </>
                       ) : team.passType === 'free' && isDraftingOpen() ? (
                         <button
-                          disabled
-                          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-white/10 text-white/30 cursor-not-allowed"
-                          title="Free draft teams can be listed after the draft season closes"
+                          onClick={() => setShowFreePassInfo('team')}
+                          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-white/10 text-white/40 hover:bg-white/15 hover:text-white/50"
                         >
                           Available After Season
                         </button>
@@ -2310,6 +2311,39 @@ export default function MarketplacePage() {
       )}
 
       {/* Sell/List Modal */}
+      {/* Free Pass Info Modal */}
+      {showFreePassInfo && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowFreePassInfo(null)}
+        >
+          <div
+            className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 max-w-sm w-full cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-white mb-3">
+              {showFreePassInfo === 'team' ? 'Free Draft Team' : 'Free Draft Pass'}
+            </h3>
+            <p className="text-white/60 text-[14px] leading-[1.7] mb-2">
+              {showFreePassInfo === 'team'
+                ? 'This team was drafted using a free pass. Free draft teams can be listed on the marketplace after the draft season closes on September 4th.'
+                : 'Free draft passes cannot be sold on the marketplace. They can only be used to enter drafts.'}
+            </p>
+            <p className="text-white/40 text-[13px] leading-[1.6] mb-6">
+              {showFreePassInfo === 'team'
+                ? 'Teams drafted with paid passes can be listed at any time.'
+                : 'Once you draft a team with a free pass, that team becomes listable after the season starts.'}
+            </p>
+            <button
+              onClick={() => setShowFreePassInfo(null)}
+              className="w-full px-4 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
+
       {showSellModal && selectedTeam && (
         <div
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
