@@ -1346,36 +1346,8 @@ function DraftRoomContent() {
         try {
           console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
 
-          // Special drafts: also poll queue API to check if the draft has been created
-          // The Cloud Function creates the draft when the queue fills — the Go API
-          // may not have the draft order until that finishes.
-          if (isSpecialDraft) {
-            try {
-              const queues = await fetch('/api/queues').then(r => r.json());
-              let roundDraftId = '';
-              let roundStatus = '';
-              for (const q of Object.values(queues) as any[]) {
-                for (const r of q.rounds || []) {
-                  if (r.draftId === pollDraftId) {
-                    roundDraftId = r.draftId;
-                    roundStatus = r.status;
-                    break;
-                  }
-                }
-              }
-              if (roundDraftId && roundStatus !== 'drafting') {
-                // Queue round exists but draft not created/ready yet — keep polling
-                console.log(`[Draft Room] Special draft queue status: ${roundStatus} — waiting for 'drafting'`);
-                throw new Error(`Queue round status is "${roundStatus}", waiting for "drafting"`);
-              }
-            } catch (qErr) {
-              // If queue check throws (network error or status not ready), fall through to Go API check
-              if ((qErr as Error).message?.includes('waiting for')) {
-                throw qErr; // Re-throw to trigger retry
-              }
-              // Network error — try Go API anyway
-            }
-          }
+          // Special drafts: skip queue status check — Go API is the source of truth
+          // for whether the draft is ready. The queue status may lag behind.
 
           const info = await draftApi.getDraftInfo(pollDraftId);
 
@@ -1383,18 +1355,14 @@ function DraftRoomContent() {
             throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
           }
 
-          // Special drafts: verify the draft is actually active/starting, not stale data.
-          // Require draftStartTime or pickNumber > 0 to confirm the draft is real.
-          if (isSpecialDraft && !info.draftStartTime && info.pickNumber <= 1) {
-            // Check if the draft order was recently created by looking for our wallet
+          // Special drafts: verify user is in the draft order (skip stale data)
+          if (isSpecialDraft) {
             const hasUser = info.draftOrder.some((u: { ownerId: string }) =>
               u.ownerId.toLowerCase() === walletParam.toLowerCase()
             );
             if (!hasUser) {
-              throw new Error('Special draft: draft order exists but does not include current user (stale data)');
+              throw new Error('Special draft: user not in draft order yet — retrying');
             }
-            // Draft has our wallet in the order — it's real, proceed
-            console.log('[Draft Room] Special draft: draft order includes user, proceeding');
           }
 
           const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
