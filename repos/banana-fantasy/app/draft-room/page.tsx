@@ -211,6 +211,8 @@ function DraftRoomContent() {
     return 'filling';
   });
   const [playerCount, setPlayerCount] = useState(() => {
+    // Special drafts: always start from URL param — queue polling is source of truth
+    if (isSpecialDraft) return Math.min(Math.max(initialPlayers, 1), 10);
     if (stored?.phase === 'filling' && stored.fillingStartedAt) {
       const initPlayers = stored.fillingInitialPlayers ?? Math.max(initialPlayers, 1);
       const elapsed = (Date.now() - stored.fillingStartedAt) / 800;
