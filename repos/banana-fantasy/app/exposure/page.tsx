@@ -348,8 +348,6 @@ export default function ExposurePage() {
               <div className="text-right">Proj Pts</div>
             </div>
             {adpValues.slice(0, 10).map(v => {
-              const depthChart = getTeamPositionDepthChart(v.team, v.position);
-              const starter = depthChart[0];
               return (
                 <div key={v.teamPosition} className="grid grid-cols-[1fr_64px_64px_80px] gap-2 px-4 py-2.5 items-center border-b border-white/[0.03] last:border-0 hover:bg-white/[0.03] transition-colors">
                   <div className="flex items-center gap-2">
@@ -359,10 +357,7 @@ export default function ExposurePage() {
                     >
                       {v.position.replace(/\d/g, '')}
                     </span>
-                    <div>
-                      <span className="text-white text-sm font-medium">{v.team} {v.position}</span>
-                      {starter && <p className="text-white/30 text-[10px]">{starter.name}</p>}
-                    </div>
+                    <span className="text-white text-sm font-medium">{v.team} {v.position}</span>
                   </div>
                   <span className="text-right text-sm font-semibold" style={{ color: exposureColor(v.exposure) }}>{v.exposure}%</span>
                   <span className="text-white/50 text-xs text-right">{v.adp}</span>
