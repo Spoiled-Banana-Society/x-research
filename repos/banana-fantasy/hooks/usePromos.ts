@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Promo } from '@/types';
 import { AppApiError, fetchJson } from '@/lib/appApiClient';
+import { pushNotification } from '@/components/NotificationCenter';
 import { useSWRLike } from '@/hooks/useSWRLike';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -65,6 +66,17 @@ export function usePromos(opts?: { userId?: string }) {
 
         // Revalidate in background (keeps everything consistent)
         void swr.mutate();
+
+        // Notify user of claimed reward
+        if (res.spinsAdded > 0) {
+          const isBuyBonus = res.promo?.type === 'buy-bonus';
+          pushNotification({
+            type: 'promo',
+            title: 'Promo Claimed!',
+            message: `You earned ${res.spinsAdded} ${isBuyBonus ? 'free draft' : 'wheel spin'}${res.spinsAdded !== 1 ? 's' : ''}!`,
+            link: isBuyBonus ? '/drafting' : '/banana-wheel',
+          });
+        }
 
         return res;
       } catch {

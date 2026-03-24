@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNotifications, type NotificationType } from '@/components/NotificationCenter';
+import { useNotifications, type NotificationType, type NotificationCategory, CATEGORY_LABELS } from '@/components/NotificationCenter';
 
 const TYPE_CONFIG: Record<NotificationType, { emoji: string; color: string; label: string }> = {
   draft_starting: { emoji: '🏈', color: '#22c55e', label: 'Draft' },
@@ -44,8 +44,9 @@ const fadeIn = {
 type FilterKey = 'all' | 'unread' | NotificationType;
 
 export default function NotificationsPage() {
-  const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllRead, clearAll, prefs, toggleCategory } = useNotifications();
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [showPrefs, setShowPrefs] = useState(false);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return notifications;
@@ -95,8 +96,45 @@ export default function NotificationsPage() {
                 Clear all
               </button>
             )}
+            <button
+              onClick={() => setShowPrefs(!showPrefs)}
+              className={`p-1.5 rounded-lg transition-colors ${showPrefs ? 'bg-banana/20 text-banana' : 'bg-white/5 text-white/30 hover:bg-white/10 hover:text-white/50'}`}
+              title="Notification settings"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
           </div>
         </motion.div>
+
+        {/* Category Preferences */}
+        {showPrefs && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
+          >
+            <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">Notification Categories</p>
+            <div className="space-y-2">
+              {(Object.keys(CATEGORY_LABELS) as NotificationCategory[]).map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => toggleCategory(cat)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors"
+                >
+                  <span className="text-sm text-white/70">
+                    {CATEGORY_LABELS[cat].emoji} {CATEGORY_LABELS[cat].label}
+                  </span>
+                  <div className={`w-9 h-5 rounded-full transition-colors relative ${prefs[cat] ? 'bg-banana' : 'bg-white/10'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${prefs[cat] ? 'left-[18px]' : 'left-0.5'}`} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Filters */}
         <motion.div

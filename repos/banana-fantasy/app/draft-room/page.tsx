@@ -10,6 +10,7 @@ import { useDraftWebSocket } from '@/hooks/useDraftWebSocket';
 import * as draftApi from '@/lib/draftApi';
 import { leaveDraft } from '@/lib/api/leagues';
 
+import { pushNotification } from '@/components/NotificationCenter';
 import { DraftRoomChat } from '@/components/drafting/DraftRoomChat';
 import { SlotMachineOverlay } from '@/components/drafting/SlotMachineOverlay';
 import { DraftTabs } from '@/components/drafting/DraftTabs';
@@ -1145,6 +1146,7 @@ function DraftRoomContent() {
   }, [engine.airplaneMode, draftId]);
 
   // Write 6: Draft completes — remove from active drafts + cleanup direct localStorage keys
+  const draftCompleteNotifiedRef = useRef(false);
   useEffect(() => {
     if (engine.draftStatus === 'completed' && draftId) {
       draftStore.removeDraft(draftId);
@@ -1152,9 +1154,19 @@ function DraftRoomContent() {
       localStorage.removeItem(`mute:${draftId}`);
       localStorage.removeItem(`queue:${draftId}`);
 
-      // Promo tracking now fires at draft start (pre-spin transition), not completion
+      // Notify user their draft is done
+      if (!draftCompleteNotifiedRef.current) {
+        draftCompleteNotifiedRef.current = true;
+        const typeLabel = draftType === 'jackpot' ? 'Jackpot' : draftType === 'hof' ? 'HOF' : 'Pro';
+        pushNotification({
+          type: 'draft_results',
+          title: 'Draft Complete!',
+          message: `Your ${typeLabel} draft "${contestName}" is done. View your team card.`,
+          link: '/standings',
+        });
+      }
     }
-  }, [engine.draftStatus, draftId, user?.id, isLiveMode]);
+  }, [engine.draftStatus, draftId, user?.id, isLiveMode, contestName, draftType]);
 
   // Trigger notification opt-in when draft completes
   useEffect(() => {

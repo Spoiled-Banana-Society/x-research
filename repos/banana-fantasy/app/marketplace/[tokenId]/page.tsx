@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
-import { useNftOffers, useTokenSaleHistory, logActivity, notifySeller, notifyOwnerOfOffer } from '@/hooks/useMarketplace';
+import { useNftOffers, useTokenSaleHistory, logActivity, notifySeller, notifyOwnerOfOffer, notifyOffererOfAcceptance } from '@/hooks/useMarketplace';
 import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
@@ -492,6 +492,16 @@ export default function NftDetailPage() {
         counterparty: offer.offererAddress || null,
         orderHash: offer.orderHash || null,
       });
+
+      // Notify the offerer (Firestore — they're not on this page)
+      if (offer.offererAddress) {
+        notifyOffererOfAcceptance({
+          offererWallet: offer.offererAddress,
+          tokenId,
+          teamName: nft?.name || `Team #${tokenId}`,
+          offerAmount: offer.amount,
+        });
+      }
 
       refetchOffers();
       setTimeout(() => fetchNft(), 2000);

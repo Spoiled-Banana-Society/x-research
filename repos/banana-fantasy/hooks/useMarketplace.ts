@@ -715,6 +715,22 @@ export function notifyOwnerOfOffer(data: {
   });
 }
 
+/** Notify offerer that their offer was accepted */
+export function notifyOffererOfAcceptance(data: {
+  offererWallet: string;
+  tokenId: string;
+  teamName: string;
+  offerAmount: number;
+}) {
+  postNotification({
+    wallet: data.offererWallet,
+    type: 'offer_accepted',
+    title: 'Your Offer Was Accepted!',
+    message: `Your $${data.offerAmount.toFixed(2)} offer on ${data.teamName} was accepted.`,
+    link: `/marketplace/${data.tokenId}`,
+  });
+}
+
 // ── Firestore Notifications Hook (for the bell) ─────────────────
 
 export interface FirestoreNotification {

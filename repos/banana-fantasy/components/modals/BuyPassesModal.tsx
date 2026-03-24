@@ -10,6 +10,7 @@ import { useMintDraftPass } from '@/hooks/useMintDraftPass';
 import { draftPassPricing } from '@/lib/pricing';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import { isStagingMode, getStagingApiUrl, getDraftsApiUrl } from '@/lib/staging';
+import { pushNotification } from '@/components/NotificationCenter';
 import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType';
 import { fetchJson } from '@/lib/appApiClient';
 
@@ -129,6 +130,12 @@ export function BuyPassesModal({
     setMintedCount(count);
     setPhase('pick-speed');
     onPurchaseComplete?.(count);
+    pushNotification({
+      type: 'purchase_complete',
+      title: 'Draft Passes Purchased!',
+      message: `You bought ${count} draft pass${count !== 1 ? 'es' : ''}. Time to draft!`,
+      link: '/drafting',
+    });
   };
 
   const handlePurchase = async () => {

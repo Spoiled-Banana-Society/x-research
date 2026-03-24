@@ -73,6 +73,12 @@ export default function BananaWheelPage() {
       if (!user || !segment) return;
       if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
         updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
+        pushNotification({
+          type: 'promo',
+          title: 'Free Drafts Won!',
+          message: `You won ${segment.prizeValue} free draft${segment.prizeValue !== 1 ? 's' : ''} on the Banana Wheel!`,
+          link: '/drafting',
+        });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
         updateUser({ jackpotEntries: (user.jackpotEntries || 0) + 1 });
         // Auto-queue for jackpot draft

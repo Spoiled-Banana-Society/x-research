@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useModalStack } from '@/hooks/useModalStack';
 import { useContests } from '@/hooks/useContests';
 import { usePromos } from '@/hooks/usePromos';
+import { usePromoReminders } from '@/hooks/usePromoReminders';
 import { isStagingMode as _isStagingMode } from '@/lib/staging';
 import { SkeletonContestCard } from '@/components/ui/Skeleton';
 import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType';
@@ -81,6 +82,7 @@ export default function HomePage() {
   const [isJoiningDraft] = React.useState(false);
   const contestsQuery = useContests();
   const promosQuery = usePromos({ userId: user?.id });
+  usePromoReminders(promosQuery.promos);
 
   const selectedContest = contestsQuery.data?.[0];
   const modals = useModalStack();

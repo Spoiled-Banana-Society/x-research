@@ -42,6 +42,59 @@ const TYPE_CONFIG: Record<NotificationType, { emoji: string; color: string }> = 
 const STORAGE_KEY = 'sbs-notifications';
 const MAX_NOTIFICATIONS = 50;
 const SYNC_EVENT = 'sbs-notifications-sync';
+const PREFS_KEY = 'sbs-notification-prefs';
+
+// ─── Notification Categories ────────────────────────────────────────────
+
+export type NotificationCategory = 'drafts' | 'promos' | 'marketplace' | 'special' | 'system';
+
+const CATEGORY_MAP: Record<NotificationType, NotificationCategory> = {
+  draft_starting: 'drafts',
+  draft_results: 'drafts',
+  promo: 'promos',
+  referral: 'system',
+  jackpot: 'special',
+  hof: 'special',
+  jackpot_queue: 'special',
+  hof_queue: 'special',
+  system: 'system',
+  offer_received: 'marketplace',
+  offer_accepted: 'marketplace',
+  purchase_complete: 'marketplace',
+  sale_complete: 'marketplace',
+  listing_created: 'marketplace',
+};
+
+export const CATEGORY_LABELS: Record<NotificationCategory, { label: string; emoji: string }> = {
+  drafts: { label: 'Drafts', emoji: '🏈' },
+  promos: { label: 'Promos & Rewards', emoji: '🎁' },
+  marketplace: { label: 'Marketplace', emoji: '💰' },
+  special: { label: 'Special Drafts', emoji: '🔥' },
+  system: { label: 'System & Referrals', emoji: '📢' },
+};
+
+export type NotificationPrefs = Record<NotificationCategory, boolean>;
+
+const DEFAULT_PREFS: NotificationPrefs = { drafts: true, promos: true, marketplace: true, special: true, system: true };
+
+export function getNotificationPrefs(): NotificationPrefs {
+  if (typeof window === 'undefined') return DEFAULT_PREFS;
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
+  } catch { return DEFAULT_PREFS; }
+}
+
+export function setNotificationPrefs(prefs: NotificationPrefs) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
+}
+
+function isCategoryEnabled(type: NotificationType): boolean {
+  const cat = CATEGORY_MAP[type];
+  if (!cat) return true;
+  return getNotificationPrefs()[cat] !== false;
+}
 
 // ─── localStorage helpers ────────────────────────────────────────────────
 
@@ -67,6 +120,8 @@ function saveNotifications(notifs: Notification[]) {
 /** Add a notification from anywhere (no hook needed). Updates localStorage + triggers sync. */
 export function pushNotification(notif: { type: NotificationType; title: string; message: string; link?: string }) {
   if (typeof window === 'undefined') return;
+  // Respect user's category preferences
+  if (!isCategoryEnabled(notif.type)) return;
   const existing = loadNotifications();
   const newNotif: Notification = {
     ...notif,
@@ -202,7 +257,18 @@ export function useNotifications() {
     saveNotifications([]);
   }, []);
 
-  return { notifications, unreadCount, markAsRead, markAllRead, addNotification, clearAll };
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  useEffect(() => { setPrefs(getNotificationPrefs()); }, []);
+
+  const toggleCategory = useCallback((cat: NotificationCategory) => {
+    setPrefs(prev => {
+      const updated = { ...prev, [cat]: !prev[cat] };
+      setNotificationPrefs(updated);
+      return updated;
+    });
+  }, []);
+
+  return { notifications, unreadCount, markAsRead, markAllRead, addNotification, clearAll, prefs, toggleCategory };
 }
 
 // ─── Bell Icon Button ────────────────────────────────────────────────────
