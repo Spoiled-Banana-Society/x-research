@@ -1440,7 +1440,6 @@ export default function DraftingPage() {
             items: [
               { q: 'What is a snake draft?', a: 'Pick order reverses each round. If you pick 1st in round 1, you pick 10th in round 2, then 1st again in round 3. This keeps things fair for everyone.' },
               { q: 'Fast or slow — what\'s the difference?', a: 'You choose your speed before each draft. Fast drafts give you 30 seconds per pick — the whole draft takes about 15-20 minutes. Slow drafts give you 8 hours per pick, perfect if you want to draft over a few days.' },
-              { q: 'What if I run out of time?', a: 'If the timer expires, the best available player is auto-picked for you based on rankings.' },
               { q: 'How many rounds?', a: '15 rounds. You draft a full roster: 1 QB, 2 RB, 3 WR, 1 TE, 2 FLEX, 1 K, 1 DEF, plus bench spots.' },
             ],
           },
