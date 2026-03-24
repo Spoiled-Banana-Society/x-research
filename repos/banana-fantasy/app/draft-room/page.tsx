@@ -43,7 +43,8 @@ function DraftRoomContent() {
   const speedParam = searchParams.get('speed') as 'fast' | 'slow' | null;
   const passTypeParam = searchParams.get('passType') as 'paid' | 'free' | null;
   const isPaidDraft = passTypeParam !== 'free'; // Default to paid if not specified
-  const isSpecialDraft = searchParams.get('special') === 'true'; // JP/HOF special draft — skip filling/slot
+  const isSpecialDraft = searchParams.get('special') === 'true'; // JP/HOF special draft — skip slot machine reveal
+  const specialTypeParam = searchParams.get('specialType') as 'jackpot' | 'hof' | null; // Known type for special drafts
 
   // draftId is stateful — starts empty when navigating before joinDraft completes
   const [draftId, setDraftId] = useState(urlDraftId);
@@ -74,9 +75,8 @@ function DraftRoomContent() {
   const [liveError, setLiveError] = useState<string | null>(null);
   const liveInitializedRef = useRef(false);
   const storedForInit = draftId ? draftStore.getDraft(draftId) : undefined;
-  // liveDataReady gates the loadLiveData effect — set true when loading phase resolves to drafting
-  // Special drafts skip filling/animations — ready immediately
-  const [liveDataReady, setLiveDataReady] = useState(isSpecialDraft);
+  // liveDataReady gates the loadLiveData effect — set true when filling→drafting transition completes
+  const [liveDataReady, setLiveDataReady] = useState(false);
   const [engineReady, setEngineReady] = useState(false);
   const liveRetryCountRef = useRef(0);
   // Track whether we're waiting for server to create draft documents after filling
@@ -198,8 +198,6 @@ function DraftRoomContent() {
 
   // ==================== PHASE STATE ====================
   const [phase, setPhase] = useState<RoomPhase>(() => {
-    // Special drafts (JP/HOF from wheel) skip all filling/slot animations
-    if (isSpecialDraft) return 'loading';
     // In live mode, if stored state shows draft is past filling, start in 'loading'
     if (isLiveMode && stored && (
       (stored.phase && stored.phase !== 'filling') ||
@@ -228,6 +226,7 @@ function DraftRoomContent() {
   });
   const [draftType, setDraftType] = useState<DraftType | null>(() => {
     if (stored?.draftType) return stored.draftType;
+    if (specialTypeParam) return specialTypeParam;
     return null;
   });
 
@@ -1108,6 +1107,7 @@ function DraftRoomContent() {
   // ==================== FILLING PHASE ====================
   // Client-side visual animation for filling phase (all modes).
   // In live mode, server polling also updates draftOrder + playerCount via Math.max.
+  // Special drafts skip client animation — server polling drives playerCount.
   useEffect(() => {
     if (phase !== 'filling') return;
 
@@ -1118,6 +1118,9 @@ function DraftRoomContent() {
         draftStore.updateDraft(draftId, { phase: 'filling', fillingStartedAt: fillingStartedAtRef.current, fillingInitialPlayers: Math.max(initialPlayers, 1) });
       }
     }
+
+    // Special drafts: server polling drives playerCount, no client-side animation
+    if (isSpecialDraft) return;
 
     // If already at 10, skip directly
     if (playerCount >= 10) return;
@@ -1165,14 +1168,20 @@ function DraftRoomContent() {
           // This prevents a race where setting draftOrder here causes the "at 10" effect
           // to succeed instantly, skipping the progress bar.
           if (phase === 'filling') {
-            // Don't update playerCount here during filling — the filling animation
-            // (800ms interval) handles the visual count-up. Jumping playerCount to
-            // the server value skips the animation when bots fill instantly.
-            // The filling animation will reach 10 naturally, then the "at 10" effect
-            // takes over and polls for the draft order.
+            // Special drafts: server is sole source of truth for player count.
+            // Update playerCount from server poll so UI shows real fill progress.
+            if (isSpecialDraft) {
+              setPlayerCount(prev => Math.max(prev, info.draftOrder.length));
+              if (draftId) {
+                draftStore.updateDraft(draftId, { players: info.draftOrder.length });
+              }
+            }
+            // Regular drafts: filling animation (800ms interval) handles visual count-up.
+            // Jumping playerCount to server value skips the animation when bots fill instantly.
             if (info.draftOrder.length >= 10) {
               console.log('[Draft Room] Poll detected 10/10 — letting filling animation finish');
-              // Don't return — keep polling so we pick up the draft order after filling animation completes
+              // For special drafts, also set playerCount to 10 so "at 10" effect fires
+              if (isSpecialDraft) setPlayerCount(10);
             }
           } else {
             // After filling (pre-spin/spinning/result), update draftOrder normally
@@ -1343,12 +1352,37 @@ function DraftRoomContent() {
     const userPos = order.findIndex((p: { isYou: boolean }) => p.isYou);
     setDraftOrder(order);
     setUserDraftPosition(userPos);
-    preSpinStartedAtRef.current = countdownStart;
     setWaitingForServer(false);
-    setPhase('pre-spin');
-    setPreSpinCountdown(15);
-    const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
-    setMainCountdown(remaining);
+
+    // Special drafts: skip slot machine reveal, go straight to drafting
+    if (isSpecialDraft) {
+      // Type is already known from URL param or queue
+      if (specialTypeParam && !draftType) setDraftType(specialTypeParam);
+      setPlayerCount(10);
+      setMainCountdown(0);
+      setPhase('drafting');
+      setLiveDataReady(true);
+      if (draftId) {
+        draftStore.updateDraft(draftId, {
+          phase: 'drafting',
+          status: 'drafting',
+          players: 10,
+          draftOrder: order,
+          userDraftPosition: userPos,
+          type: specialTypeParam || draftType,
+          draftType: specialTypeParam || draftType,
+        });
+      }
+      console.log('[Draft Room] Special draft — skipped slot machine, going to drafting');
+      // Still track promos below
+    } else {
+      // Regular draft: go to pre-spin → slot machine → drafting
+      preSpinStartedAtRef.current = countdownStart;
+      setPhase('pre-spin');
+      setPreSpinCountdown(15);
+      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
+      setMainCountdown(remaining);
+    }
 
     // Track promos — only paid drafts count (free drafts don't earn promo progress)
     const id = draftId || urlDraftId;
@@ -1404,19 +1438,23 @@ function DraftRoomContent() {
       }).catch(() => {});
     }
 
-    if (isLiveMode) setLiveDataReady(true);
-    if (draftId) {
-      draftStore.updateDraft(draftId, {
-        phase: 'pre-spin',
-        preSpinStartedAt: countdownStart,
-        randomizingStartedAt: undefined,
-        draftOrder: order,
-        userDraftPosition: userPos,
-        type: draftType,
-        draftType: draftType,
-      });
+    // Regular drafts: set liveDataReady and update store for pre-spin
+    // (Special drafts already did this in the isSpecialDraft branch above)
+    if (!isSpecialDraft) {
+      if (isLiveMode) setLiveDataReady(true);
+      if (draftId) {
+        draftStore.updateDraft(draftId, {
+          phase: 'pre-spin',
+          preSpinStartedAt: countdownStart,
+          randomizingStartedAt: undefined,
+          draftOrder: order,
+          userDraftPosition: userPos,
+          type: draftType,
+          draftType: draftType,
+        });
+      }
+      console.log('[Draft Room] Transitioned to pre-spin phase');
     }
-    console.log('[Draft Room] Transitioned to pre-spin phase');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverPollResult]);
 
@@ -1892,7 +1930,7 @@ function DraftRoomContent() {
         <div className="h-14 bg-black/30 border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-4">
             <span className="font-bold">{contestName}</span>
-            {visibleDraftType && phase !== 'filling' && (
+            {visibleDraftType && (phase !== 'filling' || isSpecialDraft) && (
               <>
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                   visibleDraftType === 'jackpot' ? 'bg-red-500/30 text-red-400' :
@@ -1902,7 +1940,7 @@ function DraftRoomContent() {
                 <VerifiedBadge type="draft-type" draftType={visibleDraftType} />
               </>
             )}
-            {phase === 'filling' && (
+            {phase === 'filling' && !isSpecialDraft && (
               <span className="px-2 py-0.5 rounded text-xs font-bold bg-white/10 text-white/50">UNREVEALED</span>
             )}
           </div>

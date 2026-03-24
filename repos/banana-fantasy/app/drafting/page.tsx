@@ -28,6 +28,10 @@ type Draft = DraftState;
 
 function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; walletAddress?: string | null }) {
   const [queues, setQueues] = useState<Record<string, DraftQueue> | null>(null);
+  // Poll faster (3s) when a round has no draftId yet (waiting for Cloud Function)
+  const hasPendingDraft = queues && Object.values(queues).some(q =>
+    (q as any).rounds?.some((r: any) => r.status === 'filling' && !r.draftId && r.members.some((m: any) => m.wallet === userId))
+  );
   useEffect(() => {
     if (!userId) return;
     fetchJson<Record<string, DraftQueue>>('/api/queues')
@@ -35,14 +39,14 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
     const interval = setInterval(() => {
       fetchJson<Record<string, DraftQueue>>('/api/queues')
         .then(setQueues).catch(() => {});
-    }, 10000);
+    }, hasPendingDraft ? 3000 : 5000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, hasPendingDraft]);
 
   if (!queues || !userId) return null;
 
   const myRounds: Array<{ type: string; round: any; color: string; label: string }> = [];
-  for (const [key, q] of Object.entries(queues)) {
+  for (const [, q] of Object.entries(queues)) {
     const isJP = q.type === 'jackpot';
     for (const r of q.rounds || []) {
       if (r.status === 'completed') continue;
@@ -59,51 +63,96 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
   if (myRounds.length === 0) return null;
 
   return (
-    <div className="mb-6">
-      <h2 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-2">Special Drafts</h2>
-      <div className="space-y-1.5">
-        {myRounds.map((item) => {
-          const r = item.round;
-          const isLive = r.status === 'ready' || r.status === 'drafting';
-          const canEnter = !!r.draftId;
-          return (
-            <div
-              key={`${item.type}-${r.roundId}`}
-              className={`group cursor-pointer transition-all overflow-hidden rounded-lg border-2 ${
-                canEnter ? 'border-banana bg-banana/10' : 'border-transparent hover:bg-white/[0.03]'
-              }`}
-              onClick={() => {
-                if (canEnter) {
-                  window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true`;
-                } else {
-                  window.location.href = '/special-drafts';
-                }
-              }}
-            >
-              <div className="flex items-center justify-between px-5 py-3">
-                <div className="flex items-center gap-2">
-                  <span>{item.type === 'jackpot' ? '🔥' : '🏆'}</span>
-                  <span className="text-white/80 font-medium" style={{ color: item.color }}>{item.label}</span>
-                  <span className="text-white/30 text-xs">·</span>
-                  <span className="text-white/40 text-xs">8-hour · {item.label} #{r.roundId}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-white/50 text-sm">{r.members.length}/10</span>
-                  {canEnter ? (
-                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-white text-black hover:bg-white/90">
-                      Enter
+    <div className="space-y-1.5 mb-3">
+      {myRounds.map((item) => {
+        const r = item.round;
+        const canEnter = !!r.draftId;
+        const accentColor = item.color;
+        const isFilling = r.status === 'filling';
+        const isLive = r.status === 'ready' || r.status === 'drafting';
+        return (
+          <div
+            key={`${item.type}-${r.roundId}`}
+            className={`group cursor-pointer transition-all overflow-hidden rounded-lg hover:bg-white/[0.03] border-2 ${
+              isLive ? 'border-banana bg-banana/10' : 'border-transparent'
+            }`}
+            onClick={() => {
+              if (canEnter) {
+                window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}`;
+              } else {
+                window.location.href = '/special-drafts';
+              }
+            }}
+          >
+            {/* Same row layout as regular drafts */}
+            <div className="flex items-center justify-between px-5 py-3">
+              {/* Name */}
+              <div className="w-20 flex-shrink-0">
+                <span className="text-white/80 font-medium">{item.label} #{r.roundId}</span>
+              </div>
+
+              {/* Speed — hidden on small screens */}
+              <div className="w-16 flex-shrink-0 text-center hidden sm:block">
+                <span className="text-white/50 text-sm">8 hour</span>
+              </div>
+
+              {/* Type — hidden on small screens */}
+              <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
+                <span className="text-sm font-semibold" style={{ color: accentColor }}>
+                  {item.type === 'jackpot' ? 'JACKPOT' : 'HALL OF FAME'}
+                </span>
+              </div>
+
+              {/* Status — progress bar + count (matches regular filling drafts) */}
+              <div className="w-28 flex-shrink-0 flex items-center justify-center">
+                {isFilling ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${(r.members.length / 10) * 100}%`,
+                          backgroundColor: accentColor
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs tabular-nums">
+                      <span className="text-white font-semibold">{r.members.length}</span>
+                      <span className="text-white/40">/10</span>
                     </span>
-                  ) : (
-                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-white/10 text-white/60">
-                      {r.members.length}/10
-                    </span>
-                  )}
-                </div>
+                  </div>
+                ) : isLive ? (
+                  <span className="text-banana font-bold text-sm animate-pulse">
+                    {r.status === 'ready' ? 'Starting!' : 'Live!'}
+                  </span>
+                ) : (
+                  <span className="text-white/50 text-sm">In progress</span>
+                )}
+              </div>
+
+              {/* Button */}
+              <div className="w-28 flex-shrink-0 flex items-center justify-end gap-2">
+                {canEnter ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}`;
+                    }}
+                    className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90 flex items-center justify-center"
+                  >
+                    Enter
+                  </button>
+                ) : (
+                  <span className="w-20 py-2 rounded-lg font-semibold text-[11px] text-center bg-white/10 text-white/40 flex items-center justify-center gap-1">
+                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    Creating
+                  </span>
+                )}
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

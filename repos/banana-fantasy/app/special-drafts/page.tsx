@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue, QueueRound } from '@/types';
 
-function RoundRow({ round, userId, typeLabel }: { round: QueueRound; userId?: string; typeLabel: string }) {
+function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; userId?: string; typeLabel: string; queueType: string }) {
   const isMember = round.members.some(m => m.wallet === userId);
 
   return (
@@ -37,21 +37,22 @@ function RoundRow({ round, userId, typeLabel }: { round: QueueRound; userId?: st
       <div className="flex items-center justify-between mt-1">
         <p className="text-white/30 text-[10px]">
           {round.status === 'filling' && round.draftId && `Enter now — waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''}`}
-          {round.status === 'filling' && !round.draftId && `Waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''} · Draft starts immediately when full`}
+          {round.status === 'filling' && !round.draftId && `Creating draft room... Enter in a moment`}
           {round.status === 'ready' && '10 winners in — draft is starting!'}
           {round.status === 'drafting' && 'Draft is live!'}
         </p>
         {isMember && (
           round.draftId ? (
             <a
-              href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true`}
+              href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true&specialType=${queueType}`}
               className="w-20 py-2 rounded-lg font-semibold text-sm text-center transition-all hover:scale-105 bg-white text-black hover:bg-white/90"
             >
               Enter Draft
             </a>
           ) : (
-            <span className="px-3 py-1.5 bg-white/5 text-white/40 text-xs font-bold rounded-lg">
-              Filling...
+            <span className="px-3 py-1.5 bg-white/5 text-white/40 text-xs font-bold rounded-lg flex items-center gap-1.5">
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Creating...
             </span>
           )
         )}
@@ -79,7 +80,7 @@ function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string })
         <span className="text-white/50 text-xs">🕐 8-hour picks</span>
       </div>
       {activeRounds.map(round => (
-        <RoundRow key={round.roundId} round={round} userId={userId} typeLabel={label} />
+        <RoundRow key={round.roundId} round={round} userId={userId} typeLabel={label} queueType={queue.type} />
       ))}
     </div>
   );
@@ -98,11 +99,15 @@ export default function SpecialDraftsPage() {
     setLoading(false);
   }, []);
 
+  // Poll faster (3s) when a round has no draftId yet (waiting for Cloud Function to create it)
+  const hasPendingDraft = queues && Object.values(queues).some(q =>
+    q.rounds?.some(r => r.status === 'filling' && !r.draftId && r.members.some(m => m.wallet === user?.id))
+  );
   useEffect(() => {
     fetchQueues();
-    const interval = setInterval(fetchQueues, 10000);
+    const interval = setInterval(fetchQueues, hasPendingDraft ? 3000 : 5000);
     return () => clearInterval(interval);
-  }, [fetchQueues]);
+  }, [fetchQueues, hasPendingDraft]);
 
   const hasActiveRounds = queues && Object.values(queues).some(q =>
     q.rounds?.some(r => r.status !== 'completed' && r.members.some(m => m.wallet === user?.id))
