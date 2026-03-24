@@ -969,6 +969,17 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **No frontend changes needed** — Richard's queue UI already handles `status: 'drafting'` and shows "Draft is live!".
 
+## NEXT: Create Special Draft at 1/10 Not 10/10 (Boris)
+> **From Richard:** Users should be able to enter the draft room as soon as they win (like regular drafts — see 1/10, watch it fill). Currently the draft only exists after all 10 join.
+
+**What needs to change:**
+1. When the **1st person** joins a queue round → create the slow draft immediately via Go API → store `draftId` in the round
+2. When persons **2-10** join → add them to the existing draft (need `POST /staging/join-special-draft?draftId=X&wallet=Y` or modify Cloud Function to call `joinDraft` for each new member)
+3. The Cloud Function should fire on EACH queue member addition, not just at 10/10
+4. The draft starts when 10/10 join (same as regular drafts)
+
+**Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
