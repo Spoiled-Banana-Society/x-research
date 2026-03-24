@@ -63,6 +63,8 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
         weeklyScore: Number(e.weeklyScore ?? e.weekScore ?? e.scoreWeek ?? 0),
         seasonScore: Number(e.seasonScore ?? e.scoreSeason ?? 0),
         isCurrentUser: Boolean(e.isCurrentUser),
+        pickCount: typeof e.pickCount === 'number' ? e.pickCount : undefined,
+        roster: Array.isArray(e.roster) ? e.roster as string[] : undefined,
       };
     });
   }, [leagueStandings]);
@@ -222,9 +224,11 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
                       {entry.displayName}
                       {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
                     </div>
-                    <div className="text-right text-white/60 text-sm">{formatScore(entry.weeklyScore)}</div>
+                    <div className="text-right text-white/60 text-sm">
+                      {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : entry.pickCount ? `${entry.pickCount} picks` : formatScore(0)}
+                    </div>
                     <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white'}`}>
-                      {formatScore(entry.seasonScore)}
+                      {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : entry.roster ? `${entry.roster.length} players` : formatScore(0)}
                     </div>
                   </div>
                 ))}
