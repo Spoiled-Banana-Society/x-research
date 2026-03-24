@@ -35,6 +35,7 @@ export default function StandingsPage() {
   // Modal state
   const [modalLeague, setModalLeague] = useState<League | null>(null);
   const [modalTab, setModalTab] = useState<ModalTab>('roster');
+  const [modalInitialPlayer, setModalInitialPlayer] = useState<string | undefined>();
 
   // Update gameweek when API returns
   React.useEffect(() => {
@@ -103,7 +104,7 @@ export default function StandingsPage() {
     setModalTab(tab);
   };
 
-  const handleOpenLeagueFromLookup = (draftId: string) => {
+  const handleOpenLeagueFromLookup = (draftId: string, options?: { tab?: string; wallet?: string }) => {
     const leagueNum = draftId.match(/(\d+)$/)?.[1] || draftId;
     setModalLeague({
       id: draftId,
@@ -118,7 +119,8 @@ export default function StandingsPage() {
       roster: [],
       draftDate: '',
     });
-    setModalTab('standings');
+    setModalTab((options?.tab as ModalTab) || 'roster');
+    setModalInitialPlayer(options?.wallet);
   };
 
   // Draft type breakdown for portfolio card
@@ -364,8 +366,9 @@ export default function StandingsPage() {
         <LeagueDetailModal
           league={modalLeague}
           initialTab={modalTab}
+          initialPlayer={modalInitialPlayer}
           walletAddress={user?.walletAddress ?? ''}
-          onClose={() => setModalLeague(null)}
+          onClose={() => { setModalLeague(null); setModalInitialPlayer(undefined); }}
         />
       )}
     </div>

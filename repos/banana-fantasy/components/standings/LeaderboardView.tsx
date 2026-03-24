@@ -9,7 +9,7 @@ import type { LeaderboardEntry } from '@/types';
 
 interface LeaderboardViewProps {
   gameweek: string;
-  onOpenLeagueDetail?: (draftId: string) => void;
+  onOpenLeagueDetail?: (draftId: string, options?: { tab?: string; wallet?: string }) => void;
 }
 
 type LevelFilter = 'all' | 'Pro' | 'HOF' | 'Jackpot';
@@ -61,6 +61,7 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
       return {
         rank: typeof e.rank === 'number' ? e.rank : idx + 1,
         displayName: String(e.displayName || e.ownerWallet || e.cardId || '-').slice(0, 20),
+        ownerWallet: String(e.ownerWallet || e.cardId || ''),
         weeklyScore: Number(e.weeklyScore ?? e.weekScore ?? e.scoreWeek ?? 0),
         seasonScore: Number(e.seasonScore ?? e.scoreSeason ?? 0),
         isCurrentUser: Boolean(e.isCurrentUser),
@@ -183,10 +184,13 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
             <h3 className="text-white font-semibold text-sm">League #{leagueLookup?.match(/(\d+)$/)?.[1] || leagueInput.trim()} — Standings</h3>
             {leagueEntries.length > 0 && onOpenLeagueDetail && (
               <button
-                onClick={() => onOpenLeagueDetail(leagueLookup)}
-                className="text-[11px] text-banana hover:text-banana/70 font-medium transition-colors"
+                onClick={() => onOpenLeagueDetail(leagueLookup, { tab: 'board' })}
+                className="flex items-center gap-1.5 text-[11px] text-white/50 hover:text-white/80 font-medium transition-colors bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1.5 rounded-lg border border-white/[0.06]"
               >
-                View Full Details &rarr;
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                </svg>
+                Draft Board
               </button>
             )}
           </div>
@@ -215,7 +219,7 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
                 {leagueEntries.map((entry, idx) => (
                   <React.Fragment key={idx}>
                     <div
-                      onClick={() => onOpenLeagueDetail?.(leagueLookup)}
+                      onClick={() => onOpenLeagueDetail?.(leagueLookup, { wallet: entry.ownerWallet })}
                       className={`
                         grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 items-center transition-colors cursor-pointer
                         ${entry.isCurrentUser ? 'bg-banana/[0.08] hover:bg-banana/[0.12]' : 'hover:bg-white/[0.04]'}

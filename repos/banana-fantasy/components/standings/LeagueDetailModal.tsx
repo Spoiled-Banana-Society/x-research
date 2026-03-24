@@ -11,6 +11,7 @@ export type ModalTab = 'roster' | 'board' | 'standings' | 'team';
 interface LeagueDetailModalProps {
   league: League;
   initialTab: ModalTab;
+  initialPlayer?: string;
   walletAddress: string;
   onClose: () => void;
 }
@@ -94,7 +95,7 @@ async function fetchRosters(draftId: string): Promise<Record<string, Record<stri
 const NUM_TEAMS = 10;
 const NUM_ROUNDS = 15;
 
-export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }: LeagueDetailModalProps) {
+export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAddress, onClose }: LeagueDetailModalProps) {
   const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
   const [isClosing, setIsClosing] = useState(false);
   const config = typeConfig[league.type] || typeConfig.regular;
@@ -144,10 +145,12 @@ export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }
         for (const key of keys) parsed[key] = parseRoster(raw[key]);
         setAllRosters(parsed);
         setPlayerKeys(keys);
-        const userKey = walletAddress
-          ? keys.find(k => k.toLowerCase() === walletAddress.toLowerCase())
+        // Prefer initialPlayer (clicked from league lookup), then current user's wallet
+        const targetWallet = initialPlayer || walletAddress;
+        const matchKey = targetWallet
+          ? keys.find(k => k.toLowerCase() === targetWallet.toLowerCase())
           : undefined;
-        setSelectedPlayer(userKey || keys.find(k => k.startsWith('0x')) || keys[0] || '');
+        setSelectedPlayer(matchKey || keys.find(k => k.startsWith('0x')) || keys[0] || '');
       } catch { /* silent */ }
       finally { setRostersLoading(false); }
     })();
