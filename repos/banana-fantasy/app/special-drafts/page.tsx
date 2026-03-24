@@ -34,11 +34,21 @@ function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
           }}
         />
       </div>
-      <p className="text-white/30 text-[10px] mt-1">
-        {round.status === 'filling' && `Waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''} · Draft starts immediately when full`}
-        {round.status === 'ready' && '10 winners in — draft is starting!'}
-        {round.status === 'drafting' && 'Draft is live!'}
-      </p>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-white/30 text-[10px]">
+          {round.status === 'filling' && `Waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''} · Draft starts immediately when full`}
+          {round.status === 'ready' && '10 winners in — draft is starting!'}
+          {round.status === 'drafting' && 'Draft is live!'}
+        </p>
+        {(round.status === 'ready' || round.status === 'drafting') && round.draftId && isMember && (
+          <a
+            href={`/draft-room?id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}`}
+            className="px-3 py-1.5 bg-banana text-black text-xs font-bold rounded-lg hover:brightness-110 transition-all"
+          >
+            Enter Draft
+          </a>
+        )}
+      </div>
     </div>
   );
 }
