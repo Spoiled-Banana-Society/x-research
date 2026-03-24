@@ -458,44 +458,33 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
           {/* PLAYER DETAIL MODE — combined card + roster */}
           {isPlayerDetail ? (
             <div>
-              {/* Player stats bar */}
-              {(() => {
-                const playerEntry = standingsEntries.find(e => e.ownerKey.toLowerCase() === selectedPlayer.toLowerCase());
-                const rank = playerEntry?.rank ?? 0;
-                // Prize data will come from API once season scoring is live
-                const prizeWon = 0; // TODO: populate from league scoring API
-                return rank > 0 ? (
-                  <div className="flex items-center justify-center gap-5 mb-5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                    <div className="text-center">
-                      <p className="text-white/40 text-[10px] uppercase tracking-wider">Rank</p>
-                      <p className="text-white font-bold text-lg">{rank}<span className="text-white/30 font-normal text-xs ml-0.5">of 10</span></p>
-                    </div>
-                    <div className="w-px h-8 bg-white/[0.08]" />
-                    <div className="text-center">
-                      <p className="text-white/40 text-[10px] uppercase tracking-wider">Roster</p>
-                      <p className="text-white/70 font-bold text-sm">{playerEntry?.playerCount ?? 0} players</p>
-                    </div>
-                    {prizeWon > 0 && (
-                      <>
-                        <div className="w-px h-8 bg-white/[0.08]" />
-                        <div className="text-center">
-                          <p className="text-white/40 text-[10px] uppercase tracking-wider">Won</p>
-                          <p className="font-bold text-sm text-green-400">${prizeWon}</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : null;
-              })()}
-
-              {/* Card image + info */}
+              {/* Card image with rank badge */}
               {teamLoading ? (
-                <div className="w-48 h-64 rounded-xl bg-white/[0.03] animate-pulse mx-auto mb-5" />
+                <div className="w-64 h-80 rounded-xl bg-white/[0.03] animate-pulse mx-auto mb-5" />
               ) : cardImageUrl ? (
                 <div className="flex flex-col items-center mb-6">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cardImageUrl} alt="Draft Card" className="w-48 rounded-xl mb-3" />
-                  <div className="flex items-center gap-3">
+                  <div className="relative">
+                    {/* Rank badge */}
+                    {(() => {
+                      const playerEntry = standingsEntries.find(e => e.ownerKey.toLowerCase() === selectedPlayer.toLowerCase());
+                      const rank = playerEntry?.rank ?? 0;
+                      if (rank <= 0) return null;
+                      return (
+                        <div className="absolute -top-2 -right-2 z-10 bg-[#111118] rounded-full p-0.5">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                            rank === 1 ? 'bg-banana text-black' :
+                            rank === 2 ? 'bg-white/80 text-black' :
+                            'bg-white/10 text-white/60'
+                          }`}>
+                            {rank}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={cardImageUrl} alt="Draft Card" className="w-64 md:w-72 rounded-xl" />
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
                     <button
                       onClick={handleSaveCard}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-white/50 text-xs transition-colors"
@@ -792,12 +781,8 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
                           <div>
                             {entry.rank <= 2 ? (
                               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                entry.rank === 1 ? 'bg-yellow-500 text-black' : 'bg-gray-400 text-black'
+                                entry.rank === 1 ? 'bg-banana text-black' : 'bg-white/80 text-black'
                               }`}>
-                                {entry.rank}
-                              </span>
-                            ) : entry.rank === 3 ? (
-                              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-orange-600 text-white">
                                 {entry.rank}
                               </span>
                             ) : (

@@ -243,11 +243,10 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
                       `}
                     >
                       <div>
-                        {entry.rank <= 3 ? (
+                        {entry.rank <= 2 ? (
                           <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            entry.rank === 1 ? 'bg-yellow-500 text-black' :
-                            entry.rank === 2 ? 'bg-gray-400 text-black' :
-                            'bg-orange-600 text-white'
+                            entry.rank === 1 ? 'bg-banana text-black' :
+                            'bg-white/80 text-black'
                           }`}>{entry.rank}</span>
                         ) : (
                           <span className="text-white/40 text-sm">{entry.rank}</span>
