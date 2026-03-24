@@ -32,38 +32,133 @@ export function playTick(pitch = 800) {
   playTone(pitch, 0.05, 0.08, 'square');
 }
 
-// Spinning ticks — accelerate then decelerate over 5 seconds
-export function startSpinSound(): () => void {
+// Background music during spin — building tension drone + rising sweep
+function startSpinMusic(): () => void {
+  const ctx = getAudioContext();
+  const now = ctx.currentTime;
+  const duration = 5;
+
+  // Master gain for all music
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0, now);
+  masterGain.gain.linearRampToValueAtTime(0.12, now + 0.5); // fade in
+  masterGain.gain.setValueAtTime(0.12, now + duration - 0.8);
+  masterGain.gain.linearRampToValueAtTime(0, now + duration); // fade out
+  masterGain.connect(ctx.destination);
+
+  // Low bass drone — builds anticipation
+  const bass = ctx.createOscillator();
+  const bassGain = ctx.createGain();
+  bass.type = 'sine';
+  bass.frequency.setValueAtTime(65, now); // C2
+  bass.frequency.linearRampToValueAtTime(82, now + duration); // subtle rise
+  bassGain.gain.setValueAtTime(1, now);
+  bass.connect(bassGain);
+  bassGain.connect(masterGain);
+  bass.start(now);
+  bass.stop(now + duration);
+
+  // Mid pad — warm chord that swells
+  const pad1 = ctx.createOscillator();
+  const pad1Gain = ctx.createGain();
+  pad1.type = 'sine';
+  pad1.frequency.setValueAtTime(196, now); // G3
+  pad1.frequency.linearRampToValueAtTime(262, now + duration); // rise to C4
+  pad1Gain.gain.setValueAtTime(0.3, now);
+  pad1Gain.gain.linearRampToValueAtTime(0.7, now + duration);
+  pad1.connect(pad1Gain);
+  pad1Gain.connect(masterGain);
+  pad1.start(now);
+  pad1.stop(now + duration);
+
+  // High shimmer — rising excitement
+  const shimmer = ctx.createOscillator();
+  const shimmerGain = ctx.createGain();
+  shimmer.type = 'triangle';
+  shimmer.frequency.setValueAtTime(392, now); // G4
+  shimmer.frequency.exponentialRampToValueAtTime(784, now + duration); // rise to G5
+  shimmerGain.gain.setValueAtTime(0, now);
+  shimmerGain.gain.linearRampToValueAtTime(0.4, now + 2); // fade in slowly
+  shimmerGain.gain.linearRampToValueAtTime(0.6, now + duration - 1);
+  shimmerGain.gain.linearRampToValueAtTime(0, now + duration);
+  shimmer.connect(shimmerGain);
+  shimmerGain.connect(masterGain);
+  shimmer.start(now);
+  shimmer.stop(now + duration);
+
+  // Pulsing rhythm — subtle eighth-note pulse that builds
+  const pulseOsc = ctx.createOscillator();
+  const pulseGain = ctx.createGain();
+  const pulseLfo = ctx.createOscillator();
+  const pulseLfoGain = ctx.createGain();
+  pulseOsc.type = 'sine';
+  pulseOsc.frequency.setValueAtTime(131, now); // C3
+  pulseOsc.frequency.linearRampToValueAtTime(165, now + duration);
+  pulseLfo.type = 'square';
+  pulseLfo.frequency.setValueAtTime(3, now); // 3 Hz pulse
+  pulseLfo.frequency.linearRampToValueAtTime(6, now + duration); // speeds up
+  pulseLfoGain.gain.setValueAtTime(0.3, now);
+  pulseLfo.connect(pulseLfoGain);
+  pulseLfoGain.connect(pulseGain.gain);
+  pulseGain.gain.setValueAtTime(0.3, now);
+  pulseOsc.connect(pulseGain);
+  pulseGain.connect(masterGain);
+  pulseOsc.start(now);
+  pulseLfo.start(now);
+  pulseOsc.stop(now + duration);
+  pulseLfo.stop(now + duration);
+
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      masterGain.gain.cancelScheduledValues(ctx.currentTime);
+      masterGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+    } catch { /* already stopped */ }
+  };
+}
+
+// Tick sounds — only in the last 2 seconds as wheel decelerates
+function startDecelerationTicks(): () => void {
   let cancelled = false;
-  const totalDuration = 5000;
-  const startInterval = 300; // ms between ticks at start
-  const fastestInterval = 60; // ms at peak speed
-  let elapsed = 0;
 
-  function scheduleTick() {
+  // Wait 3 seconds (wheel at full speed), then start ticking for last 2s
+  setTimeout(() => {
     if (cancelled) return;
+    let elapsed = 0;
+    const tickDuration = 2000;
+    const startInterval = 80;
+    const endInterval = 400;
 
-    // Ease: fast in middle, slow at start and end
-    const t = elapsed / totalDuration;
-    const speed = t < 0.3
-      ? 1 - (t / 0.3) // accelerating
-      : t < 0.7
-        ? 0 // full speed
-        : (t - 0.7) / 0.3; // decelerating
+    function scheduleTick() {
+      if (cancelled) return;
+      const t = elapsed / tickDuration;
+      const interval = startInterval + (endInterval - startInterval) * (t * t); // quadratic slowdown
+      const pitch = 1000 - t * 400; // pitch drops as it slows
 
-    const interval = fastestInterval + (startInterval - fastestInterval) * speed;
-    const pitch = 600 + (1 - speed) * 400; // higher pitch when faster
+      playTick(pitch);
+      elapsed += interval;
 
-    playTick(pitch);
-    elapsed += interval;
-
-    if (elapsed < totalDuration) {
-      setTimeout(scheduleTick, interval);
+      if (elapsed < tickDuration) {
+        setTimeout(scheduleTick, interval);
+      }
     }
-  }
+    scheduleTick();
+  }, 3000);
 
-  scheduleTick();
   return () => { cancelled = true; };
+}
+
+// Combined spin sound: music + deceleration ticks
+export function startSpinSound(): () => void {
+  const stopMusic = startSpinMusic();
+  const stopTicks = startDecelerationTicks();
+
+  return () => {
+    stopMusic();
+    stopTicks();
+  };
 }
 
 // Win sounds — tiered by prize quality
