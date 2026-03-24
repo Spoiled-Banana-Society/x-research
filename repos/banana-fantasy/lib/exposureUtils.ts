@@ -345,3 +345,98 @@ export function getTeamStacks(stacks: TeamStack[]): TeamStack[] {
     .filter((s) => s.positions.length > 1) // Only show actual stacks
     .sort((a, b) => b.exposure - a.exposure);
 }
+
+/** Auto-detect team stacks from exposure data (teams with 2+ positions drafted). */
+export function computeStacks(exposures: ExposureEntry[]): TeamStack[] {
+  const teamMap = new Map<string, ExposureEntry[]>();
+  for (const e of exposures) {
+    if (!teamMap.has(e.team)) teamMap.set(e.team, []);
+    teamMap.get(e.team)!.push(e);
+  }
+
+  const stacks: TeamStack[] = [];
+  for (const [team, entries] of teamMap) {
+    if (entries.length < 2) continue;
+    const positions = entries.map(e => e.position).sort();
+    const hasQB = positions.some(p => p === 'QB');
+    const combinedExposure = Math.round(entries.reduce((s, e) => s + e.exposure, 0) / entries.length);
+    const avgDrafts = Math.round(entries.reduce((s, e) => s + e.drafts, 0) / entries.length);
+
+    let stackType = 'Multi-Position';
+    if (entries.length >= 3) stackType = 'Full Stack';
+    else if (hasQB && positions.some(p => p.startsWith('WR'))) stackType = 'QB + WR';
+    else if (hasQB && positions.some(p => p === 'TE')) stackType = 'QB + TE';
+    else if (hasQB) stackType = 'QB + Skill';
+
+    stacks.push({
+      team,
+      positions,
+      stackType,
+      drafts: avgDrafts,
+      totalDrafts: entries[0].totalDrafts,
+      exposure: combinedExposure,
+    });
+  }
+
+  return stacks.sort((a, b) => b.positions.length - a.positions.length || b.exposure - a.exposure);
+}
+
+/** Compute bye week risk: total exposure concentration per bye week. */
+export function computeByeWeekRisk(exposures: ExposureEntry[]): {
+  week: number;
+  totalExposure: number;
+  teams: string[];
+  positions: ExposureEntry[];
+}[] {
+  const weekMap = new Map<number, { teams: Set<string>; positions: ExposureEntry[]; totalExposure: number }>();
+
+  for (const e of exposures) {
+    const bye = teamByeWeeks[e.team];
+    if (!bye) continue;
+    if (!weekMap.has(bye)) weekMap.set(bye, { teams: new Set(), positions: [], totalExposure: 0 });
+    const w = weekMap.get(bye)!;
+    w.teams.add(e.team);
+    w.positions.push(e);
+    w.totalExposure += e.exposure;
+  }
+
+  return Array.from(weekMap.entries())
+    .map(([week, data]) => ({
+      week,
+      totalExposure: Math.round(data.totalExposure),
+      teams: Array.from(data.teams),
+      positions: data.positions,
+    }))
+    .sort((a, b) => b.totalExposure - a.totalExposure);
+}
+
+/** Compute ADP value: compare exposure positions against their ADP. */
+export interface ADPValueEntry {
+  teamPosition: string;
+  team: string;
+  position: string;
+  adp: number;
+  exposure: number;
+  projectedPts: number;
+}
+
+export function computeADPValue(
+  exposures: ExposureEntry[],
+  teamPositions: { team: string; position: string; adp: number; projectedPoints: number }[],
+): ADPValueEntry[] {
+  return exposures
+    .map(e => {
+      const tp = teamPositions.find(t => t.team === e.team && t.position === e.position);
+      if (!tp) return null;
+      return {
+        teamPosition: e.teamPosition,
+        team: e.team,
+        position: e.position,
+        adp: tp.adp,
+        exposure: e.exposure,
+        projectedPts: tp.projectedPoints,
+      };
+    })
+    .filter((e): e is ADPValueEntry => e !== null)
+    .sort((a, b) => a.adp - b.adp);
+}
