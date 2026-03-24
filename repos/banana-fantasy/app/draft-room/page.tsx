@@ -198,6 +198,8 @@ function DraftRoomContent() {
 
   // ==================== PHASE STATE ====================
   const [phase, setPhase] = useState<RoomPhase>(() => {
+    // Special drafts always start in loading to check server state first
+    if (isSpecialDraft) return 'loading';
     // In live mode, if stored state shows draft is past filling, start in 'loading'
     if (isLiveMode && stored && (
       (stored.phase && stored.phase !== 'filling') ||
@@ -292,7 +294,12 @@ function DraftRoomContent() {
   // This effect fetches server state and jumps to the exact correct phase.
   const loadingHandledRef = useRef(false);
   useEffect(() => {
-    if (phase !== 'loading' || !isLiveMode || !draftId || loadingHandledRef.current) return;
+    if (phase !== 'loading' || loadingHandledRef.current) return;
+    // If not in live mode or no draftId, fall back to filling immediately
+    if (!isLiveMode || !draftId) {
+      setPhase('filling');
+      return;
+    }
     loadingHandledRef.current = true;
 
     let cancelled = false;
@@ -337,6 +344,28 @@ function DraftRoomContent() {
           draftStore.updateDraft(draftId, {
             phase: 'drafting', status: 'drafting', players: 10,
           });
+        } else if (isSpecialDraft && playerCount >= 10) {
+          // Special draft at 10/10 — skip slot machine, go straight to drafting
+          console.log('[Draft Room] Special draft at 10/10 — skipping slot machine');
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+            id: String(idx + 1),
+            name: u.ownerId,
+            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
+              ? 'You'
+              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
+            avatar: '🍌',
+          }));
+          setDraftOrder(realOrder);
+          const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+          if (userPos >= 0) setUserDraftPosition(userPos);
+          setPlayerCount(10);
+          setPhase('drafting');
+          setMainCountdown(0);
+          setLiveDataReady(true);
+          if (specialTypeParam) setDraftType(specialTypeParam);
+          else if (stored?.draftType) setDraftType(stored.draftType);
+          draftStore.updateDraft(draftId, { phase: 'drafting', status: 'drafting', players: 10 });
         } else if (playerCount >= 10 && info.draftStartTime) {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
@@ -1845,6 +1874,23 @@ function DraftRoomContent() {
   };
 
   // ==================== RENDER ====================
+  // Special drafts in loading phase: show a clean loading screen while checking server state
+  if (phase === 'loading' && isSpecialDraft) {
+    return (
+      <div className="min-h-screen text-white bg-black flex flex-col items-center justify-center gap-4">
+        <div className="flex items-center gap-3">
+          <svg className="animate-spin h-6 w-6 text-banana" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+          <span className="text-lg font-semibold">Loading draft room...</span>
+        </div>
+        {specialTypeParam && (
+          <span className={`px-3 py-1 rounded text-sm font-bold ${
+            specialTypeParam === 'jackpot' ? 'bg-red-500/30 text-red-400' : 'bg-yellow-500/30 text-yellow-400'
+          }`}>{specialTypeParam === 'jackpot' ? 'JACKPOT' : 'HALL OF FAME'}</span>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen text-white overflow-hidden flex flex-col transition-colors duration-1000 ${getBgColor()} ${screenShake ? 'animate-shake' : ''}`}>
       {/* Flash overlay */}
