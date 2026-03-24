@@ -6,7 +6,7 @@ import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue, QueueRound } from '@/types';
 
 function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; userId?: string; typeLabel: string; queueType: string }) {
-  const isMember = round.members.some(m => m.wallet === userId);
+  const isMember = round.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase());
 
   return (
     <div className={`rounded-lg border ${isMember ? 'border-banana/30 bg-banana/5' : 'border-white/[0.06] bg-white/[0.01]'} p-3`}>
@@ -66,7 +66,7 @@ function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string })
   const color = isJackpot ? '#ef4444' : '#D4AF37';
   const label = isJackpot ? 'Jackpot' : 'HOF';
   const activeRounds = (queue.rounds || []).filter(r =>
-    r.status !== 'completed' && r.members.some(m => m.wallet === userId)
+    r.status !== 'completed' && r.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase())
   );
 
   if (activeRounds.length === 0) return null;
