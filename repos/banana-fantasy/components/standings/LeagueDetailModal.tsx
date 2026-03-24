@@ -648,7 +648,7 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
                   <div className="grid grid-cols-[36px_1fr_80px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30 font-medium">
                     <div>#</div>
                     <div>Team</div>
-                    <div className="text-right">Players</div>
+                    <div className="text-right">Roster</div>
                   </div>
 
                   <div className="space-y-1">
@@ -691,7 +691,7 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
 
                           {/* Player count + chevron */}
                           <div className="flex items-center justify-end gap-2">
-                            <span className="text-white/50 text-sm">{entry.playerCount} picks</span>
+                            <span className="text-white/30 text-sm">{entry.playerCount > 0 ? `${entry.playerCount} drafted` : '—'}</span>
                             <svg className="w-3 h-3 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path d="M9 5l7 7-7 7" />
                             </svg>

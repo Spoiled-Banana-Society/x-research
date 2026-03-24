@@ -241,10 +241,10 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
                         {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
                       </div>
                       <div className="text-right text-white/60 text-sm">
-                        {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : entry.pickCount ? `${entry.pickCount} picks` : formatScore(0)}
+                        {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : <span className="text-white/20">—</span>}
                       </div>
                       <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white'}`}>
-                        {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : entry.roster ? `${entry.roster.length} players` : formatScore(0)}
+                        {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : <span className="text-white/20">—</span>}
                       </div>
                     </div>
 

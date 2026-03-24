@@ -43,7 +43,7 @@ export function SlotMachineOverlay({
   }, [autoVerifyRng, rngSeedData, slotAnimationDone, verifySpin]);
 
   const handleCloseSlotMachine = () => {
-    if (slotAnimationDone) onClose();
+    onClose();
   };
 
   return (
@@ -62,7 +62,7 @@ export function SlotMachineOverlay({
         </button>
       )}
 
-      <div className="text-center" onClick={e => e.stopPropagation()}>
+      <div className="text-center">
         <div className="mb-8">
           <p className="text-white/50 text-base mb-2 uppercase tracking-widest">Draft starting in</p>
           <div className="text-7xl font-black tabular-nums text-white" style={{ textShadow: '0 0 40px rgba(255,255,255,0.3)' }}>

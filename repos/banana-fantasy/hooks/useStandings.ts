@@ -104,18 +104,27 @@ export function useLeagueDetail(draftId: string | null, gameweek: string) {
         }
 
         // Build leaderboard-like entries from draft order
-        return info.draftOrder.map((player, idx) => ({
-          rank: idx + 1,
-          displayName: player.ownerId.startsWith('bot-')
-            ? `Bot ${idx + 1}`
-            : (player.ownerId.slice(0, 10) + '...'),
-          ownerWallet: player.ownerId,
-          weeklyScore: 0,
-          seasonScore: 0,
-          isCurrentUser: player.ownerId.toLowerCase() === wallet?.toLowerCase(),
-          roster: (ownerPicks[player.ownerId] || []).map(p => `${p.team} ${p.position}`),
-          pickCount: (ownerPicks[player.ownerId] || []).length,
-        }));
+        return info.draftOrder.map((player, idx) => {
+          const id = player.ownerId;
+          let displayName: string;
+          if (id.startsWith('bot-')) {
+            displayName = `Bot ${idx + 1}`;
+          } else if (id.startsWith('0x') && id.length >= 10) {
+            displayName = `${id.slice(0, 6)}...${id.slice(-4)}`;
+          } else {
+            displayName = id.slice(0, 12);
+          }
+          return {
+            rank: idx + 1,
+            displayName,
+            ownerWallet: id,
+            weeklyScore: 0,
+            seasonScore: 0,
+            isCurrentUser: id.toLowerCase() === wallet?.toLowerCase(),
+            roster: (ownerPicks[id] || []).map(p => `${p.team} ${p.position}`),
+            pickCount: (ownerPicks[id] || []).length,
+          };
+        });
       } catch {
         return [];
       }

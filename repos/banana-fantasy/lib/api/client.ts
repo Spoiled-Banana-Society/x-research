@@ -131,9 +131,11 @@ export function createHttpClient(config: HttpClientConfig) {
     if (!res.ok) {
       const body = await tryParseJson(res);
       const msg =
-        typeof body === 'object' && body && 'message' in body
-          ? String((body as Record<string, unknown>).message)
-          : `Request failed with status ${res.status}`;
+        typeof body === 'string' && body.length > 0
+          ? body
+          : typeof body === 'object' && body && 'message' in body
+            ? String((body as Record<string, unknown>).message)
+            : `Request failed with status ${res.status}`;
       const code =
         typeof body === 'object' && body && 'code' in body
           ? String((body as Record<string, unknown>).code)

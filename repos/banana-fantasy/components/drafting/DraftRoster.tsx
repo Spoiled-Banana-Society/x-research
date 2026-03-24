@@ -11,11 +11,13 @@ interface DraftRosterProps {
   picks: DraftPick[];
   userDraftPosition: number;
   initialPlayer?: string; // Pre-select a specific player's roster
+  userProfilePicture?: string;
+  userName?: string;
 }
 
 const POSITION_KEYS: (keyof PositionRoster)[] = ['QB', 'RB', 'WR', 'TE', 'DST'];
 
-export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, initialPlayer }: DraftRosterProps) {
+export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, initialPlayer, userProfilePicture, userName }: DraftRosterProps) {
   const [selectedPlayer, setSelectedPlayer] = useState(
     initialPlayer || draftOrder[userDraftPosition]?.name || draftOrder[0]?.name || ''
   );
@@ -29,7 +31,13 @@ export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, ini
 
   // Find the display name for the selected player
   const selectedDraftPlayer = draftOrder.find(p => p.name === selectedPlayer);
-  const displayName = selectedDraftPlayer?.displayName || selectedDraftPlayer?.name || selectedPlayer;
+  const rawName = selectedDraftPlayer?.isYou && userName
+    ? userName
+    : selectedDraftPlayer?.displayName || selectedDraftPlayer?.name || selectedPlayer;
+  // Shorten wallet addresses: 0xd330...9362
+  const displayName = rawName.startsWith('0x') && rawName.length > 12
+    ? `${rawName.slice(0, 6)}...${rawName.slice(-4)}`
+    : rawName;
 
   // Count players per position
   const positionCounts: Record<string, number> = {};
@@ -60,28 +68,31 @@ export function DraftRoster({ draftOrder, rosters, picks, userDraftPosition, ini
           backgroundSize: '12px',
         }}
       >
-        {draftOrder.map(p => (
-          <option key={p.id} value={p.name} className="bg-[#1a1a24] font-bold">
-            {p.isYou ? 'Your Team' : p.displayName || p.name}
-          </option>
-        ))}
+        {draftOrder.map(p => {
+          const label = p.isYou ? 'Your Team' : p.displayName || p.name;
+          const shortLabel = label.startsWith('0x') && label.length > 12
+            ? `${label.slice(0, 6)}...${label.slice(-4)}`
+            : label;
+          return (
+            <option key={p.id} value={p.name} className="bg-[#1a1a24] font-bold">
+              {shortLabel}
+            </option>
+          );
+        })}
       </select>
 
       {/* ===== RosterItemComponent ===== */}
 
       {/* Header section */}
       <div style={{ paddingTop: 30 }}>
-        {/* Profile photo placeholder */}
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            backgroundColor: '#424242',
-            border: '1px solid #777',
-            borderRadius: '50%',
-            margin: '10px auto',
-          }}
-        />
+        {/* Profile photo */}
+        {selectedDraftPlayer?.isYou && userProfilePicture ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={userProfilePicture} alt="You" style={{ width: 40, height: 40, borderRadius: '50%', margin: '10px auto', border: '1px solid #777', objectFit: 'cover' }} />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/banana-profile.png" alt="Player" style={{ width: 40, height: 40, borderRadius: '50%', margin: '10px auto', border: '1px solid #777' }} />
+        )}
 
         {/* Display name */}
         <div
