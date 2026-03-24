@@ -40,13 +40,23 @@ function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
           {round.status === 'ready' && '10 winners in — draft is starting!'}
           {round.status === 'drafting' && 'Draft is live!'}
         </p>
-        {(round.status === 'ready' || round.status === 'drafting') && round.draftId && isMember && (
-          <a
-            href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true`}
-            className="px-3 py-1.5 bg-banana text-black text-xs font-bold rounded-lg hover:brightness-110 transition-all animate-pulse"
-          >
-            Enter Draft
-          </a>
+        {isMember && (
+          round.draftId ? (
+            <a
+              href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                round.status === 'ready' || round.status === 'drafting'
+                  ? 'bg-banana text-black hover:brightness-110 animate-pulse'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              {round.status === 'drafting' || round.status === 'ready' ? 'Enter Draft' : 'View'}
+            </a>
+          ) : (
+            <span className="px-3 py-1.5 bg-white/5 text-white/40 text-xs font-bold rounded-lg">
+              Filling...
+            </span>
+          )
         )}
       </div>
     </div>

@@ -89,12 +89,12 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
                 <div className="flex items-center gap-3">
                   <span className="text-white/50 text-sm">{r.members.length}/10</span>
                   {isLive ? (
-                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-banana text-black">
+                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-banana text-black animate-pulse">
                       Enter
                     </span>
                   ) : (
-                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center text-white/50">
-                      {`${10 - r.members.length} left`}
+                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-white/10 text-white/60">
+                      {r.members.length}/10
                     </span>
                   )}
                 </div>
