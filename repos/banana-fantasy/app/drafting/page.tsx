@@ -1429,8 +1429,7 @@ export default function DraftingPage() {
           '10-players': {
             title: '10 Players',
             items: [
-              { q: 'Is this like a traditional league?', a: 'No — this is a tournament contest. You draft against 9 other players, and top finishers advance through playoffs for the grand prize pool.' },
-              { q: 'How many teams can I draft?', a: 'As many as you want. Each draft is a separate 10-person league. More teams = more chances at the prize pool.' },
+              { q: 'Is this like a traditional league?', a: 'No — this is a tournament contest. You draft against 9 other players and can enter as many drafts as you want. Top finishers advance through playoffs for the grand prize pool.' },
               { q: 'How does a draft lobby work?', a: 'You join a draft room that fills up to 10 players. Once full, the draft starts immediately — no scheduled times, no waiting.' },
               { q: 'What happens when 10 players join?', a: 'A 60-second countdown starts and your draft type is revealed slot machine style — Jackpot (1%), HOF (5%), or Pro (94%). Then you draft!' },
             ],
