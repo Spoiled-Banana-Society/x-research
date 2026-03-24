@@ -103,6 +103,10 @@ export function useLeagueDetail(draftId: string | null, gameweek: string) {
           });
         }
 
+        // Extract league-level metadata
+        const infoObj = info as Record<string, unknown>;
+        const leagueLevel = String(infoObj.level ?? infoObj.draftLevel ?? infoObj.draftType ?? 'Pro');
+
         // Build leaderboard-like entries from draft order
         return info.draftOrder.map((player, idx) => {
           const id = player.ownerId;
@@ -123,6 +127,7 @@ export function useLeagueDetail(draftId: string | null, gameweek: string) {
             isCurrentUser: id.toLowerCase() === wallet?.toLowerCase(),
             roster: (ownerPicks[id] || []).map(p => `${p.team} ${p.position}`),
             pickCount: (ownerPicks[id] || []).length,
+            leagueLevel,
           };
         });
       } catch {
