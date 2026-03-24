@@ -332,7 +332,16 @@ function DraftRoomContent() {
               setPhase('filling');
               return;
             }
-            // If queueMemberCount is 0 (round not found) or 10, fall through to check Go API
+            if (queueMemberCount >= 10) {
+              // Queue says full — go to filling with 10/10, let "at 10" effect
+              // handle polling for draft readiness and transitioning to drafting
+              console.log(`[Draft Room] Special draft: queue shows 10/10 — filling, at-10 effect will handle transition`);
+              setPlayerCount(10);
+              setPhase('filling');
+              if (specialTypeParam) setDraftType(specialTypeParam);
+              return;
+            }
+            // If queueMemberCount is 0 (round not found), fall through to check Go API
           } catch (err) {
             console.warn('[Draft Room] Queue check failed, falling through to draft API:', err);
           }
@@ -376,27 +385,17 @@ function DraftRoomContent() {
             phase: 'drafting', status: 'drafting', players: 10,
           });
         } else if (isSpecialDraft && playerCount >= 10) {
-          // Special draft at 10/10 — skip slot machine, go straight to drafting
-          console.log('[Draft Room] Special draft at 10/10 — skipping slot machine');
-          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
-            id: String(idx + 1),
-            name: u.ownerId,
-            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
-              ? 'You'
-              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
-            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
-            avatar: '🍌',
-          }));
-          setDraftOrder(realOrder);
-          const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
-          if (userPos >= 0) setUserDraftPosition(userPos);
+          // Special draft at 10/10 but draft hasn't started yet.
+          // Go to filling phase with 10/10 and let the "at 10" effect handle
+          // polling for when the draft order is actually ready.
+          // If the draft DOES have a valid draftOrder + draftStartTime, the
+          // draftAlreadyStarted check above already handled it.
+          console.log('[Draft Room] Special draft at 10/10 but not started — going to filling, at-10 effect will handle transition');
           setPlayerCount(10);
-          setPhase('drafting');
-          setMainCountdown(0);
-          setLiveDataReady(true);
+          setPhase('filling');
           if (specialTypeParam) setDraftType(specialTypeParam);
           else if (stored?.draftType) setDraftType(stored.draftType);
-          draftStore.updateDraft(draftId, { phase: 'drafting', status: 'drafting', players: 10 });
+          draftStore.updateDraft(draftId, { players: 10 });
         } else if (playerCount >= 10 && info.draftStartTime) {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
@@ -1358,10 +1357,56 @@ function DraftRoomContent() {
         attempts++;
         try {
           console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
+
+          // Special drafts: also poll queue API to check if the draft has been created
+          // The Cloud Function creates the draft when the queue fills — the Go API
+          // may not have the draft order until that finishes.
+          if (isSpecialDraft) {
+            try {
+              const queues = await fetch('/api/queues').then(r => r.json());
+              let roundDraftId = '';
+              let roundStatus = '';
+              for (const q of Object.values(queues) as any[]) {
+                for (const r of q.rounds || []) {
+                  if (r.draftId === pollDraftId) {
+                    roundDraftId = r.draftId;
+                    roundStatus = r.status;
+                    break;
+                  }
+                }
+              }
+              if (roundDraftId && roundStatus !== 'drafting') {
+                // Queue round exists but draft not created/ready yet — keep polling
+                console.log(`[Draft Room] Special draft queue status: ${roundStatus} — waiting for 'drafting'`);
+                throw new Error(`Queue round status is "${roundStatus}", waiting for "drafting"`);
+              }
+            } catch (qErr) {
+              // If queue check throws (network error or status not ready), fall through to Go API check
+              if ((qErr as Error).message?.includes('waiting for')) {
+                throw qErr; // Re-throw to trigger retry
+              }
+              // Network error — try Go API anyway
+            }
+          }
+
           const info = await draftApi.getDraftInfo(pollDraftId);
 
           if (!info.draftOrder || info.draftOrder.length < 10) {
             throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
+          }
+
+          // Special drafts: verify the draft is actually active/starting, not stale data.
+          // Require draftStartTime or pickNumber > 0 to confirm the draft is real.
+          if (isSpecialDraft && !info.draftStartTime && info.pickNumber <= 1) {
+            // Check if the draft order was recently created by looking for our wallet
+            const hasUser = info.draftOrder.some((u: { ownerId: string }) =>
+              u.ownerId.toLowerCase() === walletParam.toLowerCase()
+            );
+            if (!hasUser) {
+              throw new Error('Special draft: draft order exists but does not include current user (stale data)');
+            }
+            // Draft has our wallet in the order — it's real, proceed
+            console.log('[Draft Room] Special draft: draft order includes user, proceeding');
           }
 
           const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
@@ -2265,10 +2310,13 @@ function DraftRoomContent() {
                 const player = draftOrder[i];
                 const isFilling = phase === 'filling';
                 const isRandomizing = isFilling && (waitingForServer || isRandomizingFromStore);
-                const isFilled = isRandomizing ? true : isFilling ? (i < playerCount) : true;
                 const isUser = player?.isYou ?? false;
-                // Match drafting card style: user = yellow border, filled = #444, unfilled = #333
-                const borderColor = isUser ? '#F3E216' : isFilled ? '#444' : '#333';
+                // User's card is always "filled" even if playerCount hasn't caught up yet
+                const isFilled = isRandomizing ? true : isFilling ? (isUser || i < playerCount) : true;
+                // Match drafting card style: user = yellow border (or type-specific for special drafts), filled = #444, unfilled = #333
+                const borderColor = isUser
+                  ? (isSpecialDraft && visibleDraftType === 'jackpot' ? '#ef4444' : isSpecialDraft && visibleDraftType === 'hof' ? '#D4AF37' : '#F3E216')
+                  : isFilled ? '#444' : '#333';
                 // Show wallet addresses when available, placeholder names otherwise
                 const hasWalletData = player && !player.isYou && player.name && player.name.length > 10;
                 const myName = (user?.username && !user.username.startsWith('0x')) ? user.username : 'You';
