@@ -1470,7 +1470,7 @@ export default function DraftingPage() {
             title: 'Hall of Fame',
             items: [
               { q: 'What is a Hall of Fame Draft?', a: 'HOF Drafts are premium draft rooms making up 5% of all drafts. Your team competes for a separate bonus prize pool on top of the regular tournament prizes.' },
-              { q: 'How is HOF different from Jackpot?', a: 'Jackpot winners skip straight to the finals (advancement perk). HOF leagues compete for additional bonus prizes on top of regular rewards (prize perk). You can win both regular and HOF prizes.' },
+              { q: 'How do I get into a HOF Draft?', a: 'Every draft has a chance to become a HOF. When your draft room fills to 10 players, the slot machine reveals your draft type. You can also win guaranteed HOF entries on the Banana Wheel.' },
             ],
           },
           'jackpot': {
