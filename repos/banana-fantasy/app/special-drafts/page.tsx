@@ -42,8 +42,8 @@ function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
         </p>
         {(round.status === 'ready' || round.status === 'drafting') && round.draftId && isMember && (
           <a
-            href={`/draft-room?id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}`}
-            className="px-3 py-1.5 bg-banana text-black text-xs font-bold rounded-lg hover:brightness-110 transition-all"
+            href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true`}
+            className="px-3 py-1.5 bg-banana text-black text-xs font-bold rounded-lg hover:brightness-110 transition-all animate-pulse"
           >
             Enter Draft
           </a>

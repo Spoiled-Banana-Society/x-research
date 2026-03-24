@@ -21,7 +21,91 @@ import { leaveDraft } from '@/lib/api/leagues';
 import { useContests } from '@/hooks/useContests';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
 
+import { fetchJson } from '@/lib/appApiClient';
+import type { DraftQueue } from '@/types';
+
 type Draft = DraftState;
+
+function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; walletAddress?: string | null }) {
+  const [queues, setQueues] = useState<Record<string, DraftQueue> | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    fetchJson<Record<string, DraftQueue>>('/api/queues')
+      .then(setQueues).catch(() => {});
+    const interval = setInterval(() => {
+      fetchJson<Record<string, DraftQueue>>('/api/queues')
+        .then(setQueues).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
+  if (!queues || !userId) return null;
+
+  const myRounds: Array<{ type: string; round: any; color: string; label: string }> = [];
+  for (const [key, q] of Object.entries(queues)) {
+    const isJP = q.type === 'jackpot';
+    for (const r of q.rounds || []) {
+      if (r.status === 'completed') continue;
+      if (!r.members.some((m: any) => m.wallet === userId)) continue;
+      myRounds.push({
+        type: q.type,
+        round: r,
+        color: isJP ? '#ef4444' : '#D4AF37',
+        label: isJP ? 'Jackpot' : 'HOF',
+      });
+    }
+  }
+
+  if (myRounds.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-2">Special Drafts</h2>
+      <div className="space-y-1.5">
+        {myRounds.map((item) => {
+          const r = item.round;
+          const isLive = r.status === 'ready' || r.status === 'drafting';
+          return (
+            <div
+              key={`${item.type}-${r.roundId}`}
+              className={`group cursor-pointer transition-all overflow-hidden rounded-lg border-2 ${
+                isLive ? 'border-banana bg-banana/10' : 'border-transparent hover:bg-white/[0.03]'
+              }`}
+              onClick={() => {
+                if (isLive && r.draftId) {
+                  window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true`;
+                } else {
+                  window.location.href = '/special-drafts';
+                }
+              }}
+            >
+              <div className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <span>{item.type === 'jackpot' ? '🔥' : '🏆'}</span>
+                  <span className="text-white/80 font-medium" style={{ color: item.color }}>{item.label}</span>
+                  <span className="text-white/30 text-xs">·</span>
+                  <span className="text-white/40 text-xs">8-hour · Draft #{r.roundId}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-white/50 text-sm">{r.members.length}/10</span>
+                  {isLive ? (
+                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-banana text-black">
+                      Enter
+                    </span>
+                  ) : (
+                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center text-white/50">
+                      {`${10 - r.members.length} left`}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /** Snake draft: get drafter index for a given pick number (10 players) */
 function getSnakeDrafterIndex(pickNumber: number): number {
@@ -975,6 +1059,9 @@ export default function DraftingPage() {
       <div className="flex gap-6">
         {/* Left: Drafts */}
         <div className="flex-1 min-w-0">
+
+      {/* Special Drafts (Jackpot/HOF from wheel) */}
+      <SpecialDraftsSection userId={user?.id} walletAddress={user?.walletAddress} />
 
       {/* Active Drafts */}
       {sortedDrafts.length > 0 && (
