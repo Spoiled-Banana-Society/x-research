@@ -307,6 +307,36 @@ function DraftRoomContent() {
     async function checkServerState() {
       try {
         console.log('[Draft Room] Loading phase — checking server state for', draftId);
+
+        // Special drafts: check queue API first to get REAL member count.
+        // The Go API draft may have stale data from a previous test/fill.
+        if (isSpecialDraft) {
+          try {
+            const queues = await fetch('/api/queues').then(r => r.json());
+            if (cancelled) return;
+            // Find the round that has this draftId
+            let queueMemberCount = 0;
+            for (const q of Object.values(queues) as any[]) {
+              for (const r of q.rounds || []) {
+                if (r.draftId === draftId) {
+                  queueMemberCount = r.members?.length || 0;
+                  break;
+                }
+              }
+            }
+            if (queueMemberCount > 0 && queueMemberCount < 10) {
+              // Queue says not full — go to filling with real count
+              console.log(`[Draft Room] Special draft: queue shows ${queueMemberCount}/10 — filling`);
+              setPlayerCount(queueMemberCount);
+              setPhase('filling');
+              return;
+            }
+            // If queueMemberCount is 0 (round not found) or 10, fall through to check Go API
+          } catch (err) {
+            console.warn('[Draft Room] Queue check failed, falling through to draft API:', err);
+          }
+        }
+
         const info = await draftApi.getDraftInfo(draftId);
         if (cancelled) return;
 
@@ -1185,6 +1215,34 @@ function DraftRoomContent() {
 
     const poll = async () => {
       try {
+        // Special drafts during filling: poll QUEUE API for real member count
+        // (Go API draft may have stale data from previous bot fills)
+        if (isSpecialDraft && phase === 'filling') {
+          try {
+            const queues = await fetch('/api/queues').then(r => r.json());
+            if (cancelled) return;
+            let queueCount = 0;
+            for (const q of Object.values(queues) as any[]) {
+              for (const r of q.rounds || []) {
+                if (r.draftId === draftId) {
+                  queueCount = r.members?.length || 0;
+                  break;
+                }
+              }
+            }
+            if (queueCount > 0) {
+              console.log(`[Draft Room] Queue poll: ${queueCount}/10`);
+              setPlayerCount(prev => Math.max(prev, queueCount));
+              if (draftId) draftStore.updateDraft(draftId, { players: queueCount });
+              if (queueCount >= 10) {
+                console.log('[Draft Room] Queue says 10/10 — triggering at-10 effect');
+                setPlayerCount(10);
+              }
+              return; // Don't also poll Go API during filling
+            }
+          } catch { /* fall through to regular poll */ }
+        }
+
         console.log('[Draft Room] Polling getDraftInfo for', draftId);
         const info = await draftApi.getDraftInfo(draftId);
         if (cancelled) return;
@@ -1192,25 +1250,11 @@ function DraftRoomContent() {
         console.log('[Draft Room] Poll result:', info.draftOrder?.length ?? 0, 'players');
 
         if (info.draftOrder && info.draftOrder.length > 0) {
-          // During filling phase, only update playerCount here — the "at 10" effect
-          // handles draftOrder, wallets, progress bar, and phase transition.
-          // This prevents a race where setting draftOrder here causes the "at 10" effect
-          // to succeed instantly, skipping the progress bar.
           if (phase === 'filling') {
-            // Special drafts: server is sole source of truth for player count.
-            // Update playerCount from server poll so UI shows real fill progress.
-            if (isSpecialDraft) {
-              setPlayerCount(prev => Math.max(prev, info.draftOrder.length));
-              if (draftId) {
-                draftStore.updateDraft(draftId, { players: info.draftOrder.length });
-              }
-            }
             // Regular drafts: filling animation (800ms interval) handles visual count-up.
             // Jumping playerCount to server value skips the animation when bots fill instantly.
             if (info.draftOrder.length >= 10) {
               console.log('[Draft Room] Poll detected 10/10 — letting filling animation finish');
-              // For special drafts, also set playerCount to 10 so "at 10" effect fires
-              if (isSpecialDraft) setPlayerCount(10);
             }
           } else {
             // After filling (pre-spin/spinning/result), update draftOrder normally
