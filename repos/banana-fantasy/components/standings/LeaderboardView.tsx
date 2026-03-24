@@ -74,13 +74,18 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
   };
 
   const handleLeagueLookup = () => {
-    const num = leagueInput.trim().replace(/^#/, '');
-    if (!num) {
+    const input = leagueInput.trim().replace(/^#/, '');
+    if (!input) {
       setLeagueLookup(null);
       return;
     }
-    // Build a league ID from the number — try fast draft format
-    setLeagueLookup(`2025-fast-draft-${num}`);
+    // Support full draft IDs or just numbers
+    if (input.includes('draft-')) {
+      setLeagueLookup(input);
+    } else {
+      // Default to fast draft — if not found, user can try "slow-draft-X"
+      setLeagueLookup(`2025-fast-draft-${input}`);
+    }
   };
 
   const clearLeagueLookup = () => {

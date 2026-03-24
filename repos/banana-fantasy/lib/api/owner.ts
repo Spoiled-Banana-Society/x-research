@@ -261,13 +261,29 @@ export async function getOwnerLeaguesFromDraftTokens(walletAddress: string): Pro
   // Only map tokens that are in a league — available/unused tokens are not leagues
   // Deduplicate by leagueId — multiple tokens can be linked to the same league
   const seen = new Set<string>();
-  return tokens
-    .filter(t => {
-      if (!t.leagueId || seen.has(t.leagueId)) return false;
-      seen.add(t.leagueId);
-      return true;
+  const leagueTokens = tokens.filter(t => {
+    if (!t.leagueId || seen.has(t.leagueId)) return false;
+    seen.add(t.leagueId);
+    return true;
+  });
+
+  // Check draft completion status for each league via draft info API
+  const leagues = await Promise.all(
+    leagueTokens.map(async (token) => {
+      const league = mapDraftTokenToLeague(token);
+      // Check if the draft is actually complete (all 150 picks made)
+      try {
+        const { getDraftInfo } = await import('@/lib/draftApi');
+        const info = await getDraftInfo(token.leagueId);
+        league.status = info.pickNumber >= 150 ? 'completed' : 'active';
+      } catch {
+        // If draft info unavailable, fall back to roster-based detection
+      }
+      return league;
     })
-    .map(mapDraftTokenToLeague);
+  );
+
+  return leagues;
 }
 
 /**
