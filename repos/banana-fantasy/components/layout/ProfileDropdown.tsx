@@ -129,8 +129,8 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
             </div>
           </div>
 
-          {/* Card Purchase Rewards */}
-          <div className="px-3 py-2.5 border-b border-bg-tertiary">
+          {/* Card Purchase Rewards — only show after first card purchase */}
+          {(user.cardPurchaseCount || 0) > 0 && <div className="px-3 py-2.5 border-b border-bg-tertiary">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-text-muted text-[10px] uppercase tracking-wider">Card Rewards</span>
               <span className="text-text-secondary text-[11px]">{user.cardPurchaseCount || 0}/6</span>
@@ -146,12 +146,9 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
               ))}
             </div>
             <p className="text-text-muted text-[10px] mt-1">
-              {(user.cardPurchaseCount || 0) === 0
-                ? 'Pay with card to earn a free draft'
-                : `${6 - (user.cardPurchaseCount || 0)} more card purchase${6 - (user.cardPurchaseCount || 0) !== 1 ? 's' : ''} for a free draft`
-              }
+              {`${6 - (user.cardPurchaseCount || 0)} more card purchase${6 - (user.cardPurchaseCount || 0) !== 1 ? 's' : ''} for a free draft`}
             </p>
-          </div>
+          </div>}
 
           {/* Menu Items */}
           <div className="py-1">

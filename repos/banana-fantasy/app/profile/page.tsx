@@ -157,8 +157,8 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
-        {/* ─── Card Purchase Rewards ─── */}
-        <motion.div
+        {/* ─── Card Purchase Rewards — only after first card purchase ─── */}
+        {(user.cardPurchaseCount || 0) > 0 && <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
@@ -191,7 +191,7 @@ export default function ProfilePage() {
             ))}
           </div>
           <p className="text-white/25 text-[10px] mt-2">Every 6 card purchases earns a free draft pass — our way of covering your transaction fee.</p>
-        </motion.div>
+        </motion.div>}
 
         {/* ─── Linked Accounts ─── */}
         <motion.div
