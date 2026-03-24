@@ -462,26 +462,25 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
               {(() => {
                 const playerEntry = standingsEntries.find(e => e.ownerKey.toLowerCase() === selectedPlayer.toLowerCase());
                 const rank = playerEntry?.rank ?? 0;
-                const isAdvancing = rank > 0 && rank <= 2;
+                // Prize data will come from API once season scoring is live
+                const prizeWon = 0; // TODO: populate from league scoring API
                 return rank > 0 ? (
-                  <div className="flex items-center justify-center gap-4 mb-5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <div className="flex items-center justify-center gap-5 mb-5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                     <div className="text-center">
                       <p className="text-white/40 text-[10px] uppercase tracking-wider">Rank</p>
                       <p className="text-white font-bold text-lg">{rank}<span className="text-white/30 font-normal text-xs ml-0.5">of 10</span></p>
                     </div>
                     <div className="w-px h-8 bg-white/[0.08]" />
                     <div className="text-center">
-                      <p className="text-white/40 text-[10px] uppercase tracking-wider">Status</p>
-                      <p className={`font-bold text-sm ${isAdvancing ? 'text-green-400' : 'text-white/50'}`}>
-                        {isAdvancing ? 'Advancing' : 'Eliminated'}
-                      </p>
+                      <p className="text-white/40 text-[10px] uppercase tracking-wider">Roster</p>
+                      <p className="text-white/70 font-bold text-sm">{playerEntry?.playerCount ?? 0} players</p>
                     </div>
-                    {isAdvancing && (
+                    {prizeWon > 0 && (
                       <>
                         <div className="w-px h-8 bg-white/[0.08]" />
                         <div className="text-center">
-                          <p className="text-white/40 text-[10px] uppercase tracking-wider">Prize</p>
-                          <p className="font-bold text-sm text-green-400">$</p>
+                          <p className="text-white/40 text-[10px] uppercase tracking-wider">Won</p>
+                          <p className="font-bold text-sm text-green-400">${prizeWon}</p>
                         </div>
                       </>
                     )}
