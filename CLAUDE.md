@@ -947,6 +947,28 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Where to build it:** Likely in `sbs-drafts-api-main` — the leagues/draft-state models. Store batch state in Redis or Firestore for atomicity.
 
+## DONE: Special Draft Creation When Queue Fills (Boris → Richard)
+> **Built by Boris's session (2026-03-23).** Richard's request for backend draft creation is complete.
+
+**What was built:**
+
+1. **Go API endpoint:** `POST /staging/create-special-draft`
+   - Accepts `{ type: "jackpot"|"hof", wallets: string[] }` (exactly 10 wallets)
+   - Creates a slow draft league with `Level: "Jackpot"` or `"Hall of Fame"`
+   - Finds an available token for each wallet, adds them all to the league
+   - Triggers `CreateLeagueDraftStateUponFilling` when all 10 are in
+   - Returns `{ draftId, level, numPlayers }`
+
+2. **Firestore Cloud Function:** `onQueueUpdate` (deployed to `sbs-staging-env`)
+   - Watches `v2_queues/{jackpot|hof}` for document changes
+   - When a round has `status === 'ready'` and no `draftId`, calls the Go endpoint
+   - Updates the round with `draftId` and sets `status: 'drafting'`
+   - Deployed from `~/sbs-staging-functions/` (separate from SBS-Backend-main)
+
+**Full flow:** Wheel win → user queued → 10th person joins → round.status='ready' → Cloud Function fires → Go API creates draft → round updated with draftId + status='drafting' → players enter draft room.
+
+**No frontend changes needed** — Richard's queue UI already handles `status: 'drafting'` and shows "Draft is live!".
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
