@@ -1172,30 +1172,30 @@ export default function DraftingPage() {
 
           {/* How It Works — 2x2 grid */}
           <div>
-            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">How it works</h3>
+            <h3 className="text-[13px] font-semibold text-white/40 uppercase tracking-[0.12em] mb-3 px-1">How it works</h3>
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => setInfoTopic('10-players')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">10 Players</h4>
-                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
+                <h4 className="text-white text-[14px] font-semibold tracking-tight">10 Players</h4>
+                <p className="text-white/50 text-[12px] mt-1 leading-[1.6]">Join a lobby, draft starts instantly when full</p>
               </button>
               <button onClick={() => setInfoTopic('snake-draft')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">Snake Draft</h4>
-                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
+                <h4 className="text-white text-[14px] font-semibold tracking-tight">Snake Draft</h4>
+                <p className="text-white/50 text-[12px] mt-1 leading-[1.6]">Fast (30s) or slow (8hr) picks — your choice</p>
               </button>
               <button onClick={() => setInfoTopic('team-positions')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">Team Positions</h4>
-                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
+                <h4 className="text-white text-[14px] font-semibold tracking-tight">Team Positions</h4>
+                <p className="text-white/50 text-[12px] mt-1 leading-[1.6]">Draft <span className="text-white/50 font-medium">KC QB</span> or <span className="text-white/50 font-medium">DAL WR1</span> — not individual players. You get the top scorer at that position each week.</p>
               </button>
               <button onClick={() => setInfoTopic('best-ball')} className="rounded-2xl p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors text-left cursor-pointer">
-                <h4 className="text-white text-[13px] font-semibold tracking-tight">Best Ball</h4>
-                <p className="text-white/50 text-[11px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
+                <h4 className="text-white text-[14px] font-semibold tracking-tight">Best Ball</h4>
+                <p className="text-white/50 text-[12px] mt-1 leading-[1.6]">No managing needed. Draft once, best scorers auto-selected weekly. No lineups, waivers, or trades.</p>
               </button>
             </div>
           </div>
 
           {/* Draft Types — 3 cards */}
           <div>
-            <h3 className="text-[11px] font-medium text-white/25 uppercase tracking-[0.15em] mb-3 px-1">Draft Types</h3>
+            <h3 className="text-[13px] font-semibold text-white/40 uppercase tracking-[0.12em] mb-3 px-1">Draft Types</h3>
             <div className="grid grid-cols-3 gap-3">
               {/* Pro */}
               <button
@@ -1204,11 +1204,11 @@ export default function DraftingPage() {
                 style={{ background: 'linear-gradient(160deg, rgba(168,85,247,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <h4 className="text-white text-[13px] font-semibold tracking-tight">Pro</h4>
+                  <h4 className="text-white text-[14px] font-semibold tracking-tight">Pro</h4>
                   <span className="text-white/15">&middot;</span>
                   <span className="text-[15px] font-bold tracking-tight text-pro">94%</span>
                 </div>
-                <p className="text-white/50 text-[11px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
+                <p className="text-white/50 text-[12px] leading-[1.6]">Standard draft. Compete for your share of the prize pool.</p>
               </button>
               {/* Hall of Fame */}
               <button
@@ -1217,11 +1217,11 @@ export default function DraftingPage() {
                 style={{ background: 'linear-gradient(160deg, rgba(212,175,55,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <h4 className="text-white text-[13px] font-semibold tracking-tight">Hall of Fame</h4>
+                  <h4 className="text-white text-[14px] font-semibold tracking-tight">Hall of Fame</h4>
                   <span className="text-white/15">&middot;</span>
                   <span className="text-[15px] font-bold tracking-tight text-hof">5%</span>
                 </div>
-                <p className="text-white/50 text-[11px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
+                <p className="text-white/50 text-[12px] leading-[1.6]">Bonus prize pool on top of standard rewards.</p>
               </button>
               {/* Jackpot */}
               <button
@@ -1230,11 +1230,11 @@ export default function DraftingPage() {
                 style={{ background: 'linear-gradient(160deg, rgba(239,68,68,0.06) 0%, transparent 60%)' }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <h4 className="text-white text-[13px] font-semibold tracking-tight">Jackpot</h4>
+                  <h4 className="text-white text-[14px] font-semibold tracking-tight">Jackpot</h4>
                   <span className="text-white/15">&middot;</span>
                   <span className="text-[15px] font-bold tracking-tight text-jackpot">1%</span>
                 </div>
-                <p className="text-white/50 text-[11px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
+                <p className="text-white/50 text-[12px] leading-[1.6]">Win your league and skip straight to the finals. The rarest draft type.</p>
               </button>
             </div>
           </div>
