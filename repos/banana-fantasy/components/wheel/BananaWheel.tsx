@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { wheelSegments, WHEEL_SEGMENT_ANGLE, type WheelSegment } from '@/lib/wheelConfig';
 import type { WheelSpinOutcome } from '@/hooks/useWheel';
+import { startSpinSound, playWinSound, getWinTier } from '@/lib/wheelSounds';
 
 interface BananaWheelProps {
   spinsAvailable: number;
@@ -128,11 +129,18 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
 
     const segment = wheelSegments.find((seg) => seg.id === outcome?.result) ?? null;
 
+    // Start spinning tick sounds
+    const stopSpinSound = startSpinSound();
+
     setTimeout(() => {
+      stopSpinSound();
       setIsSpinning(false);
       setWonSegment(segment);
       setShowResult(true);
-      if (segment) fireCelebration(segment);
+      if (segment) {
+        fireCelebration(segment);
+        playWinSound(getWinTier(segment));
+      }
       if (onSpinComplete) onSpinComplete(outcome, segment);
     }, 5000);
   };
