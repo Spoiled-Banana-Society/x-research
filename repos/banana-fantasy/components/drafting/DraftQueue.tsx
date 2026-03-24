@@ -43,8 +43,8 @@ export function DraftQueue({
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center">
           <div className="text-5xl mb-4">&#x1F34C;</div>
-          <p className="font-primary text-white/40 text-sm">Nothing here but us apes!</p>
-          <p className="text-white/20 text-xs mt-1">Queue players from the Draft section.</p>
+          <p className="font-primary text-white/40 text-sm">Your queue is empty</p>
+          <p className="text-white/20 text-xs mt-1">Add players from the Draft tab to set your pick order.</p>
         </div>
       </div>
     );

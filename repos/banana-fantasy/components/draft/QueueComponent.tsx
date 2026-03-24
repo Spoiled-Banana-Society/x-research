@@ -79,7 +79,7 @@ const QueueComponent: React.FC<DraftQueueComponentProps> = (props) => {
                 </DragDropContext>
             ) : (
                 <h1 className="font-primary text-center italic mt-16 text-gray-300">
-                    Nothing here but us apes! 🦍 <br /> Queue players from the Draft section.
+                    Your queue is empty. <br /> Add players from the Draft tab to set your pick order.
                 </h1>
             )}
         </div>
