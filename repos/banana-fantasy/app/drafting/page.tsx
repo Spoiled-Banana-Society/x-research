@@ -1448,7 +1448,6 @@ export default function DraftingPage() {
             items: [
               { q: 'What are Team Positions?', a: 'Instead of drafting individual players like Patrick Mahomes, you draft Team Positions like "KC QB". Each week, you automatically get the points from the highest-scoring player at that position for that team.' },
               { q: 'How does this protect against injuries?', a: 'In traditional fantasy, one injury can destroy your season. With Team Positions, if a starter gets hurt, you automatically get points from whoever replaces them. Your team stays competitive all season regardless of injuries.' },
-              { q: 'Can you give an example?', a: 'Draft "KC QB" and you get whoever scores most — Mahomes, the backup, whoever plays. Draft "DAL WR1" and you get the top-scoring Dallas wide receiver each week, no matter who it is.' },
             ],
           },
           'best-ball': {
