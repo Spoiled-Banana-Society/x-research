@@ -81,11 +81,13 @@ export function useLeagueDetail(draftId: string | null, gameweek: string) {
 
       // Fall back to draft summary — shows rosters even without scores
       try {
-        const { getDraftInfo, getDraftSummary } = await import('@/lib/draftApi');
-        const [info, summary] = await Promise.all([
-          getDraftInfo(draftId!),
-          getDraftSummary(draftId!),
+        const apiBase = '/api/draft-lookup';
+        const [infoRes, summaryRes] = await Promise.all([
+          fetchJson<{ draftOrder: { ownerId: string; tokenId: string }[]; pickNumber: number }>(`${apiBase}?draftId=${draftId}&type=info`, { signal }),
+          fetchJson<{ playerInfo: { ownerAddress: string; playerId: string; position: string; team: string; pickNum: number } }[]>(`${apiBase}?draftId=${draftId}&type=summary`, { signal }),
         ]);
+        const info = infoRes;
+        const summary = summaryRes;
 
         // Group picks by owner to build team rosters
         const ownerPicks: Record<string, { playerId: string; position: string; team: string; pickNum: number }[]> = {};
