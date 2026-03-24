@@ -74,18 +74,23 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
   };
 
   const handleLeagueLookup = () => {
-    const input = leagueInput.trim().replace(/^#/, '');
-    if (!input) {
+    const raw = leagueInput.trim();
+    if (!raw) {
       setLeagueLookup(null);
       return;
     }
-    // Support full draft IDs or just numbers
-    if (input.includes('draft-')) {
-      setLeagueLookup(input);
-    } else {
-      // Default to fast draft — if not found, user can try "slow-draft-X"
-      setLeagueLookup(`2025-fast-draft-${input}`);
+    // Support full draft IDs
+    if (raw.includes('draft-')) {
+      setLeagueLookup(raw);
+      return;
     }
+    // Extract just the number from input like "league 7", "#7", "League #7", or just "7"
+    const numMatch = raw.match(/(\d+)/);
+    if (!numMatch) {
+      setLeagueLookup(null);
+      return;
+    }
+    setLeagueLookup(`2025-fast-draft-${numMatch[1]}`);
   };
 
   const clearLeagueLookup = () => {
