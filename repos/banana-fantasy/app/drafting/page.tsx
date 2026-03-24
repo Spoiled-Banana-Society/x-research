@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePromos } from '@/hooks/usePromos';
-import { getDraftTypeColor } from '@/lib/draftTypes';
+import { getDraftTypeColor, isDraftingOpen } from '@/lib/draftTypes';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { PromoModal } from '@/components/modals/PromoModal';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
@@ -149,6 +149,11 @@ export default function DraftingPage() {
   };
 
   const handleEnterDraft = () => {
+    if (!isDraftingOpen()) {
+      alert('Drafting is closed for the season.');
+      return;
+    }
+
     if (!isLoggedIn) {
       setShowLoginModal(true);
       return;
@@ -186,6 +191,7 @@ export default function DraftingPage() {
       speed,
       mode: 'live',
       wallet: user.walletAddress,
+      passType,
     });
     router.push(`/draft-room?${params.toString()}`);
   };

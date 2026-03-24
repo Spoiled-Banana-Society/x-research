@@ -107,6 +107,7 @@ export interface MarketplaceTeam {
   imageUrl: string | null;
   orderHash: string | null;
   protocolAddress: string | null;
+  passType?: 'paid' | 'free';
 }
 
 export interface CollectionStats {

@@ -218,6 +218,7 @@ function enrichWithBackendData(
       roster: roster.length > 0 ? roster : nft.roster,
       color: colorMap[draftType],
       name: token.leagueDisplayName || nft.name,
+      passType: (token.passType === 'free' ? 'free' : 'paid') as 'paid' | 'free',
     };
   });
 }

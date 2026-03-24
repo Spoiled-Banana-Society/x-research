@@ -31,6 +31,7 @@ export async function joinDraft(
   speed: DraftSpeed,
   numLeaguesToJoin: number = 1,
   draftType?: DraftPromoType,
+  passType?: 'paid' | 'free',
 ): Promise<DraftRoom> {
   const wallet = normalizeWalletAddress(walletAddress);
   const controller = new AbortController();
@@ -43,6 +44,7 @@ export async function joinDraft(
       {
         numLeaguesToJoin,
         ...(draftType ? { draftType } : {}),
+        passType: passType || 'paid',
       },
       { signal: controller.signal },
     );
