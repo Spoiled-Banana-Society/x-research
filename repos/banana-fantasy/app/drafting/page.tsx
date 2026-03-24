@@ -1455,7 +1455,7 @@ export default function DraftingPage() {
             items: [
               { q: 'What is Best Ball?', a: 'Best Ball is a set-it-and-forget-it format. After you draft your team, the platform automatically starts your highest-scoring players each week. No lineup management, no waivers, no trades — just draft and watch.' },
               { q: 'How does scoring work?', a: 'Each week, your best players at each position are automatically selected based on their actual performance. Your weekly score is the sum of your best performers according to your roster requirements.' },
-              { q: 'Can I trade or drop players?', a: 'No trades or waivers in Best Ball — that\'s the beauty of it! However, your teams are tradeable digital assets, so you can sell your entire team on our marketplace at any time.' },
+              { q: 'Can I trade or drop players?', a: 'No trades or waivers in Best Ball — that\'s the beauty of it! However, you can sell your entire team on our marketplace at any time if you want out.' },
             ],
           },
           'pro': {
