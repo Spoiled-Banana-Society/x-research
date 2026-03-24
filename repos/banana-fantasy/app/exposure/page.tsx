@@ -94,11 +94,8 @@ export default function ExposurePage() {
     const topExposure = exposures.length > 0
       ? exposures.reduce((max, e) => e.exposure > max.exposure ? e : max, exposures[0])
       : null;
-    const avgADP = adpValues.length > 0
-      ? Math.round(adpValues.reduce((s, v) => s + v.adp, 0) / adpValues.length)
-      : 0;
-    return { uniquePositions, topExposure, avgADP };
-  }, [exposures, adpValues]);
+    return { uniquePositions, topExposure };
+  }, [exposures]);
 
   // ── Depth chart modal ─────────────────────────────────────────────────
 
@@ -152,8 +149,8 @@ export default function ExposurePage() {
               )}
             </div>
             <div>
-              <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1">Avg ADP</p>
-              <p className="text-white font-bold text-2xl">{summary.avgADP > 0 ? summary.avgADP : '—'}</p>
+              <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1">Stacks</p>
+              <p className="text-white font-bold text-2xl">{stacks.length > 0 ? stacks.length : '—'}</p>
             </div>
           </div>
         </div>
