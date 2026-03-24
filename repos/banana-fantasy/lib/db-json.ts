@@ -94,6 +94,7 @@ function getOrCreateUser(db: DbSchema, userId: string): User {
     wheelSpins: 0,
     jackpotEntries: 0,
     hofEntries: 0,
+    cardPurchaseCount: 0,
     isVerified: false,
     createdAt: todayDate(),
   };

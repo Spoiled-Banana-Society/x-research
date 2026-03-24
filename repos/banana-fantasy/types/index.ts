@@ -13,6 +13,7 @@ export interface User {
   wheelSpins: number;
   jackpotEntries: number;
   hofEntries: number;
+  cardPurchaseCount: number;
   isVerified: boolean;
   blueCheckEmail?: string;
   isBlueCheckVerified?: boolean;

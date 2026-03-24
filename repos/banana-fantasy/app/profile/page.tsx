@@ -157,6 +157,42 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
+        {/* ─── Card Purchase Rewards ─── */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-6"
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-banana/20 flex items-center justify-center">
+              <span className="text-banana text-sm">🎁</span>
+            </div>
+            <div>
+              <p className="text-white/40 text-[11px] uppercase tracking-widest font-medium">Card Purchase Rewards</p>
+              <p className="text-white/60 text-[12px] mt-0.5">
+                {(user.cardPurchaseCount || 0) === 0
+                  ? 'Pay with card to start earning'
+                  : `${user.cardPurchaseCount || 0} of 6 toward a free draft`
+                }
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 flex-1 rounded-full transition-all ${
+                  i < (user.cardPurchaseCount || 0)
+                    ? 'bg-banana'
+                    : 'bg-white/[0.06]'
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-white/25 text-[10px] mt-2">Every 6 card purchases earns a free draft pass — our way of covering your transaction fee.</p>
+        </motion.div>
+
         {/* ─── Linked Accounts ─── */}
         <motion.div
           initial={{ opacity: 0 }}

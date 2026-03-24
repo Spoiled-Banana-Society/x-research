@@ -116,6 +116,7 @@ const MOCK_USER: User | null = MOCK_AUTH
       wheelSpins: 0,
       jackpotEntries: 0,
       hofEntries: 0,
+      cardPurchaseCount: 0,
       isVerified: true,
       createdAt: '2025-01-01T00:00:00Z',
     }
@@ -294,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             wheelSpins: 0,
             jackpotEntries: 0,
             hofEntries: 0,
+            cardPurchaseCount: 0,
             isVerified: false,
             createdAt: new Date().toISOString(),
           };
@@ -451,6 +453,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               freeDrafts: data.freeDrafts ?? prev.freeDrafts,
               jackpotEntries: data.jackpotEntries ?? prev.jackpotEntries,
               hofEntries: data.hofEntries ?? prev.hofEntries,
+              cardPurchaseCount: data.cardPurchaseCount ?? prev.cardPurchaseCount,
             };
           });
         }
@@ -522,6 +525,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated.freeDrafts = firestoreBalance.freeDrafts ?? updated.freeDrafts;
         updated.jackpotEntries = firestoreBalance.jackpotEntries ?? updated.jackpotEntries;
         updated.hofEntries = firestoreBalance.hofEntries ?? updated.hofEntries;
+        updated.cardPurchaseCount = firestoreBalance.cardPurchaseCount ?? updated.cardPurchaseCount;
       }
       return updated;
     });

@@ -23,6 +23,7 @@ const seedUser1: User = {
   wheelSpins: 2,
   jackpotEntries: 0,
   hofEntries: 0,
+  cardPurchaseCount: 0,
   isVerified: true,
   createdAt: '2025-09-01',
 };

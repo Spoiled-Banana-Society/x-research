@@ -415,6 +415,36 @@ export function BuyPassesModal({
               </div>
             </div>
 
+            {/* Card Purchase Rewards banner */}
+            {paymentMethod === 'card' && flowStep === 'idle' && (
+              <div className="bg-banana/[0.06] border border-banana/10 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🎁</span>
+                  <p className="text-white/70 text-[12px] font-medium">
+                    {((user?.cardPurchaseCount || 0) + 1) >= 6
+                      ? 'This purchase earns you a FREE draft!'
+                      : 'Card fee? We\'ve got you — every 6 purchases earns a free draft'
+                    }
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full ${
+                        i < (user?.cardPurchaseCount || 0)
+                          ? 'bg-banana'
+                          : i === (user?.cardPurchaseCount || 0)
+                            ? 'bg-banana/40'
+                            : 'bg-white/[0.06]'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-white/30 text-[10px] mt-1.5">{user?.cardPurchaseCount || 0} of 6 toward your next free draft</p>
+              </div>
+            )}
+
             {/* Card flow status */}
             {paymentMethod === 'card' && flowStep !== 'idle' && (
               <div className="bg-bg-tertiary/60 border border-bg-elevated rounded-xl p-3 space-y-2">

@@ -658,6 +658,18 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
       }
     }
 
+    // Card Purchase Rewards: every 6 card purchases = 1 free draft
+    let freePassFromRewards = false;
+    if (purchase.paymentMethod === 'card') {
+      user.cardPurchaseCount = (user.cardPurchaseCount || 0) + 1;
+      if (user.cardPurchaseCount >= 6) {
+        user.cardPurchaseCount = 0;
+        user.freeDrafts = (user.freeDrafts || 0) + 1;
+        freeDraftsAdded += 1;
+        freePassFromRewards = true;
+      }
+    }
+
     tx.set(purchaseRef, stripUndefined(purchase), { merge: true });
     tx.set(userRef, stripUndefined(user), { merge: true });
 
@@ -667,6 +679,7 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
       spinsAdded,
       draftPassesAdded,
       freeDraftsAdded,
+      freePassFromRewards,
     };
   });
 }
