@@ -65,14 +65,15 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
         {myRounds.map((item) => {
           const r = item.round;
           const isLive = r.status === 'ready' || r.status === 'drafting';
+          const canEnter = !!r.draftId;
           return (
             <div
               key={`${item.type}-${r.roundId}`}
               className={`group cursor-pointer transition-all overflow-hidden rounded-lg border-2 ${
-                isLive ? 'border-banana bg-banana/10' : 'border-transparent hover:bg-white/[0.03]'
+                canEnter ? 'border-banana bg-banana/10' : 'border-transparent hover:bg-white/[0.03]'
               }`}
               onClick={() => {
-                if (isLive && r.draftId) {
+                if (canEnter) {
                   window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true`;
                 } else {
                   window.location.href = '/special-drafts';
@@ -88,7 +89,7 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-white/50 text-sm">{r.members.length}/10</span>
-                  {isLive ? (
+                  {canEnter ? (
                     <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-banana text-black animate-pulse">
                       Enter
                     </span>

@@ -36,7 +36,8 @@ function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
       </div>
       <div className="flex items-center justify-between mt-1">
         <p className="text-white/30 text-[10px]">
-          {round.status === 'filling' && `Waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''} · Draft starts immediately when full`}
+          {round.status === 'filling' && round.draftId && `Enter now — waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''}`}
+          {round.status === 'filling' && !round.draftId && `Waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''} · Draft starts immediately when full`}
           {round.status === 'ready' && '10 winners in — draft is starting!'}
           {round.status === 'drafting' && 'Draft is live!'}
         </p>
@@ -44,13 +45,9 @@ function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
           round.draftId ? (
             <a
               href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true`}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                round.status === 'ready' || round.status === 'drafting'
-                  ? 'bg-banana text-black hover:brightness-110 animate-pulse'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+              className="px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-banana text-black hover:brightness-110 animate-pulse"
             >
-              {round.status === 'drafting' || round.status === 'ready' ? 'Enter Draft' : 'View'}
+              Enter Draft
             </a>
           ) : (
             <span className="px-3 py-1.5 bg-white/5 text-white/40 text-xs font-bold rounded-lg">

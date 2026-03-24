@@ -879,10 +879,8 @@ export async function joinQueue(
       }
       round.members.push({ wallet: userId, joinedAt: Date.now() });
 
-      // Full! Draft starts immediately
-      if (round.members.length >= QUEUE_MAX) {
-        round.status = 'ready';
-      }
+      // Note: status stays 'filling' — the Firebase trigger handles creating the draft
+      // on the 1st member and setting status to 'drafting' at 10/10.
     }
 
     tx.set(queueRef, queue);
