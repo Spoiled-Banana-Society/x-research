@@ -30,7 +30,7 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
   const [queues, setQueues] = useState<Record<string, DraftQueue> | null>(null);
   // Poll faster (3s) when a round has no draftId yet (waiting for Cloud Function)
   const hasPendingDraft = queues && Object.values(queues).some(q =>
-    (q as any).rounds?.some((r: any) => r.status === 'filling' && !r.draftId && r.members.some((m: any) => m.wallet === userId))
+    (q as any).rounds?.some((r: any) => r.status === 'filling' && !r.draftId && r.members.some((m: any) => m.wallet?.toLowerCase() === userId?.toLowerCase()))
   );
   useEffect(() => {
     if (!userId) return;
@@ -50,7 +50,7 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
     const isJP = q.type === 'jackpot';
     for (const r of q.rounds || []) {
       if (r.status === 'completed') continue;
-      if (!r.members.some((m: any) => m.wallet === userId)) continue;
+      if (!r.members.some((m: any) => m.wallet?.toLowerCase() === userId?.toLowerCase())) continue;
       myRounds.push({
         type: q.type,
         round: r,
