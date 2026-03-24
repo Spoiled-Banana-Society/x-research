@@ -208,8 +208,8 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
             </div>
           )}
           {leagueEntries.length > 0 && (
-            <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-              <div className="grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 bg-white/[0.03] border-b border-white/[0.06]">
+            <div className="rounded-xl border border-white/[0.06] overflow-hidden max-w-xl">
+              <div className="grid grid-cols-[32px_1fr_72px_72px] gap-1 px-3 py-2.5 bg-white/[0.03] border-b border-white/[0.06]">
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium">#</div>
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium">Player</div>
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Weekly</div>
@@ -221,30 +221,30 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
                     <div
                       onClick={() => onOpenLeagueDetail?.(leagueLookup, { wallet: entry.ownerWallet })}
                       className={`
-                        grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 items-center transition-colors cursor-pointer
+                        grid grid-cols-[32px_1fr_72px_72px] gap-1 px-3 py-2.5 items-center transition-colors cursor-pointer
                         ${entry.isCurrentUser ? 'bg-banana/[0.08] hover:bg-banana/[0.12]' : 'hover:bg-white/[0.04]'}
                       `}
                     >
                       <div>
                         {entry.rank <= 3 ? (
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                             entry.rank === 1 ? 'bg-yellow-500 text-black' :
                             entry.rank === 2 ? 'bg-gray-400 text-black' :
                             'bg-orange-600 text-white'
                           }`}>{entry.rank}</span>
                         ) : (
-                          <span className="text-white/50 text-sm">{entry.rank}</span>
+                          <span className="text-white/40 text-xs">{entry.rank}</span>
                         )}
                       </div>
                       <div className={`text-sm font-medium truncate ${entry.isCurrentUser ? 'text-banana' : 'text-white/80'}`}>
                         {entry.displayName}
                         {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
                       </div>
-                      <div className="text-right text-white/60 text-sm">
-                        {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : <span className="text-white/20">—</span>}
+                      <div className="text-right text-white/50 text-xs">
+                        {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : <span className="text-white/15">—</span>}
                       </div>
-                      <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white'}`}>
-                        {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : <span className="text-white/20">—</span>}
+                      <div className={`text-right font-semibold text-xs ${entry.isCurrentUser ? 'text-banana' : 'text-white/70'}`}>
+                        {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : <span className="text-white/15">—</span>}
                       </div>
                     </div>
 

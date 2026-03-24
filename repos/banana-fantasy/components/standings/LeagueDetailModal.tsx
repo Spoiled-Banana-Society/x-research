@@ -100,6 +100,8 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
   const [isClosing, setIsClosing] = useState(false);
   const config = typeConfig[league.type] || typeConfig.regular;
   const draftId = league.id;
+  const isPlayerDetail = !!initialPlayer;
+  const cardFetchWallet = initialPlayer || walletAddress;
 
   // Roster state
   const [allRosters, setAllRosters] = useState<Record<string, PlayerRoster>>({});
@@ -168,13 +170,13 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
     })();
   }, [draftId]);
 
-  // Fetch team card
+  // Fetch team card (for the target player — initialPlayer or current user)
   useEffect(() => {
-    if (!walletAddress || !draftId) { setTeamLoading(false); return; }
+    if (!cardFetchWallet || !draftId) { setTeamLoading(false); return; }
     (async () => {
       try {
         const [tokens, info] = await Promise.allSettled([
-          getOwnerDraftTokens(walletAddress),
+          getOwnerDraftTokens(cardFetchWallet),
           getDraftInfo(draftId),
         ]);
         if (tokens.status === 'fulfilled') {
@@ -195,7 +197,7 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
       } catch { /* silent */ }
       finally { setTeamLoading(false); }
     })();
-  }, [walletAddress, draftId]);
+  }, [cardFetchWallet, draftId]);
 
   const getPlayerLabel = (key: string): string => {
     const r = allRosters[key];
@@ -407,11 +409,18 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] flex-shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <h2 className="text-white font-bold text-lg truncate">{league.name}</h2>
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${config.bg} ${config.text}`}>
-              {config.label}
-            </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-white font-bold text-lg truncate">{league.name}</h2>
+              <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${config.bg} ${config.text}`}>
+                {config.label}
+              </span>
+            </div>
+            {isPlayerDetail && roster && (
+              <p className="text-white/40 text-xs mt-0.5">
+                {roster.pfpDisplayName || (selectedPlayer.startsWith('0x') ? truncateAddress(selectedPlayer) : selectedPlayer)}
+              </p>
+            )}
           </div>
           <button
             onClick={handleClose}
@@ -423,26 +432,111 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
           </button>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex border-b border-white/[0.06] flex-shrink-0">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
-                activeTab === tab.id ? 'text-banana' : 'text-white/40 hover:text-white/70'
-              }`}
-            >
-              {tab.label}
-              {activeTab === tab.id && (
-                <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-banana rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
+        {/* Tab bar — hidden in player detail mode */}
+        {!isPlayerDetail && (
+          <div className="flex border-b border-white/[0.06] flex-shrink-0">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+                  activeTab === tab.id ? 'text-banana' : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                {tab.label}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-banana rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5">
+
+          {/* PLAYER DETAIL MODE — combined card + roster */}
+          {isPlayerDetail ? (
+            <div>
+              {/* Card image + info */}
+              {teamLoading ? (
+                <div className="w-48 h-64 rounded-xl bg-white/[0.03] animate-pulse mx-auto mb-5" />
+              ) : cardImageUrl ? (
+                <div className="flex flex-col items-center mb-6">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={cardImageUrl} alt="Draft Card" className="w-48 rounded-xl mb-3" />
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleSaveCard}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-white/50 text-xs transition-colors"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Save Card
+                    </button>
+                    <button
+                      onClick={handleSaveRoster}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-white/50 text-xs transition-colors"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Save Roster
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Roster */}
+              {rostersLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="h-8 rounded-lg bg-white/[0.03] animate-pulse" />
+                  ))}
+                </div>
+              ) : roster ? (
+                <>
+                  {/* Header row */}
+                  <div className="flex items-center py-2 border-b border-white/[0.08]">
+                    <div className="flex-1" />
+                    <div className="w-11 text-center text-white/30 text-[10px] font-bold uppercase">BYE</div>
+                    <div className="w-11 text-center text-white/30 text-[10px] font-bold uppercase">ADP</div>
+                    <div className="w-11 text-center text-white/30 text-[10px] font-bold uppercase">Pick</div>
+                  </div>
+
+                  {POSITION_ORDER.map((pos) => {
+                    const players = roster[pos] || [];
+                    if (players.length === 0) return null;
+                    const color = POS_COLORS[pos];
+                    return (
+                      <div key={pos} className="border-b border-white/[0.06] pb-3">
+                        <p className="font-bold pt-4 pb-1 text-lg" style={{ color }}>{pos}</p>
+                        {players.map((player) => (
+                          <div
+                            key={player.playerId + player.pickNum}
+                            className="flex items-center py-1.5 pl-2.5"
+                            style={{ borderLeft: `2px solid ${color}` }}
+                          >
+                            <div className="flex-1">
+                              <p className="text-white font-bold uppercase text-xs">{player.playerId}</p>
+                            </div>
+                            <div className="w-11 text-center text-white text-xs font-bold">{player.byeWeek}</div>
+                            <div className="w-11 text-center text-white text-xs font-bold">{player.adp || '-'}</div>
+                            <div className="w-11 text-center text-white text-xs font-bold">{player.pickNum}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <p className="text-white/40 text-sm text-center py-8">No roster data available</p>
+              )}
+            </div>
+          ) : (
+          <>
+
           {/* ROSTER TAB */}
           {activeTab === 'roster' && (
             <div>
@@ -789,6 +883,8 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
                 </>
               )}
             </div>
+          )}
+          </>
           )}
         </div>
       </div>
