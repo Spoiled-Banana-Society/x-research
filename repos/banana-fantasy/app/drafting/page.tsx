@@ -85,12 +85,12 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
                   <span>{item.type === 'jackpot' ? '🔥' : '🏆'}</span>
                   <span className="text-white/80 font-medium" style={{ color: item.color }}>{item.label}</span>
                   <span className="text-white/30 text-xs">·</span>
-                  <span className="text-white/40 text-xs">8-hour · Draft #{r.roundId}</span>
+                  <span className="text-white/40 text-xs">8-hour · {item.label} #{r.roundId}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-white/50 text-sm">{r.members.length}/10</span>
                   {canEnter ? (
-                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-banana text-black animate-pulse">
+                    <span className="w-20 py-2 rounded-lg font-semibold text-sm text-center bg-white text-black hover:bg-white/90">
                       Enter
                     </span>
                   ) : (

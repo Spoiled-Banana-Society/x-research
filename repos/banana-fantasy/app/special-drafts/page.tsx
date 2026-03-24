@@ -5,14 +5,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue, QueueRound } from '@/types';
 
-function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
+function RoundRow({ round, userId, typeLabel }: { round: QueueRound; userId?: string; typeLabel: string }) {
   const isMember = round.members.some(m => m.wallet === userId);
 
   return (
     <div className={`rounded-lg border ${isMember ? 'border-banana/30 bg-banana/5' : 'border-white/[0.06] bg-white/[0.01]'} p-3`}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-white/50 text-xs font-mono">Draft #{round.roundId}</span>
+          <span className="text-white/50 text-xs font-mono">{typeLabel} #{round.roundId}</span>
           {isMember && <span className="text-banana text-[10px] font-semibold">YOU</span>}
         </div>
         <div className="flex items-center gap-2">
@@ -45,7 +45,7 @@ function RoundRow({ round, userId }: { round: QueueRound; userId?: string }) {
           round.draftId ? (
             <a
               href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true`}
-              className="px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-banana text-black hover:brightness-110 animate-pulse"
+              className="w-20 py-2 rounded-lg font-semibold text-sm text-center transition-all hover:scale-105 bg-white text-black hover:bg-white/90"
             >
               Enter Draft
             </a>
@@ -79,7 +79,7 @@ function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string })
         <span className="text-white/50 text-xs">🕐 8-hour picks</span>
       </div>
       {activeRounds.map(round => (
-        <RoundRow key={round.roundId} round={round} userId={userId} />
+        <RoundRow key={round.roundId} round={round} userId={userId} typeLabel={label} />
       ))}
     </div>
   );
