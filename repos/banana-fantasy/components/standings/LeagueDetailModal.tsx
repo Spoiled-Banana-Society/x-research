@@ -6,7 +6,7 @@ import { getOwnerDraftTokens } from '@/lib/api/owner';
 import { getDraftsApiUrl } from '@/lib/staging';
 import type { League } from '@/types';
 
-export type ModalTab = 'roster' | 'board' | 'team';
+export type ModalTab = 'roster' | 'board' | 'standings' | 'team';
 
 interface LeagueDetailModalProps {
   league: League;
@@ -204,6 +204,28 @@ export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }
 
   const roster = allRosters[selectedPlayer];
 
+  // Build standings entries from roster data
+  const standingsEntries = useMemo(() => {
+    if (playerKeys.length === 0) return [];
+    return playerKeys.map((key, idx) => {
+      const r = allRosters[key];
+      const totalPlayers = r
+        ? POSITION_ORDER.reduce((sum, pos) => sum + (r[pos]?.length || 0), 0)
+        : 0;
+      let displayName = key;
+      if (r?.pfpDisplayName) displayName = r.pfpDisplayName;
+      else if (key.startsWith('0x')) displayName = truncateAddress(key);
+      else if (key.startsWith('bot-')) displayName = key.replace(/^bot-fast-\d+-/, 'Bot ');
+      return {
+        ownerKey: key,
+        displayName,
+        playerCount: totalPlayers,
+        isCurrentUser: key.toLowerCase() === walletAddress?.toLowerCase(),
+        rank: idx + 1,
+      };
+    });
+  }, [playerKeys, allRosters, walletAddress]);
+
   // Build board grid
   const { boardGrid, drafterOrder } = useMemo(() => {
     if (boardPicks.length === 0) return { boardGrid: [], drafterOrder: [] };
@@ -358,6 +380,7 @@ export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }
   const tabs: { id: ModalTab; label: string }[] = [
     { id: 'roster', label: 'Roster' },
     { id: 'board', label: 'Board' },
+    { id: 'standings', label: 'Standings' },
     { id: 'team', label: 'Team' },
   ];
 
@@ -603,6 +626,91 @@ export function LeagueDetailModal({ league, initialTab, walletAddress, onClose }
                 </div>
               ) : (
                 <p className="text-white/40 text-sm text-center py-8">Draft board not available</p>
+              )}
+            </div>
+          )}
+
+          {/* STANDINGS TAB */}
+          {activeTab === 'standings' && (
+            <div>
+              {rostersLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="h-12 rounded-lg bg-white/[0.03] animate-pulse" />
+                  ))}
+                </div>
+              ) : standingsEntries.length > 0 ? (
+                <>
+                  {/* Header */}
+                  <div className="grid grid-cols-[36px_1fr_80px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30 font-medium">
+                    <div>#</div>
+                    <div>Team</div>
+                    <div className="text-right">Players</div>
+                  </div>
+
+                  <div className="space-y-1">
+                    {standingsEntries.map((entry) => (
+                      <React.Fragment key={entry.ownerKey}>
+                        <div
+                          onClick={() => { setSelectedPlayer(entry.ownerKey); setActiveTab('roster'); }}
+                          className={`
+                            grid grid-cols-[36px_1fr_80px] gap-2 px-3 py-2.5 rounded-lg items-center cursor-pointer transition-colors
+                            ${entry.isCurrentUser
+                              ? 'bg-banana/[0.08] ring-1 ring-banana/20 hover:bg-banana/[0.12]'
+                              : 'hover:bg-white/[0.04]'
+                            }
+                          `}
+                        >
+                          {/* Rank */}
+                          <div>
+                            {entry.rank <= 2 ? (
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                entry.rank === 1 ? 'bg-yellow-500 text-black' : 'bg-gray-400 text-black'
+                              }`}>
+                                {entry.rank}
+                              </span>
+                            ) : entry.rank === 3 ? (
+                              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-orange-600 text-white">
+                                {entry.rank}
+                              </span>
+                            ) : (
+                              <span className="text-white/50 text-sm font-medium">{entry.rank}</span>
+                            )}
+                          </div>
+
+                          {/* Team name */}
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium truncate ${entry.isCurrentUser ? 'text-banana' : 'text-white/80'}`}>
+                              {entry.displayName}
+                              {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
+                            </p>
+                          </div>
+
+                          {/* Player count + chevron */}
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-white/50 text-sm">{entry.playerCount} picks</span>
+                            <svg className="w-3 h-3 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Advance line between rank 2 and 3 */}
+                        {entry.rank === 2 && standingsEntries.length > 2 && (
+                          <div className="flex items-center gap-2 px-3 py-1.5">
+                            <div className="flex-1 h-px bg-green-500/30" />
+                            <span className="text-[9px] uppercase tracking-wider text-green-500/50 font-medium">Advance</span>
+                            <div className="flex-1 h-px bg-green-500/30" />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+
+                  <p className="text-white/20 text-[10px] text-center mt-4">Click a team to view their roster</p>
+                </>
+              ) : (
+                <p className="text-white/40 text-sm text-center py-8">No standings data available</p>
               )}
             </div>
           )}

@@ -103,6 +103,24 @@ export default function StandingsPage() {
     setModalTab(tab);
   };
 
+  const handleOpenLeagueFromLookup = (draftId: string) => {
+    const leagueNum = draftId.match(/(\d+)$/)?.[1] || draftId;
+    setModalLeague({
+      id: draftId,
+      name: `League #${leagueNum}`,
+      contestId: '',
+      type: 'regular',
+      leagueRank: 0,
+      weeklyRank: 0,
+      weeklyScore: 0,
+      seasonScore: 0,
+      status: 'completed',
+      roster: [],
+      draftDate: '',
+    });
+    setModalTab('standings');
+  };
+
   // Draft type breakdown for portfolio card
   const typeBreakdown = useMemo(() => {
     const counts = { jackpot: 0, hof: 0, pro: 0 };
@@ -338,7 +356,7 @@ export default function StandingsPage() {
 
       {/* LEADERBOARD VIEW */}
       {(viewMode === 'leaderboard' || !isLoggedIn) && (
-        <LeaderboardView gameweek={gameweek} />
+        <LeaderboardView gameweek={gameweek} onOpenLeagueDetail={handleOpenLeagueFromLookup} />
       )}
 
       {/* League Detail Modal */}

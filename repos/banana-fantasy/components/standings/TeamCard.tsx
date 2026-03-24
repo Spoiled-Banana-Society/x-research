@@ -145,13 +145,18 @@ export function TeamCard({ league, onOpenModal, index = 0 }: TeamCardProps) {
               {league.name}
             </h3>
             <span
-              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${config.color}/20 ${config.text}`}
+              className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full flex-shrink-0 ${config.color}/20 ${config.text} ring-1 ring-current/20`}
             >
               {config.label}
             </span>
             {league.prizeIndicator != null && league.prizeIndicator > 0 && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 flex-shrink-0">
                 ${league.prizeIndicator}
+              </span>
+            )}
+            {inTheMoney && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 flex-shrink-0 border border-green-500/20">
+                Advancing
               </span>
             )}
           </div>
@@ -161,7 +166,9 @@ export function TeamCard({ league, onOpenModal, index = 0 }: TeamCardProps) {
             <div>
               <p className="text-white/40 text-[10px] uppercase tracking-wider mb-0.5">Rank</p>
               <p className="text-white font-bold text-lg">
-                {league.leagueRank > 0 ? formatRank(league.leagueRank) : '-'}
+                {league.leagueRank > 0 ? (
+                  <>{formatRank(league.leagueRank)}<span className="text-white/30 font-normal text-xs ml-0.5">of 10</span></>
+                ) : '-'}
               </p>
             </div>
             <div>
@@ -177,6 +184,31 @@ export function TeamCard({ league, onOpenModal, index = 0 }: TeamCardProps) {
               </p>
             </div>
           </div>
+
+          {/* Rank progress bar */}
+          {league.leagueRank > 0 && (
+            <div className="flex items-center gap-0.5 mb-3">
+              {Array.from({ length: 10 }, (_, i) => {
+                const pos = i + 1;
+                const isYou = pos === league.leagueRank;
+                const isAdvancingZone = pos <= 2;
+                return (
+                  <div
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full ${
+                      isYou
+                        ? isAdvancingZone
+                          ? 'bg-green-400'
+                          : 'bg-banana'
+                        : isAdvancingZone
+                          ? 'bg-green-500/25'
+                          : 'bg-white/[0.06]'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="flex items-center gap-2">

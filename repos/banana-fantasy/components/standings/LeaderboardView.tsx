@@ -9,6 +9,7 @@ import type { LeaderboardEntry } from '@/types';
 
 interface LeaderboardViewProps {
   gameweek: string;
+  onOpenLeagueDetail?: (draftId: string) => void;
 }
 
 type LevelFilter = 'all' | 'Pro' | 'HOF' | 'Jackpot';
@@ -23,7 +24,7 @@ const filterPills: { id: LevelFilter; label: string; color: string }[] = [
 
 const PAGE_SIZE = 20;
 
-export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
+export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardViewProps) {
   const [level, setLevel] = useState<LevelFilter>('all');
   const [sortField, setSortField] = useState<SortField>('SeasonScore');
   const [page, setPage] = useState(0);
@@ -178,7 +179,17 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
       {/* League lookup results */}
       {leagueLookup && (
         <div className="mb-6">
-          <h3 className="text-white font-semibold text-sm mb-3">League #{leagueLookup?.match(/(\d+)$/)?.[1] || leagueInput.trim()} — Standings</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-semibold text-sm">League #{leagueLookup?.match(/(\d+)$/)?.[1] || leagueInput.trim()} — Standings</h3>
+            {leagueEntries.length > 0 && onOpenLeagueDetail && (
+              <button
+                onClick={() => onOpenLeagueDetail(leagueLookup)}
+                className="text-[11px] text-banana hover:text-banana/70 font-medium transition-colors"
+              >
+                View Full Details &rarr;
+              </button>
+            )}
+          </div>
           {leagueLookupLoading && leagueEntries.length === 0 && (
             <div className="space-y-2">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -200,37 +211,48 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Weekly</div>
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Season</div>
               </div>
-              <div className="divide-y divide-white/[0.04]">
+              <div>
                 {leagueEntries.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    className={`
-                      grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 items-center transition-colors
-                      ${entry.isCurrentUser ? 'bg-banana/[0.08]' : 'hover:bg-white/[0.03]'}
-                    `}
-                  >
-                    <div>
-                      {entry.rank <= 3 ? (
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          entry.rank === 1 ? 'bg-yellow-500 text-black' :
-                          entry.rank === 2 ? 'bg-gray-400 text-black' :
-                          'bg-orange-600 text-white'
-                        }`}>{entry.rank}</span>
-                      ) : (
-                        <span className="text-white/50 text-sm">{entry.rank}</span>
-                      )}
+                  <React.Fragment key={idx}>
+                    <div
+                      onClick={() => onOpenLeagueDetail?.(leagueLookup)}
+                      className={`
+                        grid grid-cols-[40px_1fr_80px_80px] sm:grid-cols-[50px_1fr_100px_100px] gap-2 px-4 py-3 items-center transition-colors cursor-pointer
+                        ${entry.isCurrentUser ? 'bg-banana/[0.08] hover:bg-banana/[0.12]' : 'hover:bg-white/[0.04]'}
+                      `}
+                    >
+                      <div>
+                        {entry.rank <= 3 ? (
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            entry.rank === 1 ? 'bg-yellow-500 text-black' :
+                            entry.rank === 2 ? 'bg-gray-400 text-black' :
+                            'bg-orange-600 text-white'
+                          }`}>{entry.rank}</span>
+                        ) : (
+                          <span className="text-white/50 text-sm">{entry.rank}</span>
+                        )}
+                      </div>
+                      <div className={`text-sm font-medium truncate ${entry.isCurrentUser ? 'text-banana' : 'text-white/80'}`}>
+                        {entry.displayName}
+                        {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
+                      </div>
+                      <div className="text-right text-white/60 text-sm">
+                        {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : entry.pickCount ? `${entry.pickCount} picks` : formatScore(0)}
+                      </div>
+                      <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white'}`}>
+                        {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : entry.roster ? `${entry.roster.length} players` : formatScore(0)}
+                      </div>
                     </div>
-                    <div className={`text-sm font-medium truncate ${entry.isCurrentUser ? 'text-banana' : 'text-white/80'}`}>
-                      {entry.displayName}
-                      {entry.isCurrentUser && <span className="ml-1.5 text-[10px] text-banana/60">(You)</span>}
-                    </div>
-                    <div className="text-right text-white/60 text-sm">
-                      {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : entry.pickCount ? `${entry.pickCount} picks` : formatScore(0)}
-                    </div>
-                    <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white'}`}>
-                      {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : entry.roster ? `${entry.roster.length} players` : formatScore(0)}
-                    </div>
-                  </div>
+
+                    {/* Advance line between rank 2 and 3 */}
+                    {entry.rank === 2 && leagueEntries.length > 2 && (
+                      <div className="flex items-center gap-2 px-4 py-1.5">
+                        <div className="flex-1 h-px bg-green-500/30" />
+                        <span className="text-[9px] uppercase tracking-wider text-green-500/50 font-medium">Advance</span>
+                        <div className="flex-1 h-px bg-green-500/30" />
+                      </div>
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
             </div>

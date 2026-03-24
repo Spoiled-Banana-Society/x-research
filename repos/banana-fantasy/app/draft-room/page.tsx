@@ -43,7 +43,6 @@ function DraftRoomContent() {
   const speedParam = searchParams.get('speed') as 'fast' | 'slow' | null;
   const passTypeParam = searchParams.get('passType') as 'paid' | 'free' | null;
   const isPaidDraft = passTypeParam !== 'free'; // Default to paid if not specified
-  const isSpecialDraft = searchParams.get('special') === 'true'; // JP/HOF special draft — skip filling/slot
 
   // draftId is stateful — starts empty when navigating before joinDraft completes
   const [draftId, setDraftId] = useState(urlDraftId);
@@ -75,8 +74,7 @@ function DraftRoomContent() {
   const liveInitializedRef = useRef(false);
   const storedForInit = draftId ? draftStore.getDraft(draftId) : undefined;
   // liveDataReady gates the loadLiveData effect — set true when loading phase resolves to drafting
-  // Special drafts skip filling/animations — ready immediately
-  const [liveDataReady, setLiveDataReady] = useState(isSpecialDraft);
+  const [liveDataReady, setLiveDataReady] = useState(false);
   const [engineReady, setEngineReady] = useState(false);
   const liveRetryCountRef = useRef(0);
   // Track whether we're waiting for server to create draft documents after filling
@@ -198,12 +196,14 @@ function DraftRoomContent() {
 
   // ==================== PHASE STATE ====================
   const [phase, setPhase] = useState<RoomPhase>(() => {
-    // Special drafts (JP/HOF from wheel) skip all filling/slot animations
-    if (isSpecialDraft) return 'loading';
     // In live mode, if stored state shows draft is past filling, start in 'loading'
+    // to check server state BEFORE showing any UI/animations. This prevents replaying
+    // RANDOMIZING/slot machine on re-entry.
     if (isLiveMode && stored && (
       (stored.phase && stored.phase !== 'filling') ||
       stored.preSpinStartedAt ||
+      // If randomizing bar has been running 15s+, skip to loading (check server state)
+      // instead of starting a new 60s poll that would get stuck
       (stored.randomizingStartedAt && (Date.now() - stored.randomizingStartedAt) > 3000)
     )) return 'loading';
     if (!isLiveMode && stored?.phase) return stored.phase;
