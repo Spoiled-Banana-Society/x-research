@@ -947,6 +947,33 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Where to build it:** Likely in `sbs-drafts-api-main` — the leagues/draft-state models. Store batch state in Redis or Firestore for atomicity.
 
+## Backend Needed: Special Draft Creation When Queue Fills (Boris)
+> **From Richard's session:** The frontend special draft queue system is fully built. When 10 Jackpot (or HOF) winners fill a queue, the round status changes to `'ready'` in Firestore (`v2_queues/{jackpot|hof}`). The backend needs to actually CREATE the draft and enter all 10 players.
+
+**What the frontend does:**
+- Users win JP/HOF on the wheel → auto-queued into `v2_queues/jackpot` or `v2_queues/hof` (Firestore)
+- Each queue has `rounds[]` — when a round fills to 10 members, `round.status` flips from `'filling'` to `'ready'`
+- All 10 members get an in-app notification: "Draft Starting!"
+- All special drafts are **slow (8-hour picks)**
+
+**What the backend needs to do when `round.status === 'ready'`:**
+1. Create a new slow draft/league with `league.Level = "Jackpot"` or `"Hall of Fame"`
+2. Auto-enter all 10 wallets from `round.members[].wallet` into that draft
+3. Set `round.draftId` to the new draft ID and `round.status` to `'drafting'`
+4. The draft room should work the same as regular drafts from there (WS, picks, etc.)
+
+**Option A:** A Go API endpoint: `POST /staging/create-special-draft` that takes `{ type: "jackpot"|"hof", wallets: string[] }` and creates + fills the draft.
+
+**Option B:** A Firestore trigger (Cloud Function) that watches `v2_queues` for rounds with `status === 'ready'` and creates the draft automatically.
+
+**Firestore structure:**
+```
+v2_queues/jackpot
+  rounds: [
+    { roundId: 1, members: [{wallet: "0x...", joinedAt: 123}], status: "ready", draftId: null }
+  ]
+```
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
