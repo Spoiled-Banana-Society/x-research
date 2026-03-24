@@ -178,7 +178,7 @@ export function LeaderboardView({ gameweek }: LeaderboardViewProps) {
       {/* League lookup results */}
       {leagueLookup && (
         <div className="mb-6">
-          <h3 className="text-white font-semibold text-sm mb-3">League #{leagueInput.trim().replace(/^#/, '')} — Standings</h3>
+          <h3 className="text-white font-semibold text-sm mb-3">League #{leagueLookup?.match(/(\d+)$/)?.[1] || leagueInput.trim()} — Standings</h3>
           {leagueLookupLoading && leagueEntries.length === 0 && (
             <div className="space-y-2">
               {Array.from({ length: 10 }).map((_, i) => (
