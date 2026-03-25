@@ -534,7 +534,48 @@ function DraftRoomContent() {
           setPhase('filling');
         }
       } catch (err) {
-        console.warn('[Draft Room] Loading phase server check failed, falling back to stored state:', err);
+        console.warn('[Draft Room] Loading phase server check failed:', err);
+
+        // Special drafts (staging): Go API draft doesn't exist yet — create it + fill with bots
+        if (isSpecialDraft && isStagingMode()) {
+          console.log('[Draft Room] Special draft: auto-creating + filling draft in staging...');
+          try {
+            const stagingBase = getStagingApiUrl();
+            if (stagingBase && walletParam) {
+              // Mint a token for the wallet (may already exist — ignore errors)
+              const mintId = 40000 + Math.floor(Math.random() * 10000);
+              await fetch(`${stagingBase}/owner/${walletParam}/draftToken/mint`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minId: mintId, maxId: mintId }),
+              }).catch(() => {});
+
+              // Create the special draft
+              const typeForApi = specialTypeParam === 'hof' ? 'hof' : 'jackpot';
+              await fetch(`${stagingBase}/staging/create-special-draft`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: typeForApi, wallets: [walletParam] }),
+              });
+
+              // Wait for draft state to be created
+              await new Promise(r => setTimeout(r, 3000));
+
+              // Fill with 9 bots
+              await fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' });
+
+              // Wait for draft to start
+              await new Promise(r => setTimeout(r, 3000));
+
+              // Retry the server check — draft should exist now
+              console.log('[Draft Room] Retrying server check after auto-fill...');
+              loadingHandledRef.current = false;
+              setPhase('loading'); // Re-trigger loading effect
+              return;
+            }
+          } catch (fillErr) {
+            console.warn('[Draft Room] Auto-fill failed:', fillErr);
+          }
+        }
+
         // Fall back to stored phase or filling
         if (stored?.status === 'drafting') {
           setPhase('drafting');
