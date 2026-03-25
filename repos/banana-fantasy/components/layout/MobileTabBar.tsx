@@ -3,70 +3,80 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const tabs = [
-  {
-    href: '/drafting',
-    label: 'Draft',
-    // Football icon
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <ellipse cx="12" cy="12" rx="10" ry="7" />
-        <path d="M12 5v14" />
-        <path d="M7 8.5l10 7" />
-        <path d="M7 15.5l10-7" />
-      </svg>
-    ),
-    matchPaths: ['/drafting', '/draft-room', '/buy-drafts', '/special-drafts'],
-  },
-  {
-    href: '/banana-wheel',
-    label: 'Spin',
-    // Wheel / star icon
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 2v7" />
-        <path d="M12 15v7" />
-        <path d="M2 12h7" />
-        <path d="M15 12h7" />
-      </svg>
-    ),
-    matchPaths: ['/banana-wheel'],
-  },
-  {
-    href: '/standings',
-    label: 'Teams',
-    // Chart / bar icon
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 20V10" />
-        <path d="M12 20V4" />
-        <path d="M6 20v-6" />
-      </svg>
-    ),
-    matchPaths: ['/standings', '/exposure', '/leaderboard'],
-  },
-  {
-    href: '/marketplace',
-    label: 'Market',
-    // Tag / price icon
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-        <line x1="7" y1="7" x2="7.01" y2="7" />
-      </svg>
-    ),
-    matchPaths: ['/marketplace'],
-  },
-];
+import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/components/NotificationCenter';
 
 export function MobileTabBar() {
   const pathname = usePathname();
+  const { user, isLoggedIn } = useAuth();
+  const { unreadCount } = useNotifications();
 
   // Don't show in draft room — it has its own UI
   if (pathname.startsWith('/draft-room')) return null;
+
+  const wheelSpins = isLoggedIn && user ? user.wheelSpins : 0;
+
+  const tabs = [
+    {
+      href: '/drafting',
+      label: 'Draft',
+      matchPaths: ['/drafting', '/draft-room', '/buy-drafts', '/special-drafts'],
+      badge: 0,
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#fbbf24' : 'none'} stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z" />
+          <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z" />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+        </svg>
+      ),
+    },
+    {
+      href: '/banana-wheel',
+      label: 'Spin',
+      matchPaths: ['/banana-wheel'],
+      badge: wheelSpins,
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="2" />
+          <path d="M12 2v4" />
+          <path d="M12 18v4" />
+          <path d="M2 12h4" />
+          <path d="M18 12h4" />
+          <path d="M4.93 4.93l2.83 2.83" />
+          <path d="M16.24 16.24l2.83 2.83" />
+          <path d="M4.93 19.07l2.83-2.83" />
+          <path d="M16.24 7.76l2.83-2.83" />
+        </svg>
+      ),
+    },
+    {
+      href: '/standings',
+      label: 'Teams',
+      matchPaths: ['/standings', '/exposure', '/leaderboard'],
+      badge: 0,
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 20V10" />
+          <path d="M12 20V4" />
+          <path d="M6 20v-6" />
+        </svg>
+      ),
+    },
+    {
+      href: '/notifications',
+      label: 'Alerts',
+      matchPaths: ['/notifications'],
+      badge: unreadCount,
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#fbbf24' : 'none'} stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 01-3.46 0" />
+        </svg>
+      ),
+    },
+  ];
 
   const isActive = (tab: typeof tabs[0]) =>
     tab.matchPaths.some(p => pathname === p || pathname.startsWith(p + '/'));
@@ -84,11 +94,18 @@ export function MobileTabBar() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
                 active ? 'text-banana' : 'text-white/35'
               }`}
             >
-              {tab.icon(active)}
+              <div className="relative">
+                {tab.icon(active)}
+                {tab.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    {tab.badge > 9 ? '9+' : tab.badge}
+                  </span>
+                )}
+              </div>
               <span className={`text-[10px] font-medium ${active ? 'text-banana' : 'text-white/35'}`}>
                 {tab.label}
               </span>

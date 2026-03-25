@@ -65,20 +65,20 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
           {/* Right side */}
           <div className="flex items-center gap-0.5 sm:gap-1">
             {isLoading || (isLoggedIn && !isBalanceLoaded) ? (
-              // Skeleton — simplified on mobile
+              // Skeleton
               <>
-                <div className="hidden md:flex items-center px-2 py-1.5 animate-pulse">
-                  <div className="w-[44px] h-[28px] rounded-md bg-white/10" />
+                <div className="flex items-center px-1 py-1.5 animate-pulse">
+                  <div className="w-[48px] h-[28px] rounded bg-white/10" />
                 </div>
                 <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 animate-pulse" />
               </>
             ) : (
               <>
+                {/* Batch Progress — visible on all sizes */}
+                <BatchProgressIndicator />
+
                 {/* ── Desktop-only icons ── */}
                 <div className="hidden md:contents">
-                  {/* Batch Progress Indicator */}
-                  <BatchProgressIndicator />
-
                   {/* Draft Passes */}
                   <Tooltip
                     content={
