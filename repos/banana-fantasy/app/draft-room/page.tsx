@@ -336,15 +336,8 @@ function DraftRoomContent() {
               setPhase('filling');
               return;
             }
-            if (queueMemberCount >= 10) {
-              // Queue says full — go to filling with 10/10, let "at 10" effect
-              // handle polling for draft readiness and transitioning to drafting
-              console.log(`[Draft Room] Special draft: queue shows 10/10 — filling, at-10 effect will handle transition`);
-              setPlayerCount(10);
-              setPhase('filling');
-              if (specialTypeParam) setDraftType(specialTypeParam);
-              return;
-            }
+            // If queue says 10/10, fall through to Go API to check if draft is started
+            // (don't go to filling — that causes a flash on re-entry)
             // If queueMemberCount is 0 (round not found), fall through to check Go API
           } catch (err) {
             console.warn('[Draft Room] Queue check failed, falling through to draft API:', err);
@@ -2444,8 +2437,10 @@ function DraftRoomContent() {
               ) : phase === 'pre-spin' ? (
                 <span className="text-yellow-400 flex items-center justify-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                  Draft type reveal in {preSpinCountdown}s
-                  <span className="text-white/50 ml-2">· Starting in {formatTime(mainCountdown)}</span>
+                  {isSpecialDraft
+                    ? `Draft starting in ${formatTime(mainCountdown)}`
+                    : <>Draft type reveal in {preSpinCountdown}s<span className="text-white/50 ml-2">· Starting in {formatTime(mainCountdown)}</span></>
+                  }
                 </span>
               ) : (phase === 'spinning' || phase === 'result') ? (
                 <span className="text-white/70">Draft starting in {formatTime(mainCountdown)}</span>
