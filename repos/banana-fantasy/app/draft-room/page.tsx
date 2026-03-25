@@ -357,8 +357,11 @@ function DraftRoomContent() {
         const playerCount = info.draftOrder?.length || 0;
         const draftAlreadyStarted = info.pickNumber > 1 ||
           (info.draftStartTime && info.draftStartTime * 1000 < Date.now());
+        // Special drafts: if Go API has 10 players and a draftStartTime, treat as started
+        // (slow drafts may have draftStartTime in the future during countdown)
+        const specialDraftReady = isSpecialDraft && playerCount >= 10 && info.draftStartTime;
 
-        if (draftAlreadyStarted) {
+        if (draftAlreadyStarted || specialDraftReady) {
           // Draft is actively picking — jump straight to drafting
           console.log(`[Draft Room] Server shows draft at pick ${info.pickNumber} — jumping to drafting`);
 
@@ -382,8 +385,9 @@ function DraftRoomContent() {
           setShowSlotMachine(false);
           setLiveDataReady(true);
 
-          // Restore draft type from stored state
-          if (stored?.draftType) setDraftType(stored.draftType);
+          // Restore draft type — URL param takes priority for special drafts
+          if (specialTypeParam) setDraftType(specialTypeParam);
+          else if (stored?.draftType) setDraftType(stored.draftType);
 
           draftStore.updateDraft(draftId, {
             phase: 'drafting', status: 'drafting', players: 10,
