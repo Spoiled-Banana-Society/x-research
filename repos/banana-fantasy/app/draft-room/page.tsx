@@ -565,11 +565,31 @@ function DraftRoomContent() {
               // Wait for draft to start
               await new Promise(r => setTimeout(r, 3000));
 
-              // Retry the server check — draft should exist now
+              // Retry inline — draft should exist now
               console.log('[Draft Room] Retrying server check after auto-fill...');
-              loadingHandledRef.current = false;
-              setPhase('loading'); // Re-trigger loading effect
-              return;
+              const retryInfo = await draftApi.getDraftInfo(draftId);
+              if (cancelled) return;
+              if (retryInfo.draftOrder?.length >= 10) {
+                console.log('[Draft Room] Auto-fill worked! Starting countdown...');
+                const ro = retryInfo.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+                  id: String(idx + 1), name: u.ownerId,
+                  displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase() ? 'You' : u.ownerId.slice(0,6)+'...'+u.ownerId.slice(-4),
+                  isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(), avatar: '🍌',
+                }));
+                setDraftOrder(ro);
+                const up = ro.findIndex((p: { isYou: boolean }) => p.isYou);
+                if (up >= 0) setUserDraftPosition(up);
+                setPlayerCount(10);
+                if (specialTypeParam) setDraftType(specialTypeParam);
+                const cs = Date.now();
+                preSpinStartedAtRef.current = cs;
+                setPhase('pre-spin');
+                setPreSpinCountdown(60);
+                setMainCountdown(60);
+                setLiveDataReady(true);
+                draftStore.updateDraft(draftId, { phase: 'pre-spin', preSpinStartedAt: cs, players: 10, draftOrder: ro, userDraftPosition: up, type: specialTypeParam || draftType, draftType: specialTypeParam || draftType, isSpecial: true });
+                return;
+              }
             }
           } catch (fillErr) {
             console.warn('[Draft Room] Auto-fill failed:', fillErr);
