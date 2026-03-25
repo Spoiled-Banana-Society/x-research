@@ -313,36 +313,8 @@ function DraftRoomContent() {
       try {
         console.log('[Draft Room] Loading phase — checking server state for', draftId);
 
-        // Special drafts: check queue API first to get REAL member count.
-        // The Go API draft may have stale data from a previous test/fill.
-        if (isSpecialDraft) {
-          try {
-            const queues = await fetch('/api/queues').then(r => r.json());
-            if (cancelled) return;
-            // Find the round that has this draftId
-            let queueMemberCount = 0;
-            for (const q of Object.values(queues) as any[]) {
-              for (const r of q.rounds || []) {
-                if (r.draftId === draftId) {
-                  queueMemberCount = r.members?.length || 0;
-                  break;
-                }
-              }
-            }
-            if (queueMemberCount > 0 && queueMemberCount < 10) {
-              // Queue says not full — go to filling with real count
-              console.log(`[Draft Room] Special draft: queue shows ${queueMemberCount}/10 — filling`);
-              setPlayerCount(queueMemberCount);
-              setPhase('filling');
-              return;
-            }
-            // If queue says 10/10, fall through to Go API to check if draft is started
-            // (don't go to filling — that causes a flash on re-entry)
-            // If queueMemberCount is 0 (round not found), fall through to check Go API
-          } catch (err) {
-            console.warn('[Draft Room] Queue check failed, falling through to draft API:', err);
-          }
-        }
+        // Special drafts: Cloud Function auto-fills the draft when user joins.
+        // Go straight to Go API check — if draft is ready, start immediately.
 
         const info = await draftApi.getDraftInfo(draftId);
         if (cancelled) return;
@@ -386,17 +358,36 @@ function DraftRoomContent() {
             phase: 'drafting', status: 'drafting', players: 10,
           });
         } else if (isSpecialDraft && playerCount >= 10) {
-          // Special draft at 10/10 but draft hasn't started yet.
-          // Go to filling phase with 10/10 and let the "at 10" effect handle
-          // polling for when the draft order is actually ready.
-          // If the draft DOES have a valid draftOrder + draftStartTime, the
-          // draftAlreadyStarted check above already handled it.
-          console.log('[Draft Room] Special draft at 10/10 but not started — going to filling, at-10 effect will handle transition');
+          // Special draft at 10/10 — Cloud Function auto-filled it.
+          // Go straight to pre-spin countdown (60s), skip filling phase entirely.
+          console.log('[Draft Room] Special draft auto-filled to 10/10 — starting countdown');
+          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+            id: String(idx + 1),
+            name: u.ownerId,
+            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
+              ? 'You'
+              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
+            avatar: '🍌',
+          }));
+          setDraftOrder(realOrder);
+          const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+          if (userPos >= 0) setUserDraftPosition(userPos);
           setPlayerCount(10);
-          setPhase('filling');
           if (specialTypeParam) setDraftType(specialTypeParam);
-          else if (stored?.draftType) setDraftType(stored.draftType);
-          draftStore.updateDraft(draftId, { players: 10 });
+          // Start 60s countdown
+          const countdownStart = Date.now();
+          preSpinStartedAtRef.current = countdownStart;
+          setPhase('pre-spin');
+          setPreSpinCountdown(60);
+          setMainCountdown(60);
+          setLiveDataReady(true);
+          draftStore.updateDraft(draftId, {
+            phase: 'pre-spin', preSpinStartedAt: countdownStart, players: 10,
+            draftOrder: realOrder, userDraftPosition: userPos,
+            type: specialTypeParam || draftType, draftType: specialTypeParam || draftType,
+            isSpecial: true,
+          });
         } else if (playerCount >= 10 && info.draftStartTime) {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
@@ -1228,36 +1219,8 @@ function DraftRoomContent() {
 
     const poll = async () => {
       try {
-        // Special drafts: ALWAYS poll queue API, NEVER Go API during filling.
-        // Go API may have stale data from previous tests with the same draftId.
-        if (isSpecialDraft) {
-          if (phase !== 'filling') return; // Only poll during filling; drafting phase uses engine/WS
-          try {
-            const queues = await fetch('/api/queues').then(r => r.json());
-            if (cancelled) return;
-            let queueCount = 0;
-            for (const q of Object.values(queues) as any[]) {
-              for (const r of q.rounds || []) {
-                if (r.draftId === draftId) {
-                  queueCount = r.members?.length || 0;
-                  break;
-                }
-              }
-            }
-            if (queueCount > 0) {
-              console.log(`[Draft Room] Queue poll: ${queueCount}/10`);
-              setPlayerCount(prev => Math.max(prev, queueCount));
-              if (draftId) draftStore.updateDraft(draftId, { players: queueCount });
-              if (queueCount >= 10) {
-                console.log('[Draft Room] Queue says 10/10 — triggering at-10 effect');
-                setPlayerCount(10);
-              }
-            }
-          } catch (err) {
-            console.warn('[Draft Room] Queue poll failed:', err);
-          }
-          return; // Never fall through to Go API for special drafts during filling
-        }
+        // Special drafts skip filling poll — Cloud Function auto-fills, loading phase handles it
+        if (isSpecialDraft) return;
 
         console.log('[Draft Room] Polling getDraftInfo for', draftId);
         const info = await draftApi.getDraftInfo(draftId);
