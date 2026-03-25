@@ -966,7 +966,7 @@ export default function MarketplacePage() {
 
           {/* Teams Grid */}
           {(viewFilter === 'all' || viewFilter === 'top' || viewFilter === 'jackpot' || viewFilter === 'hof' ? allNftsLoading : listingsLoading) ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-12">
               {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
             </div>
           ) : deduplicatedTeams.length === 0 ? (
@@ -988,7 +988,7 @@ export default function MarketplacePage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-12">
               {deduplicatedTeams.map((team) => (
                 <div
                   key={`${team.id}-${team.orderHash}`}
@@ -1774,7 +1774,7 @@ export default function MarketplacePage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
               {deduplicatedTeams.filter(t => watchlistSet.has(t.tokenId)).map((team) => (
                 <div
                   key={`wl-${team.id}-${team.orderHash}`}

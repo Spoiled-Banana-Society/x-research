@@ -453,7 +453,7 @@ export function LeagueDetailModal({ league, initialTab, initialPlayer, walletAdd
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
 
           {/* PLAYER DETAIL MODE — combined card + roster */}
           {isPlayerDetail ? (

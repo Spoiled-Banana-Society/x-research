@@ -94,8 +94,10 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
               </>
             ) : (
               <>
-                {/* Batch Progress Indicator */}
-                <BatchProgressIndicator />
+                {/* Batch Progress Indicator — desktop only */}
+                <div className="hidden md:flex">
+                  <BatchProgressIndicator />
+                </div>
 
                 {/* Draft Passes */}
                 <Tooltip
@@ -115,7 +117,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                     aria-label={`Draft passes: ${isLoggedIn && user ? user.draftPasses + user.freeDrafts : 0} available`}
                     className="flex items-center px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
                   >
-                    <svg width="44" height="28" viewBox="0 0 88 56" className="transition-transform group-hover:scale-110 w-[36px] h-[22px] sm:w-[44px] sm:h-[28px]">
+                    <svg width="44" height="28" viewBox="0 0 88 56" className="transition-transform group-hover:scale-110 w-[28px] h-[18px] sm:w-[36px] sm:h-[22px] md:w-[44px] md:h-[28px]">
                       <defs>
                         <linearGradient id="goldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                           <stop offset="0%" stopColor="#FBBF24"/>
@@ -134,74 +136,66 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                   </Link>
                 </Tooltip>
 
-                {/* Banana Wheel */}
-                <Tooltip
-                  content={
-                    <div className="text-center">
-                      <p className="font-semibold">Banana Wheel</p>
-                      {isLoggedIn && user ? (
-                        <>
-                          <p className="text-text-secondary text-xs mt-1">
-                            {user.wheelSpins} spin{user.wheelSpins !== 1 ? 's' : ''} available
-                          </p>
-                          <p className="text-text-muted text-xs">
+                {/* Banana Wheel + Prizes — hidden on mobile, accessible via hamburger menu */}
+                <div className="hidden md:contents">
+                  <Tooltip
+                    content={
+                      <div className="text-center">
+                        <p className="font-semibold">Banana Wheel</p>
+                        {isLoggedIn && user ? (
+                          <>
+                            <p className="text-text-secondary text-xs mt-1">
+                              {user.wheelSpins} spin{user.wheelSpins !== 1 ? 's' : ''} available
+                            </p>
+                            <p className="text-text-muted text-xs">
+                              Win drafts, Jackpots, HOF entries
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-text-muted text-xs mt-1">
                             Win drafts, Jackpots, HOF entries
                           </p>
-                        </>
-                      ) : (
-                        <p className="text-text-muted text-xs mt-1">
-                          Win drafts, Jackpots, HOF entries
-                        </p>
+                        )}
+                      </div>
+                    }
+                  >
+                    <Link
+                      href="/banana-wheel"
+                      aria-label={`Banana Wheel${isLoggedIn && user && user.wheelSpins > 0 ? `: ${user.wheelSpins} spins available` : ''}`}
+                      className="relative flex items-center gap-1.5 px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                    >
+                      <svg width="36" height="36" viewBox="0 0 100 100" className="transition-transform group-hover:scale-110 w-[36px] h-[36px]">
+                        <circle cx="50" cy="50" r="48" fill="#2D3A6D" stroke="#1E2A5E" strokeWidth="2"/>
+                        <path d="M50,50 L50,8 A42,42 0 0,1 79.7,20.3 Z" fill="#F59E0B"/>
+                        <path d="M50,50 L79.7,20.3 A42,42 0 0,1 92,50 Z" fill="#EC4899"/>
+                        <path d="M50,50 L92,50 A42,42 0 0,1 79.7,79.7 Z" fill="#8B5CF6"/>
+                        <path d="M50,50 L79.7,79.7 A42,42 0 0,1 50,92 Z" fill="#F97316"/>
+                        <path d="M50,50 L50,92 A42,42 0 0,1 20.3,79.7 Z" fill="#EF4444"/>
+                        <path d="M50,50 L20.3,79.7 A42,42 0 0,1 8,50 Z" fill="#22C55E"/>
+                        <path d="M50,50 L8,50 A42,42 0 0,1 20.3,20.3 Z" fill="#FBBF24"/>
+                        <path d="M50,50 L20.3,20.3 A42,42 0 0,1 50,8 Z" fill="#06B6D4"/>
+                        <circle cx="50" cy="50" r="14" fill="#1E2A5E"/>
+                        <image href="/sbs-logo.png" x="40" y="40" width="20" height="20" />
+                        <path d="M50,0 L44,14 L56,14 Z" fill="#F59E0B"/>
+                      </svg>
+                      {isLoggedIn && user && user.wheelSpins > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-banana text-black text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                          {user.wheelSpins}
+                        </span>
                       )}
-                    </div>
-                  }
-                >
-                  <Link
-                    href="/banana-wheel"
-                    aria-label={`Banana Wheel${isLoggedIn && user && user.wheelSpins > 0 ? `: ${user.wheelSpins} spins available` : ''}`}
-                    className="relative flex items-center gap-1.5 px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
-                  >
-                    <svg width="36" height="36" viewBox="0 0 100 100" className="transition-transform group-hover:scale-110 w-[24px] h-[24px] sm:w-[36px] sm:h-[36px]">
-                      {/* Outer dark ring */}
-                      <circle cx="50" cy="50" r="48" fill="#2D3A6D" stroke="#1E2A5E" strokeWidth="2"/>
+                    </Link>
+                  </Tooltip>
 
-                      {/* Wheel segments - 8 vibrant colors */}
-                      <path d="M50,50 L50,8 A42,42 0 0,1 79.7,20.3 Z" fill="#F59E0B"/>
-                      <path d="M50,50 L79.7,20.3 A42,42 0 0,1 92,50 Z" fill="#EC4899"/>
-                      <path d="M50,50 L92,50 A42,42 0 0,1 79.7,79.7 Z" fill="#8B5CF6"/>
-                      <path d="M50,50 L79.7,79.7 A42,42 0 0,1 50,92 Z" fill="#F97316"/>
-                      <path d="M50,50 L50,92 A42,42 0 0,1 20.3,79.7 Z" fill="#EF4444"/>
-                      <path d="M50,50 L20.3,79.7 A42,42 0 0,1 8,50 Z" fill="#22C55E"/>
-                      <path d="M50,50 L8,50 A42,42 0 0,1 20.3,20.3 Z" fill="#FBBF24"/>
-                      <path d="M50,50 L20.3,20.3 A42,42 0 0,1 50,8 Z" fill="#06B6D4"/>
-
-                      {/* Center dark circle */}
-                      <circle cx="50" cy="50" r="14" fill="#1E2A5E"/>
-
-                      {/* SBS Logo in center */}
-                      <image href="/sbs-logo.png" x="40" y="40" width="20" height="20" />
-
-                      {/* Top pointer */}
-                      <path d="M50,0 L44,14 L56,14 Z" fill="#F59E0B"/>
-                    </svg>
-                    {isLoggedIn && user && user.wheelSpins > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-banana text-black text-[10px] font-bold rounded-full flex items-center justify-center px-1">
-                        {user.wheelSpins}
-                      </span>
-                    )}
-                  </Link>
-                </Tooltip>
-
-                {/* Prizes */}
-                <Tooltip content="Prizes">
-                  <Link
-                    href="/prizes"
-                    aria-label="Prizes"
-                    className="flex items-center px-1.5 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
-                  >
-                    <span className="text-lg sm:text-2xl" aria-hidden="true">🏆</span>
-                  </Link>
-                </Tooltip>
+                  <Tooltip content="Prizes">
+                    <Link
+                      href="/prizes"
+                      aria-label="Prizes"
+                      className="flex items-center px-1.5 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                    >
+                      <span className="text-2xl" aria-hidden="true">🏆</span>
+                    </Link>
+                  </Tooltip>
+                </div>
 
                 {/* Notifications */}
                 {isLoggedIn && <NotificationWidget />}

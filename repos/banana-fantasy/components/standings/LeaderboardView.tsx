@@ -223,11 +223,11 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
           )}
           {leagueEntries.length > 0 && (
             <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-              <div className="grid grid-cols-[36px_1fr_80px_80px] gap-2 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06]">
+              <div className="grid grid-cols-[28px_1fr] sm:grid-cols-[36px_1fr_80px_80px] gap-2 px-3 sm:px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06]">
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium">#</div>
                 <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium">Player</div>
-                <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Weekly</div>
-                <div className="text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Season</div>
+                <div className="hidden sm:block text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Weekly</div>
+                <div className="hidden sm:block text-[10px] uppercase tracking-wider text-white/30 font-medium text-right">Season</div>
               </div>
               <div>
                 {leagueEntries.map((entry, idx) => {
@@ -238,7 +238,7 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
                     <div
                       onClick={() => onOpenLeagueDetail?.(leagueLookup, { wallet: entry.ownerWallet })}
                       className={`
-                        grid grid-cols-[36px_1fr_80px_80px] gap-2 px-4 py-2.5 items-center transition-colors cursor-pointer
+                        grid grid-cols-[28px_1fr] sm:grid-cols-[36px_1fr_80px_80px] gap-2 px-3 sm:px-4 py-2.5 items-center transition-colors cursor-pointer
                         ${entry.isCurrentUser ? 'bg-banana/[0.08] hover:bg-banana/[0.12]' : 'hover:bg-white/[0.04]'}
                       `}
                     >
@@ -261,10 +261,10 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 flex-shrink-0">${prizeWon}</span>
                         )}
                       </div>
-                      <div className="text-right text-white/50 text-sm">
+                      <div className="hidden sm:block text-right text-white/50 text-sm">
                         {entry.weeklyScore > 0 ? formatScore(entry.weeklyScore) : <span className="text-white/15">—</span>}
                       </div>
-                      <div className={`text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white/70'}`}>
+                      <div className={`hidden sm:block text-right font-semibold text-sm ${entry.isCurrentUser ? 'text-banana' : 'text-white/70'}`}>
                         {entry.seasonScore > 0 ? formatScore(entry.seasonScore) : <span className="text-white/15">—</span>}
                       </div>
                     </div>

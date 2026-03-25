@@ -216,15 +216,15 @@ export default function ExposurePage() {
         {filteredExposures.length > 0 ? (
           <div className="rounded-xl border border-white/[0.06] overflow-hidden">
             {/* Header */}
-            <div className="grid grid-cols-[36px_120px_1fr_56px_48px_56px_56px_40px] gap-1 px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-white/30 font-medium">
-              <div>#</div>
+            <div className="grid grid-cols-[100px_1fr_48px] sm:grid-cols-[36px_120px_1fr_56px_48px_56px_56px_40px] gap-1 px-3 sm:px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-white/30 font-medium">
+              <div className="hidden sm:block">#</div>
               <div>Position</div>
               <div>Exposure</div>
-              <div className="text-right">Drafts</div>
+              <div className="hidden sm:block text-right">Drafts</div>
               <div className="text-right">%</div>
-              <div className="text-right">ADP</div>
-              <div className="text-right">Proj</div>
-              <div className="text-right">Bye</div>
+              <div className="hidden sm:block text-right">ADP</div>
+              <div className="hidden sm:block text-right">Proj</div>
+              <div className="hidden sm:block text-right">Bye</div>
             </div>
 
             {/* Rows */}
@@ -234,9 +234,9 @@ export default function ExposurePage() {
                 <div
                   key={e.teamPosition}
                   onClick={() => setSelectedExposure(e)}
-                  className="grid grid-cols-[36px_120px_1fr_56px_48px_56px_56px_40px] gap-1 px-4 py-2.5 items-center hover:bg-white/[0.04] cursor-pointer transition-colors border-b border-white/[0.03] last:border-0"
+                  className="grid grid-cols-[100px_1fr_48px] sm:grid-cols-[36px_120px_1fr_56px_48px_56px_56px_40px] gap-1 px-3 sm:px-4 py-2.5 items-center hover:bg-white/[0.04] cursor-pointer transition-colors border-b border-white/[0.03] last:border-0"
                 >
-                  <span className="text-white/30 text-xs">{idx + 1}</span>
+                  <span className="hidden sm:block text-white/30 text-xs">{idx + 1}</span>
                   <div className="flex items-center gap-2">
                     <span
                       className="text-[11px] font-bold px-1.5 py-0.5 rounded"
@@ -255,13 +255,13 @@ export default function ExposurePage() {
                       />
                     </div>
                   </div>
-                  <span className="text-white/50 text-xs text-right">{e.drafts}/{e.totalDrafts}</span>
+                  <span className="hidden sm:block text-white/50 text-xs text-right">{e.drafts}/{e.totalDrafts}</span>
                   <span className="text-right text-sm font-semibold" style={{ color: exposureColor(e.exposure) }}>
                     {e.exposure}%
                   </span>
-                  <span className="text-white/50 text-xs text-right">{e.adp < 999 ? e.adp : '—'}</span>
-                  <span className="text-white/50 text-xs text-right">{e.projected > 0 ? e.projected.toFixed(1) : '—'}</span>
-                  <span className="text-white/30 text-xs text-right">{bye}</span>
+                  <span className="hidden sm:block text-white/50 text-xs text-right">{e.adp < 999 ? e.adp : '—'}</span>
+                  <span className="hidden sm:block text-white/50 text-xs text-right">{e.projected > 0 ? e.projected.toFixed(1) : '—'}</span>
+                  <span className="hidden sm:block text-white/30 text-xs text-right">{bye}</span>
                 </div>
               );
             })}
