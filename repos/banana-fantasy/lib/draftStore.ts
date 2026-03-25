@@ -43,6 +43,9 @@ export interface DraftState {
   // Pass type used to enter this draft
   passType?: 'paid' | 'free';
 
+  // Special draft (Jackpot/HOF from wheel) — shown in SpecialDraftsSection, not regular list
+  isSpecial?: boolean;
+
   // Engine state for resuming mid-draft
   enginePicks?: Array<{
     pickNumber: number; round: number; pickInRound: number;

@@ -735,8 +735,11 @@ export default function DraftingPage() {
     return all.filter(d => !hiddenDraftIds.has(d.id) && d.status !== 'completed');
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds]);
 
+  // Filter out special drafts (Jackpot/HOF from wheel) — SpecialDraftsSection already shows them
+  const nonSpecialDrafts = activeDrafts.filter(d => !d.isSpecial);
+
   // Sort drafts: Your turn > In progress (by picks away) > Filling (oldest first, newest at bottom)
-  const sortedDrafts = [...activeDrafts].sort((a, b) => {
+  const sortedDrafts = [...nonSpecialDrafts].sort((a, b) => {
     // Your turn drafts first
     if (a.isYourTurn && !b.isYourTurn) return -1;
     if (!a.isYourTurn && b.isYourTurn) return 1;

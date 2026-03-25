@@ -82,8 +82,9 @@ function DraftRoomContent() {
   // Track whether we're waiting for server to create draft documents after filling
   // Initialize from stored state so re-entry renders correctly on first frame (no flash)
   const _isResumingRandomize = !!(storedForInit?.randomizingStartedAt && !storedForInit?.preSpinStartedAt);
+  const _resumeProgressDuration = isSpecialDraft ? 15000 : 3000;
   const _resumeProgress = _isResumingRandomize
-    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / 3000); return 0.99 * Math.pow(t, 0.6); })()
+    ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / _resumeProgressDuration); return 0.99 * Math.pow(t, 0.6); })()
     : 0;
   const [waitingForServer, setWaitingForServer] = useState(_isResumingRandomize);
   const [serverWaitProgress, setServerWaitProgress] = useState(_resumeProgress);
@@ -1044,6 +1045,7 @@ function DraftRoomContent() {
       fillingStartedAt: Date.now(),
       fillingInitialPlayers: Math.max(initialPlayers, 1),
       liveWalletAddress: walletParam,
+      ...(isSpecialDraft ? { isSpecial: true } : {}),
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
@@ -1316,8 +1318,9 @@ function DraftRoomContent() {
     const randomizingStartedAt = existingTimestamp || Date.now();
 
     // Compute initial progress from elapsed time so the bar doesn't flash to 0%
+    const progressDuration = isSpecialDraft ? 15000 : 3000;
     const initialElapsed = Date.now() - randomizingStartedAt;
-    const initialT = Math.min(1, initialElapsed / 3000);
+    const initialT = Math.min(1, initialElapsed / progressDuration);
     const initialProgress = 0.99 * (1 - Math.pow(1 - initialT, 3));
     setServerWaitProgress(initialProgress);
     serverWaitProgressRef.current = initialProgress;
@@ -1329,14 +1332,22 @@ function DraftRoomContent() {
     const MIN_RANDOMIZING_MS = 2000;
     const pollDraftId = draftId; // Capture for async closure
 
-    // Smooth progress animation — ticks every 50ms, reaches ~99% over ~3s
+    // Special drafts: longer progress duration (server may need more time to create draft)
+    // Regular drafts: 3s cubic ease-out to 99%
+    // Special drafts: 15s cubic ease-out to 99% — gives server plenty of time
+    const PROGRESS_DURATION_MS = isSpecialDraft ? 15000 : 3000;
+    // Special drafts: poll faster (800ms) since server may be ready sooner
+    const RETRY_DELAY_MS = isSpecialDraft ? 800 : 2000;
+    const MAX_RETRIES = isSpecialDraft ? 60 : 30; // more retries with shorter delay
+
+    // Smooth progress animation — ticks every 50ms, reaches ~99% over PROGRESS_DURATION_MS
     // Independent of API attempts so the bar moves smoothly
     let pollDone = false;
     const progressInterval = setInterval(() => {
       if (pollDone) { clearInterval(progressInterval); return; }
       const elapsed = Date.now() - randomizingStartedAt;
       // Cubic ease-out: fills quickly then decelerates near end
-      const t = Math.min(1, elapsed / 3000); // 3s to reach max
+      const t = Math.min(1, elapsed / PROGRESS_DURATION_MS);
       const progress = 0.99 * (1 - Math.pow(1 - t, 3)); // cubic ease-out, cap 99%
       serverWaitProgressRef.current = progress;
       setServerWaitProgress(progress);
@@ -1344,7 +1355,7 @@ function DraftRoomContent() {
 
     (async () => {
       let attempts = 0;
-      while (attempts < 30) {
+      while (attempts < MAX_RETRIES) {
         attempts++;
         try {
           console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
@@ -1413,7 +1424,7 @@ function DraftRoomContent() {
           return;
         } catch (err) {
           console.warn(`[Draft Room] Server not ready (attempt ${attempts}):`, err instanceof Error ? err.message : err);
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
         }
       }
       // Exhausted — fall back to local
@@ -1460,6 +1471,7 @@ function DraftRoomContent() {
           userDraftPosition: userPos,
           type: specialTypeParam || draftType,
           draftType: specialTypeParam || draftType,
+          isSpecial: true,
         });
       }
       console.log('[Draft Room] Special draft — skipped slot machine, going to drafting');
