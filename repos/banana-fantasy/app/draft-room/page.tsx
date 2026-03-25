@@ -1454,19 +1454,21 @@ function DraftRoomContent() {
     setUserDraftPosition(userPos);
     setWaitingForServer(false);
 
-    // Special drafts: skip slot machine reveal, go straight to drafting
+    // Special drafts: go to pre-spin countdown (60s) but skip the slot machine
     if (isSpecialDraft) {
-      // Type is already known from URL param or queue
       if (specialTypeParam && !draftType) setDraftType(specialTypeParam);
       setPlayerCount(10);
-      setMainCountdown(0);
-      setPhase('drafting');
-      setLiveDataReady(true);
+      preSpinStartedAtRef.current = countdownStart;
+      setPhase('pre-spin');
+      setPreSpinCountdown(60); // Full 60s countdown, no 15s slot trigger
+      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
+      setMainCountdown(remaining);
+      if (isLiveMode) setLiveDataReady(true);
       if (draftId) {
         draftStore.updateDraft(draftId, {
-          phase: 'drafting',
-          status: 'drafting',
-          players: 10,
+          phase: 'pre-spin',
+          preSpinStartedAt: countdownStart,
+          randomizingStartedAt: undefined,
           draftOrder: order,
           userDraftPosition: userPos,
           type: specialTypeParam || draftType,
@@ -1474,7 +1476,7 @@ function DraftRoomContent() {
           isSpecial: true,
         });
       }
-      console.log('[Draft Room] Special draft — skipped slot machine, going to drafting');
+      console.log('[Draft Room] Special draft — 60s countdown, no slot machine');
       // Still track promos below
     } else {
       // Regular draft: go to pre-spin → slot machine → drafting
@@ -1579,8 +1581,10 @@ function DraftRoomContent() {
   }, [phase]);
 
   // Transition from pre-spin to spinning when preSpinCountdown hits 0
+  // Special drafts: skip slot machine entirely — stay in pre-spin until mainCountdown hits 0
   useEffect(() => {
     if (phase !== 'pre-spin') return;
+    if (isSpecialDraft) return; // Special drafts don't trigger slot machine
     if (preSpinCountdown > 0) return;
 
     const selectedResult: DraftType = draftType || 'pro';
