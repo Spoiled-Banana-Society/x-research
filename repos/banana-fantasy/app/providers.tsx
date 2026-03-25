@@ -6,6 +6,7 @@ import { PrivyProvider } from '@/providers/PrivyProvider';
 import { AuthProvider } from '@/hooks/useAuth';
 import { ReduxProvider } from '@/redux/provider';
 import { Header } from '@/components/layout/Header';
+import { MobileTabBar } from '@/components/layout/MobileTabBar';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
 import { OnboardingTutorial } from '@/components/onboarding/OnboardingTutorial';
@@ -50,7 +51,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
     <NotifContext.Provider value={{ triggerOptIn: notif.triggerOptIn }}>
       <div className="min-h-screen bg-bg-primary">
         {!isDraftRoom && <Header onEditProfile={() => setShowEditProfile(true)} onShowTutorial={handleShowTutorial} />}
-        <main id="main-content" tabIndex={-1}>{children}</main>
+        <main id="main-content" tabIndex={-1} className="pb-16 md:pb-0">{children}</main>
+        {!isDraftRoom && <MobileTabBar />}
         <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} />
         {showOnboarding && <OnboardingTutorial onComplete={() => setShowOnboarding(false)} />}
         {showTutorial && <OnboardingTutorial onComplete={() => setShowTutorial(false)} />}

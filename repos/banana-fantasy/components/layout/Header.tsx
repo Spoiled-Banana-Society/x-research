@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from './Logo';
@@ -20,10 +20,9 @@ interface HeaderProps {
 export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: HeaderProps) {
   const { user, walletAddress, isLoggedIn, isLoading, isBalanceLoaded, login } = useAuth();
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdminWallet = isWalletAdmin(walletAddress);
 
-  // Nav items - primary links visible to all, auth-gated links for logged-in users
+  // Nav items — desktop only
   const navItems = [
     { href: '/drafting', label: 'Drafting', tooltip: 'View active drafts', auth: false },
     { href: '/exposure', label: 'Exposure', tooltip: 'Player & team exposure', auth: true },
@@ -39,12 +38,12 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
   return (
     <header className="bg-bg-secondary/80 backdrop-blur-md border-b border-bg-tertiary sticky top-0 z-30">
       <div className="w-full pl-3 pr-2 sm:pl-8 sm:pr-4 lg:pl-12 lg:pr-6">
-        <div className="flex items-center justify-between h-16">
-          {/* Left side: Logo + Navigation grouped together */}
+        <div className="flex items-center justify-between h-14 md:h-16">
+          {/* Left side: Logo + Desktop Navigation */}
           <div className="flex items-center gap-2">
             <Logo />
 
-            {/* Desktop Navigation */}
+            {/* Desktop Navigation — hidden on mobile */}
             <nav aria-label="Main navigation" className="hidden md:flex items-center flex-shrink min-w-0">
               {navItems.map((item) => (
                 <Tooltip key={item.href} content={item.tooltip}>
@@ -63,98 +62,67 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
             </nav>
           </div>
 
-          {/* Right side icons */}
+          {/* Right side */}
           <div className="flex items-center gap-0.5 sm:gap-1">
             {isLoading || (isLoggedIn && !isBalanceLoaded) ? (
-              // Skeleton placeholders — same wrappers/sizes as real elements
+              // Skeleton — simplified on mobile
               <>
-                {/* Ticket skeleton */}
-                <div className="flex items-center px-1 sm:px-2 py-1.5 animate-pulse">
-                  <div className="w-[36px] h-[22px] sm:w-[44px] sm:h-[28px] rounded-md bg-white/10" />
+                <div className="hidden md:flex items-center px-2 py-1.5 animate-pulse">
+                  <div className="w-[44px] h-[28px] rounded-md bg-white/10" />
                 </div>
-                {/* JP/HOF skeleton */}
-                <div className="flex flex-col items-center w-[56px] sm:w-[72px] py-1 animate-pulse gap-1">
-                  <div className="h-[16px] sm:h-[18px] w-[42px] sm:w-[52px] rounded bg-white/10" />
-                  <div className="h-[12px] sm:h-[14px] w-[48px] sm:w-[60px] rounded bg-white/10" />
-                </div>
-                {/* Wheel skeleton */}
-                <div className="flex items-center px-1 sm:px-2 py-1.5 animate-pulse">
-                  <div className="w-[24px] h-[24px] sm:w-[36px] sm:h-[36px] rounded-full bg-white/10" />
-                </div>
-                {/* Prizes skeleton */}
-                <div className="flex items-center px-1.5 sm:px-3 py-2 animate-pulse">
-                  <div className="w-5 sm:w-6 h-5 sm:h-6 rounded bg-white/10" />
-                </div>
-                {/* Notification skeleton */}
-                <div className="flex items-center px-1.5 sm:px-3 py-2 animate-pulse">
-                  <div className="w-4 sm:w-5 h-4 sm:h-5 rounded bg-white/10" />
-                </div>
-                {/* Profile skeleton — matches w-9 h-9 rounded-full */}
-                <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
+                <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 animate-pulse" />
               </>
             ) : (
               <>
-                {/* Batch Progress Indicator — desktop only */}
-                <div className="hidden md:flex">
-                  <BatchProgressIndicator />
-                </div>
-
-                {/* Draft Passes */}
-                <Tooltip
-                  content={
-                    <div className="text-center">
-                      <p className="font-semibold">Draft Passes</p>
-                      {isLoggedIn && user && (
-                        <p className="text-text-secondary text-xs mt-1">
-                          Paid: {user.draftPasses} | Free: {user.freeDrafts}
-                        </p>
-                      )}
-                    </div>
-                  }
-                >
-                  <Link
-                    href="/buy-drafts"
-                    aria-label={`Draft passes: ${isLoggedIn && user ? user.draftPasses + user.freeDrafts : 0} available`}
-                    className="flex items-center px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
-                  >
-                    <svg width="44" height="28" viewBox="0 0 88 56" className="transition-transform group-hover:scale-110 w-[28px] h-[18px] sm:w-[36px] sm:h-[22px] md:w-[44px] md:h-[28px]">
-                      <defs>
-                        <linearGradient id="goldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#FBBF24"/>
-                          <stop offset="100%" stopColor="#D97706"/>
-                        </linearGradient>
-                      </defs>
-                      {/* Ticket shape - subtle gold gradient */}
-                      <rect x="0" y="0" width="88" height="56" rx="6" fill="url(#goldGradient)"/>
-                      {/* Left semicircle cutout */}
-                      <circle cx="0" cy="28" r="6" fill="#1a1a2e"/>
-                      {/* Right semicircle cutout */}
-                      <circle cx="88" cy="28" r="6" fill="#1a1a2e"/>
-                      {/* Large centered number */}
-                      <text x="44" y="40" textAnchor="middle" fill="#1C1C1E" fontSize="32" fontWeight="bold" fontFamily="system-ui">{isLoggedIn && user ? user.draftPasses + user.freeDrafts : 0}</text>
-                    </svg>
-                  </Link>
-                </Tooltip>
-
-                {/* Banana Wheel + Prizes — hidden on mobile, accessible via hamburger menu */}
+                {/* ── Desktop-only icons ── */}
                 <div className="hidden md:contents">
+                  {/* Batch Progress Indicator */}
+                  <BatchProgressIndicator />
+
+                  {/* Draft Passes */}
+                  <Tooltip
+                    content={
+                      <div className="text-center">
+                        <p className="font-semibold">Draft Passes</p>
+                        {isLoggedIn && user && (
+                          <p className="text-text-secondary text-xs mt-1">
+                            Paid: {user.draftPasses} | Free: {user.freeDrafts}
+                          </p>
+                        )}
+                      </div>
+                    }
+                  >
+                    <Link
+                      href="/buy-drafts"
+                      aria-label={`Draft passes: ${isLoggedIn && user ? user.draftPasses + user.freeDrafts : 0} available`}
+                      className="flex items-center px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                    >
+                      <svg width="44" height="28" viewBox="0 0 88 56" className="transition-transform group-hover:scale-110 w-[44px] h-[28px]">
+                        <defs>
+                          <linearGradient id="goldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#FBBF24"/>
+                            <stop offset="100%" stopColor="#D97706"/>
+                          </linearGradient>
+                        </defs>
+                        <rect x="0" y="0" width="88" height="56" rx="6" fill="url(#goldGradient)"/>
+                        <circle cx="0" cy="28" r="6" fill="#1a1a2e"/>
+                        <circle cx="88" cy="28" r="6" fill="#1a1a2e"/>
+                        <text x="44" y="40" textAnchor="middle" fill="#1C1C1E" fontSize="32" fontWeight="bold" fontFamily="system-ui">{isLoggedIn && user ? user.draftPasses + user.freeDrafts : 0}</text>
+                      </svg>
+                    </Link>
+                  </Tooltip>
+
+                  {/* Banana Wheel */}
                   <Tooltip
                     content={
                       <div className="text-center">
                         <p className="font-semibold">Banana Wheel</p>
                         {isLoggedIn && user ? (
-                          <>
-                            <p className="text-text-secondary text-xs mt-1">
-                              {user.wheelSpins} spin{user.wheelSpins !== 1 ? 's' : ''} available
-                            </p>
-                            <p className="text-text-muted text-xs">
-                              Win drafts, Jackpots, HOF entries
-                            </p>
-                          </>
-                        ) : (
-                          <p className="text-text-muted text-xs mt-1">
-                            Win drafts, Jackpots, HOF entries
+                          <p className="text-text-secondary text-xs mt-1">
+                            {user.wheelSpins} spin{user.wheelSpins !== 1 ? 's' : ''} available
                           </p>
+                        ) : (
+                          <p className="text-text-muted text-xs mt-1">Win drafts, Jackpots, HOF entries</p>
                         )}
                       </div>
                     }
@@ -162,7 +130,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                     <Link
                       href="/banana-wheel"
                       aria-label={`Banana Wheel${isLoggedIn && user && user.wheelSpins > 0 ? `: ${user.wheelSpins} spins available` : ''}`}
-                      className="relative flex items-center gap-1.5 px-1 sm:px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                      className="relative flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
                     >
                       <svg width="36" height="36" viewBox="0 0 100 100" className="transition-transform group-hover:scale-110 w-[36px] h-[36px]">
                         <circle cx="50" cy="50" r="48" fill="#2D3A6D" stroke="#1E2A5E" strokeWidth="2"/>
@@ -186,21 +154,22 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                     </Link>
                   </Tooltip>
 
+                  {/* Prizes */}
                   <Tooltip content="Prizes">
                     <Link
                       href="/prizes"
                       aria-label="Prizes"
-                      className="flex items-center px-1.5 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
+                      className="flex items-center px-3 py-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
                     >
                       <span className="text-2xl" aria-hidden="true">🏆</span>
                     </Link>
                   </Tooltip>
+
+                  {/* Notifications */}
+                  {isLoggedIn && <NotificationWidget />}
                 </div>
 
-                {/* Notifications */}
-                {isLoggedIn && <NotificationWidget />}
-
-                {/* Profile Dropdown or Log In button */}
+                {/* Profile Dropdown or Log In — always visible */}
                 {isLoggedIn && user ? (
                   <ProfileDropdown onEditProfile={onEditProfile} />
                 ) : (
@@ -208,98 +177,8 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
                 )}
               </>
             )}
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-nav"
-              className="md:hidden p-2 rounded-lg hover:bg-bg-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F3E216]"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-text-secondary"
-              >
-                {mobileMenuOpen ? (
-                  <>
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </>
-                ) : (
-                  <>
-                    <line x1="3" y1="12" x2="21" y2="12" />
-                    <line x1="3" y1="6" x2="21" y2="6" />
-                    <line x1="3" y1="18" x2="21" y2="18" />
-                  </>
-                )}
-              </svg>
-            </button>
           </div>
         </div>
-
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <nav id="mobile-nav" aria-label="Mobile navigation" className="md:hidden py-4 border-t border-bg-tertiary animate-slide-up">
-            <div className="flex flex-col gap-1">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                    isActive(item.href)
-                      ? 'text-banana bg-banana/10'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-                  }`}
-                >
-                  {item.label}
-                  <span className="text-text-muted text-xs ml-2">— {item.tooltip}</span>
-                </Link>
-              ))}
-              {/* Additional mobile links */}
-              <div className="border-t border-bg-tertiary mt-2 pt-2">
-                <Link href="/banana-wheel" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                  🎡 Banana Wheel
-                  {isLoggedIn && user && <span className="text-banana ml-2">({user.wheelSpins} spins)</span>}
-                </Link>
-                <Link href="/jackpot-hof" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                  🎰 Jackpot &amp; HOF
-                </Link>
-                <Link href="/referrals" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                  🤝 Referrals
-                </Link>
-                <Link href="/prizes" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                  🏆 Prizes
-                </Link>
-                {isLoggedIn && (
-                  <>
-                    <Link href="/exposure" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                      📊 Exposure
-                    </Link>
-                    <Link href="/rankings" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                      📋 Rankings
-                    </Link>
-                    <Link href="/history" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                      📜 History
-                    </Link>
-                  </>
-                )}
-                <Link href="/faq" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center">
-                  ❓ FAQ
-                </Link>
-              </div>
-            </div>
-          </nav>
-        )}
       </div>
     </header>
   );
