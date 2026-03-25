@@ -1216,9 +1216,10 @@ function DraftRoomContent() {
 
     const poll = async () => {
       try {
-        // Special drafts during filling: poll QUEUE API for real member count
-        // (Go API draft may have stale data from previous bot fills)
-        if (isSpecialDraft && phase === 'filling') {
+        // Special drafts: ALWAYS poll queue API, NEVER Go API during filling.
+        // Go API may have stale data from previous tests with the same draftId.
+        if (isSpecialDraft) {
+          if (phase !== 'filling') return; // Only poll during filling; drafting phase uses engine/WS
           try {
             const queues = await fetch('/api/queues').then(r => r.json());
             if (cancelled) return;
@@ -1239,9 +1240,11 @@ function DraftRoomContent() {
                 console.log('[Draft Room] Queue says 10/10 — triggering at-10 effect');
                 setPlayerCount(10);
               }
-              return; // Don't also poll Go API during filling
             }
-          } catch { /* fall through to regular poll */ }
+          } catch (err) {
+            console.warn('[Draft Room] Queue poll failed:', err);
+          }
+          return; // Never fall through to Go API for special drafts during filling
         }
 
         console.log('[Draft Room] Polling getDraftInfo for', draftId);
