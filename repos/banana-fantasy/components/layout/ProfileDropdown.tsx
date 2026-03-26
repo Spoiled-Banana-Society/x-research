@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { useExportWallet } from '@privy-io/react-auth';
 import { getNflTeamLogo } from '@/lib/nflTeams';
+import { InstallAppButton } from '@/components/home/AddToHomeScreenCard';
 
 interface ProfileDropdownProps {
   onEditProfile: () => void;
@@ -203,6 +204,9 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
               </button>
             )}
           </div>
+
+          {/* Install App — mobile only, hidden when already installed */}
+          <InstallAppButton />
 
           {/* Support — opens Crisp chat */}
           <div className="border-t border-bg-tertiary py-1">

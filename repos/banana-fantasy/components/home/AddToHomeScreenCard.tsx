@@ -1,77 +1,36 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
+import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 const DISMISS_KEY = 'sbs-a2hs-dismissed';
-const DISMISS_DAYS = 7; // Show again after 7 days
-
-type Platform = 'ios' | 'android' | 'other';
-
-function detectPlatform(): Platform {
-  if (typeof window === 'undefined') return 'other';
-  const ua = window.navigator.userAgent.toLowerCase();
-  if (/iphone|ipad|ipod/.test(ua)) return 'ios';
-  if (/android/.test(ua)) return 'android';
-  return 'other';
-}
-
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.matchMedia?.('(display-mode: standalone)').matches ||
-    Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
-  );
-}
+const DISMISS_DAYS = 3;
 
 function isDismissed(): boolean {
   if (typeof window === 'undefined') return true;
   const ts = localStorage.getItem(DISMISS_KEY);
   if (!ts) return false;
-  const dismissedAt = Number(ts);
-  const daysSince = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24);
-  return daysSince < DISMISS_DAYS;
+  return (Date.now() - Number(ts)) / (1000 * 60 * 60 * 24) < DISMISS_DAYS;
 }
 
 export function AddToHomeScreenCard() {
+  const { canInstall, isIOS, isStandalone, triggerInstall } = useInstallPrompt();
   const [show, setShow] = useState(false);
-  const [platform, setPlatform] = useState<Platform>('other');
-  const deferredPromptRef = useRef<Event | null>(null);
-
-  // Capture the beforeinstallprompt event (Chrome/Android)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      deferredPromptRef.current = e;
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
 
   useEffect(() => {
-    const p = detectPlatform();
-    setPlatform(p);
-    // Show on mobile only, not already installed, not recently dismissed
-    if (p !== 'other' && !isStandalone() && !isDismissed()) {
+    // Show on mobile only, not installed, not dismissed
+    if (typeof window === 'undefined') return;
+    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+    if (isMobile && !isStandalone && !isDismissed()) {
       setShow(true);
     }
-  }, []);
+  }, [isStandalone]);
 
   const handleInstall = useCallback(async () => {
-    // Try native install prompt first (Chrome/Android)
-    if (deferredPromptRef.current) {
-      try {
-        (deferredPromptRef.current as any).prompt();
-        const result = await (deferredPromptRef.current as any).userChoice;
-        if (result.outcome === 'accepted') {
-          setShow(false);
-          return;
-        }
-      } catch {}
-    }
-    // Can't auto-prompt — show manual instructions
-    // The UI already shows them below the button
-  }, []);
+    const installed = await triggerInstall();
+    if (installed) setShow(false);
+  }, [triggerInstall]);
 
   const handleDismiss = useCallback(() => {
     setShow(false);
@@ -81,50 +40,89 @@ export function AddToHomeScreenCard() {
   if (!show) return null;
 
   return (
-    <aside className="mb-6 glass-card overflow-hidden">
-      <div className="flex items-center gap-4 p-4">
+    <aside className="mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
         {/* App icon */}
-        <div className="w-14 h-14 rounded-2xl bg-[#0a0a0f] border border-white/10 flex items-center justify-center flex-shrink-0 shadow-lg">
-          <Image
-            src="/icons/icon-192.png"
-            alt="Banana Fantasy"
-            width={48}
-            height={48}
-            className="rounded-xl"
-          />
+        <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
+          <Image src="/icons/icon-192.png" alt="Banana Fantasy" width={40} height={40} className="rounded-lg" />
         </div>
 
-        {/* Text */}
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <p className="text-white font-semibold text-sm">Get the App Experience</p>
-          <p className="text-white/40 text-xs mt-0.5">
-            Add to your home screen for instant access — no download needed.
-          </p>
-          {platform === 'ios' && (
-            <p className="text-white/30 text-[10px] mt-1">
-              Tap <span className="text-white/50 font-medium">Share</span> → <span className="text-white/50 font-medium">Add to Home Screen</span>
-            </p>
-          )}
+          <p className="text-white font-semibold text-[13px]">Get the App</p>
+          <p className="text-white/40 text-[11px]">Add to home screen — instant access, no download</p>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
-          {platform === 'android' && (
+        {/* Button */}
+        {isIOS ? (
+          <div className="flex flex-col items-end flex-shrink-0">
+            <p className="text-banana text-[10px] font-semibold">
+              Share → Add to Home
+            </p>
+            <button onClick={handleDismiss} className="text-white/20 text-[9px] mt-1">
+              Got it
+            </button>
+          </div>
+        ) : canInstall ? (
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <button
               onClick={handleInstall}
-              className="px-4 py-2 bg-banana text-black text-xs font-bold rounded-lg hover:bg-banana/90 transition-colors"
+              className="px-4 py-1.5 bg-banana text-black text-xs font-bold rounded-full hover:bg-banana/90 transition-colors"
             >
-              Install
+              Add
             </button>
-          )}
-          <button
-            onClick={handleDismiss}
-            className="px-3 py-1.5 text-white/30 text-[10px] hover:text-white/50 transition-colors"
-          >
-            Not now
-          </button>
-        </div>
+            <button onClick={handleDismiss} className="text-white/20 text-[9px]">
+              Later
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-end flex-shrink-0">
+            <p className="text-banana text-[10px] font-semibold">
+              Menu → Add to Home
+            </p>
+            <button onClick={handleDismiss} className="text-white/20 text-[9px] mt-1">
+              Got it
+            </button>
+          </div>
+        )}
       </div>
     </aside>
+  );
+}
+
+/**
+ * Compact install button for profile dropdown
+ */
+export function InstallAppButton() {
+  const { canInstall, isIOS, isStandalone, triggerInstall } = useInstallPrompt();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(/iphone|ipad|ipod|android/i.test(navigator.userAgent));
+  }, []);
+
+  if (!isMobile || isStandalone) return null;
+
+  if (isIOS) {
+    return (
+      <div className="w-full px-4 py-2 text-left text-text-secondary text-sm flex items-center gap-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span>Share → Add to Home Screen</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => triggerInstall()}
+      className="w-full px-4 py-2 text-left text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors flex items-center gap-3 text-sm"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      Install App
+    </button>
   );
 }
