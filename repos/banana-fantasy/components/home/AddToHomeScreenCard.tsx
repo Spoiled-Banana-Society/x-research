@@ -42,7 +42,7 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
           </div>
           <h3 className="text-white font-bold text-lg">Install SBS</h3>
           <p className="text-white/40 text-xs mt-1">
-            {browser === 'safari' ? '5 simple steps' : 'Open in Safari first'}
+            {browser === 'safari' ? '4 simple steps' : 'Open in Safari first'}
           </p>
         </div>
 
@@ -75,7 +75,7 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
                 </div>
               </div>
 
-              {/* Same 5 steps as Safari */}
+              {/* Same 4 steps as Safari */}
               <p className="text-white/25 text-[10px] uppercase tracking-wider mb-3">Then in Safari:</p>
               <div className="space-y-3.5">
                 <Step
@@ -92,18 +92,12 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
                 />
                 <Step
                   num={3}
-                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>}
-                  title={<>Scroll down &amp; tap <span className="text-banana">&quot;View More&quot;</span></>}
-                  desc="The arrow pointing down"
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
+                  title={<>Scroll down &amp; tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
+                  desc="Don&apos;t see it? Tap &quot;More&quot; first"
                 />
                 <Step
                   num={4}
-                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
-                  title={<>Tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
-                  desc=""
-                />
-                <Step
-                  num={5}
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
                   title={<>Tap <span className="text-banana">&quot;Add&quot;</span> — you&apos;re done!</>}
                   desc="SBS is now on your home screen"
@@ -111,7 +105,7 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
               </div>
             </div>
           ) : (
-            /* Safari — 5 step install flow */
+            /* Safari — 4 step install flow */
             <div className="space-y-3.5">
               <Step
                 num={1}
@@ -141,26 +135,16 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
                 num={3}
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                }
-                title={<>Scroll down &amp; tap <span className="text-banana">&quot;View More&quot;</span></>}
-                desc="The arrow pointing down"
-              />
-              <Step
-                num={4}
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                     <line x1="12" y1="8" x2="12" y2="16" />
                     <line x1="8" y1="12" x2="16" y2="12" />
                   </svg>
                 }
-                title={<>Tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
-                desc=""
+                title={<>Scroll down &amp; tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
+                desc="Don&apos;t see it? Tap &quot;More&quot; first"
               />
               <Step
-                num={5}
+                num={4}
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 6L9 17l-5-5" />
