@@ -42,7 +42,7 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
           </div>
           <h3 className="text-white font-bold text-lg">Install SBS</h3>
           <p className="text-white/40 text-xs mt-1">
-            {browser === 'safari' ? '3 simple steps in Safari' : 'Open in Safari first'}
+            {browser === 'safari' ? '5 simple steps' : 'Open in Safari first'}
           </p>
         </div>
 
@@ -90,10 +90,22 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
               <CopyLinkButton />
             </div>
           ) : (
-            /* Safari — direct install flow */
-            <div className="space-y-4">
+            /* Safari — 5 step install flow */
+            <div className="space-y-3.5">
               <Step
                 num={1}
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="5" r="1.5" fill="#fbbf24" />
+                    <circle cx="12" cy="12" r="1.5" fill="#fbbf24" />
+                    <circle cx="12" cy="19" r="1.5" fill="#fbbf24" />
+                  </svg>
+                }
+                title={<>Tap the <span className="text-banana">three dots</span> next to the URL</>}
+                desc="Top-right of your browser"
+              />
+              <Step
+                num={2}
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
@@ -101,28 +113,40 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
                     <line x1="12" y1="2" x2="12" y2="15" />
                   </svg>
                 }
-                title="Tap Share"
-                desc="The square with arrow next to the URL bar at the bottom"
+                title={<>Tap <span className="text-banana">&quot;Share...&quot;</span></>}
+                desc=""
               />
               <Step
-                num={2}
+                num={3}
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 }
-                title="Scroll down the share menu"
-                desc={<>Find and tap <span className="text-white font-medium">&quot;Add to Home Screen&quot;</span></>}
+                title={<>Scroll down &amp; tap <span className="text-banana">&quot;View More&quot;</span></>}
+                desc="The arrow pointing down"
               />
               <Step
-                num={3}
+                num={4}
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                }
+                title={<>Tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
+                desc=""
+              />
+              <Step
+                num={5}
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 }
-                title={<>Tap <span className="text-banana">&quot;Add&quot;</span></>}
-                desc="Top-right corner — done!"
+                title={<>Tap <span className="text-banana">&quot;Add&quot;</span> — you&apos;re done!</>}
+                desc="SBS is now on your home screen"
               />
             </div>
           )}
@@ -144,16 +168,16 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
 
 function Step({ num, icon, title, desc }: { num: number; icon: React.ReactNode; title: React.ReactNode; desc: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0 mt-0.5">
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-white font-medium text-sm leading-tight">
-          <span className="text-white/30 mr-1.5">{num}.</span>
+        <p className="text-white font-medium text-[13px] leading-tight">
+          <span className="text-banana/60 font-bold mr-1">{num}.</span>
           {title}
         </p>
-        <p className="text-white/35 text-xs mt-0.5">{desc}</p>
+        {desc && <p className="text-white/30 text-[11px] mt-0.5">{desc}</p>}
       </div>
     </div>
   );
