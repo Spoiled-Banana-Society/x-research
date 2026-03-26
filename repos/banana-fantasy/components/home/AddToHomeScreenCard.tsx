@@ -49,45 +49,66 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
         {/* Steps */}
         <div className="px-5 py-4">
           {browser === 'chrome' ? (
-            /* Chrome on iOS — need to switch to Safari */
-            <div className="space-y-4">
-              <Step
-                num={1}
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            /* Chrome on iOS — show Safari requirement + same 5 steps */
+            <div>
+              {/* Safari required banner */}
+              <div className="mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
                   </svg>
-                }
-                title="Open this page in Safari"
-                desc="Copy the URL and paste it in Safari"
-              />
-              <Step
-                num={2}
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
-                    <polyline points="16 6 12 2 8 6" />
-                    <line x1="12" y1="2" x2="12" y2="15" />
-                  </svg>
-                }
-                title="Tap Share"
-                desc="The square with arrow next to the URL bar"
-              />
-              <Step
-                num={3}
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                    <line x1="8" y1="12" x2="16" y2="12" />
-                  </svg>
-                }
-                title={<>Scroll down &amp; tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
-                desc="Then tap Add to confirm"
-              />
+                  <p className="text-white font-medium text-xs">Must be done in Safari</p>
+                </div>
+                <p className="text-white/40 text-[11px] mb-2">Open this page in Safari, then follow the 5 steps below.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.origin).catch(() => {});
+                      window.location.href = `x-safari-${window.location.href}`;
+                    }}
+                    className="flex-1 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg"
+                  >
+                    Open Safari
+                  </button>
+                  <CopyLinkButton />
+                </div>
+              </div>
 
-              <CopyLinkButton />
+              {/* Same 5 steps as Safari */}
+              <p className="text-white/25 text-[10px] uppercase tracking-wider mb-3">Then in Safari:</p>
+              <div className="space-y-3.5">
+                <Step
+                  num={1}
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1.5" fill="#fbbf24" /><circle cx="12" cy="12" r="1.5" fill="#fbbf24" /><circle cx="12" cy="19" r="1.5" fill="#fbbf24" /></svg>}
+                  title={<>Tap the <span className="text-banana">three dots</span> next to the URL</>}
+                  desc="Top-right of your browser"
+                />
+                <Step
+                  num={2}
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>}
+                  title={<>Tap <span className="text-banana">&quot;Share...&quot;</span></>}
+                  desc=""
+                />
+                <Step
+                  num={3}
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>}
+                  title={<>Scroll down &amp; tap <span className="text-banana">&quot;View More&quot;</span></>}
+                  desc="The arrow pointing down"
+                />
+                <Step
+                  num={4}
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
+                  title={<>Tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
+                  desc=""
+                />
+                <Step
+                  num={5}
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
+                  title={<>Tap <span className="text-banana">&quot;Add&quot;</span> — you&apos;re done!</>}
+                  desc="SBS is now on your home screen"
+                />
+              </div>
             </div>
           ) : (
             /* Safari — 5 step install flow */
@@ -195,13 +216,13 @@ function CopyLinkButton() {
           setTimeout(() => setCopied(false), 2000);
         });
       }}
-      className="w-full py-2.5 bg-white/[0.06] text-white/60 font-medium rounded-xl text-xs flex items-center justify-center gap-2"
+      className="flex-1 py-2 bg-white/[0.06] text-white/50 font-medium rounded-lg text-xs flex items-center justify-center gap-1.5"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
       </svg>
-      {copied ? 'Copied! Paste in Safari' : 'Copy Link'}
+      {copied ? 'Copied!' : 'Copy Link'}
     </button>
   );
 }
