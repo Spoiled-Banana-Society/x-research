@@ -24,6 +24,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
   const [username, setUsername] = useState('');
   const [nflTeam, setNflTeam] = useState('');
   const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -31,12 +33,14 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       setUsername(user.username);
       setNflTeam(user.nflTeam || '');
       setProfilePicturePreview(user.profilePicture || null);
+      setPendingFile(null);
     }
   }, [user]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setPendingFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfilePicturePreview(reader.result as string);
@@ -45,19 +49,32 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     }
   };
 
-  const handleSave = () => {
-    // If profile pic is a base64 data URL (too large for backend), use NFL team logo instead
+  const handleSave = async () => {
+    setSaving(true);
     let pic = profilePicturePreview || undefined;
-    if (pic && pic.startsWith('data:')) {
-      // Base64 is too large for Go API — fall back to NFL team logo if available
-      const teamLogo = nflTeam ? getNflTeamLogo(nflTeam) : null;
-      pic = teamLogo || undefined;
+
+    // Upload custom image to Firebase Storage if user selected a file
+    if (pendingFile && user?.walletAddress) {
+      try {
+        const formData = new FormData();
+        formData.append('file', pendingFile);
+        formData.append('wallet', user.walletAddress);
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          pic = data.url;
+        }
+      } catch {
+        // Upload failed — keep local preview for desktop, won't sync to mobile
+      }
     }
+
     updateUser({
       username,
       nflTeam: nflTeam || undefined,
       profilePicture: pic,
     });
+    setSaving(false);
     onClose();
   };
 
@@ -192,8 +209,8 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           <Button variant="ghost" onClick={onClose} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleSave} className="flex-1">
-            Save Changes
+          <Button onClick={handleSave} className="flex-1" disabled={saving}>
+            {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </div>
