@@ -209,7 +209,10 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
             <button
               onClick={() => {
                 try {
-                  if (window.$crisp) (window.$crisp as any).push(['do', 'chat:open']);
+                  if (window.$crisp) {
+                    (window.$crisp as any).push(['do', 'chat:show']);
+                    (window.$crisp as any).push(['do', 'chat:open']);
+                  }
                 } catch {}
                 setIsOpen(false);
               }}

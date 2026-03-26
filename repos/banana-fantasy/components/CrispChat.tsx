@@ -19,18 +19,25 @@ export function CrispChat() {
     script.async = true;
     document.head.appendChild(script);
 
-    // Hide Crisp floating bubble on mobile — accessible via profile dropdown "Support" button
-    // Desktop: keep floating bubble visible
+    // Hide Crisp floating bubble entirely — chat opens via profile dropdown "Support" button
+    // The chat window itself still shows when opened programmatically
+    window.$crisp.push(['config', 'hide:on:initial:load', true]);
+
     const style = document.createElement('style');
+    style.id = 'crisp-hide';
     style.textContent = `
-      @media (max-width: 767px) {
-        .crisp-client .cc-1brb6,
-        .crisp-client [data-visible] { display: none !important; }
-        .crisp-client .cc-1brb6[data-full-view="true"],
-        .crisp-client [data-full-view="true"] { display: block !important; bottom: 0 !important; }
-      }
+      .crisp-client .cc-1brb6 { display: none !important; visibility: hidden !important; }
     `;
     document.head.appendChild(style);
+
+    // Once Crisp loads, hide the bubble via API too
+    const waitForCrisp = setInterval(() => {
+      if (window.$crisp && typeof (window.$crisp as any).push === 'function') {
+        try { (window.$crisp as any).push(['do', 'chat:hide']); } catch {}
+        clearInterval(waitForCrisp);
+      }
+    }, 500);
+    setTimeout(() => clearInterval(waitForCrisp), 10000);
 
     return () => {
       const crispScript = document.querySelector('script[src="https://client.crisp.chat/l.js"]');

@@ -46,10 +46,17 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
   };
 
   const handleSave = () => {
+    // If profile pic is a base64 data URL (too large for backend), use NFL team logo instead
+    let pic = profilePicturePreview || undefined;
+    if (pic && pic.startsWith('data:')) {
+      // Base64 is too large for Go API — fall back to NFL team logo if available
+      const teamLogo = nflTeam ? getNflTeamLogo(nflTeam) : null;
+      pic = teamLogo || undefined;
+    }
     updateUser({
       username,
       nflTeam: nflTeam || undefined,
-      profilePicture: profilePicturePreview || undefined,
+      profilePicture: pic,
     });
     onClose();
   };
