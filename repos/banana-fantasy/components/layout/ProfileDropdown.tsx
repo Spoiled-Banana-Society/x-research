@@ -60,6 +60,15 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
               className="w-full h-full object-cover"
               unoptimized
             />
+          ) : user.nflTeam && getNflTeamLogo(user.nflTeam) ? (
+            <Image
+              src={getNflTeamLogo(user.nflTeam)!}
+              alt={user.nflTeam}
+              width={36}
+              height={36}
+              className="w-full h-full object-cover"
+              unoptimized
+            />
           ) : (
             <span className="text-lg">🍌</span>
           )}

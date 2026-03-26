@@ -19,16 +19,28 @@ export function CrispChat() {
     script.async = true;
     document.head.appendChild(script);
 
-    // Push Crisp widget above mobile bottom tab bar (56px + safe area)
+    // Push Crisp widget above mobile bottom tab bar
     const style = document.createElement('style');
     style.textContent = `
       @media (max-width: 767px) {
-        .crisp-client .cc-1brb6 .cc-unoo,
         .crisp-client .cc-1brb6,
-        #crisp-chatbox { bottom: 64px !important; }
+        .crisp-client .cc-1brb6 .cc-unoo,
+        .crisp-client [data-full-view="true"],
+        .crisp-client [class*="cc-"] { bottom: 70px !important; }
+        #crisp-chatbox { bottom: 70px !important; }
       }
     `;
     document.head.appendChild(style);
+
+    // Also use Crisp JS API to offset position once loaded
+    const waitForCrisp = setInterval(() => {
+      if (window.$crisp && typeof (window.$crisp as any).push === 'function') {
+        try { (window.$crisp as any).push(['config', 'position:reverse', true]); } catch {}
+        try { (window.$crisp as any).push(['config', 'container:index', 69]); } catch {}
+        clearInterval(waitForCrisp);
+      }
+    }, 1000);
+    setTimeout(() => clearInterval(waitForCrisp), 10000);
 
     return () => {
       const crispScript = document.querySelector('script[src="https://client.crisp.chat/l.js"]');
