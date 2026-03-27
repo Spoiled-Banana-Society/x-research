@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ContestCard } from '@/components/home/ContestCard';
 import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { AddToHomeScreenCard } from '@/components/home/AddToHomeScreenCard';
-import { PWAInstallPromoCard } from '@/components/home/PWAInstallPromoCard';
+import { usePWAInstallPromo } from '@/hooks/usePWAInstallPromo';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
 import { SpecialDraftBanner } from '@/components/home/SpecialDraftBanner';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
@@ -83,7 +83,42 @@ export default function HomePage() {
   const [isJoiningDraft] = React.useState(false);
   const contestsQuery = useContests();
   const promosQuery = usePromos({ userId: user?.id });
+  const pwaPromo = usePWAInstallPromo();
   usePromoReminders(promosQuery.promos);
+
+  // Build combined promos including PWA install promo
+  const allPromos = React.useMemo(() => {
+    const base = promosQuery.promos || [];
+    // Only show PWA promo if active or user has entered (to show draw state)
+    if (!pwaPromo.loading && (pwaPromo.promoActive || pwaPromo.hasEntered || pwaPromo.raffleResult)) {
+      const pwaPromoObj: import('@/types').Promo = {
+        id: 'pwa-install-promo',
+        type: 'add-to-home-screen',
+        title: pwaPromo.raffleResult?.status === 'drawn'
+          ? 'Raffle Complete'
+          : !pwaPromo.promoActive
+            ? 'Raffle Draw Coming'
+            : 'Install SBS — Win 5 Free Spins',
+        description: pwaPromo.raffleResult?.status === 'drawn'
+          ? `Winner: ${pwaPromo.raffleResult.winnerWallet?.slice(0, 6)}...${pwaPromo.raffleResult.winnerWallet?.slice(-4)}`
+          : !pwaPromo.promoActive
+            ? `${pwaPromo.entryCount} entered — draw starting soon`
+            : `${pwaPromo.entryCount} entered`,
+        ctaText: pwaPromo.hasEntered ? 'Entered' : 'Install',
+        ctaLink: '#',
+        backgroundColor: '#1a1a2e',
+        isNew: pwaPromo.promoActive,
+        timerEndTime: pwaPromo.promoActive ? pwaPromo.promoEnd : pwaPromo.drawTime,
+        claimable: false,
+        modalContent: {
+          title: 'Install SBS — Win Free Spins',
+          explanation: 'Add Banana Fantasy to your home screen for a chance to win 5 free spins. 1 random winner chosen after the timer ends.',
+        },
+      };
+      return [pwaPromoObj, ...base];
+    }
+    return base;
+  }, [promosQuery.promos, pwaPromo]);
 
   const selectedContest = contestsQuery.data?.[0];
   const modals = useModalStack();
@@ -235,10 +270,9 @@ export default function HomePage() {
 
       {/* Promo Carousel */}
       <section className="mb-4">
-        <PromoCarousel promos={promosQuery.promos || []} claimPromo={promosQuery.claimPromo} onVerifyTweet={promosQuery.verifyTweetEngagement} onGenerateReferralCode={promosQuery.generateReferralCode} />
+        <PromoCarousel promos={allPromos} claimPromo={promosQuery.claimPromo} onVerifyTweet={promosQuery.verifyTweetEngagement} onGenerateReferralCode={promosQuery.generateReferralCode} />
       </section>
 
-      <PWAInstallPromoCard />
       <AddToHomeScreenCard />
 
       {/* Contest Details Modal */}

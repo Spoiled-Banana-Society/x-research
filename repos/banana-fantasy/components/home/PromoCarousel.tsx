@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Promo } from '@/types';
 import { PromoModal } from '../modals/PromoModal';
 import { useAuth } from '@/hooks/useAuth';
 import { reservePromoDraftType } from '@/lib/promoDraftType';
+import { InstallModal } from '@/components/home/AddToHomeScreenCard';
+import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 interface PromoCarouselProps {
   promos: Promo[];
@@ -56,6 +58,27 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
   const [claimedPromos, setClaimedPromos] = useState<Set<string>>(new Set());
   const [_timerTick, setTimerTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [installModalBrowser, setInstallModalBrowser] = useState<'safari' | 'chrome' | null>(null);
+  const { triggerInstall } = useInstallPrompt();
+
+  const handlePWAInstallClick = useCallback(async (promo: Promo) => {
+    // After promo ends, navigate to raffle page
+    if (promo.timerEndTime) {
+      const diff = new Date(promo.timerEndTime).getTime() - Date.now();
+      if (diff <= 0) {
+        router.push('/banana-wheel/raffle');
+        return;
+      }
+    }
+    // During promo, open install modal
+    if (typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      const ua = navigator.userAgent.toLowerCase();
+      const isSafari = /iphone|ipad|ipod/.test(ua) && /safari/.test(ua) && !/chrome|crios|fxios/.test(ua);
+      setInstallModalBrowser(isSafari ? 'safari' : 'chrome');
+    } else {
+      await triggerInstall();
+    }
+  }, [router, triggerInstall]);
 
   // Check if a promo's CLAIM button is actually visible in the UI
   const hasVisibleClaim = (p: Promo) => {
@@ -148,6 +171,10 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
   }, [currentIndex, sortedPromos.length]);
 
   const handlePromoClick = (promo: Promo) => {
+    if (promo.type === 'add-to-home-screen') {
+      handlePWAInstallClick(promo);
+      return;
+    }
     setSelectedPromo(promo);
     setIsModalOpen(true);
   };
@@ -365,8 +392,21 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
                         </div>
                       )}
 
+                      {/* PWA Install promo - show countdown + entry count */}
+                      {promo.type === 'add-to-home-screen' && (
+                        <div className="-mt-2">
+                          <div className="flex justify-center items-center gap-2 text-xs text-[#4a4a4a] mb-1.5">
+                            <span className="font-semibold tabular-nums">{formatTimeRemaining(promo.timerEndTime)}</span>
+                          </div>
+                          <p className="text-[10px] text-[#9a9a9a] text-center">{promo.description}</p>
+                          <p className={`text-center text-xs text-[#1d1d1f] font-semibold mt-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+                            Learn more
+                          </p>
+                        </div>
+                      )}
+
                       {/* Progress bar - show for other promos with progress (not daily-drafts, mint, pick-10, new-user, tweet-engagement) */}
-                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.type !== 'new-user' && promo.type !== 'tweet-engagement' && (showProgressBar && (!promo.claimable || isClaimed)) && (
+                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.type !== 'new-user' && promo.type !== 'tweet-engagement' && promo.type !== 'add-to-home-screen' && (showProgressBar && (!promo.claimable || isClaimed)) && (
                         <div className="-mt-2">
                           <div className="flex justify-center text-xs text-[#4a4a4a] mb-1">
                             <span className="font-semibold">{progressCurrent}/{progressMax}</span>
@@ -383,8 +423,8 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
                         </div>
                       )}
 
-                      {/* Claimable button - for other promos (not daily-drafts, mint, or pick-10) */}
-                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.claimable && !isClaimed && ((promo.type !== 'new-user' && promo.type !== 'tweet-engagement') || (isLoggedIn && isTwitterVerified)) && (
+                      {/* Claimable button - for other promos (not daily-drafts, mint, pick-10, or add-to-home-screen) */}
+                      {promo.type !== 'daily-drafts' && promo.type !== 'mint' && promo.type !== 'pick-10' && promo.type !== 'add-to-home-screen' && promo.claimable && !isClaimed && ((promo.type !== 'new-user' && promo.type !== 'tweet-engagement') || (isLoggedIn && isTwitterVerified)) && (
                         <div className="pt-6">
                           <button
                             onClick={(e) => handleClaim(promo, e)}
@@ -437,6 +477,14 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
         onVerifyTweet={onVerifyTweet}
         onGenerateReferralCode={onGenerateReferralCode}
       />
+
+      {/* PWA Install Modal */}
+      {installModalBrowser && (
+        <InstallModal
+          browser={installModalBrowser}
+          onClose={() => setInstallModalBrowser(null)}
+        />
+      )}
 
       {/* Claim Success Popup - Apple-style */}
       {claimSuccess.show && (
