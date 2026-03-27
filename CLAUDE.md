@@ -980,35 +980,48 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## ACTION NEEDED FROM BORIS (2026-03-27)
+## ACTION NEEDED FROM BORIS (2026-03-27) — NOT DONE YET
 
-Richard's Claude needs answers before proceeding with the full timer/slow-draft migration to banana-fantasy. The dev's code is cloned into the shared workspace:
-- `repos/sbs-draft-web/` (branch: `new-timer-changes`)
-- `repos/sbs-drafts-api/` (branch: `playoff-scripts`)
+**Richard's Claude verified: the `playoff-scripts` branch is NOT deployed to staging.**
+- Proof: `curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions` returns `404 page not found`
+- The old `/draft/` endpoints work fine, but `/draft-actions/` (from the new branch) doesn't exist
+- The staging API is still running the old `main` branch code
 
-**Please check and respond in CLAUDE.md:**
+**Boris — please do these steps IN ORDER:**
 
-1. **Is the `playoff-scripts` branch deployed to staging?**
-   - Check: `curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences`
-   - If it returns a proper response (even 404 for missing draft), the new endpoints are live
-   - If it returns "route not found", the branch hasn't been deployed yet
+### Step 1: Deploy the playoff-scripts branch to staging
+```bash
+cd ~/sbs-drafts-api-main
+git fetch origin
+git checkout playoff-scripts
+git pull origin playoff-scripts
+gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
+```
 
-2. **If NOT deployed, please deploy it:**
-   ```bash
-   cd ~/sbs-drafts-api-main
-   git checkout playoff-scripts
-   gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
-   ```
+### Step 2: Verify the deploy worked
+```bash
+curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences
+```
+- Should return something like `{"error":"draft not found"}` or similar — NOT `404 page not found`
 
-3. **Is Cloud Tasks set up on staging?**
-   - Queue name: `auto-draft-queue` · Region: `us-central1` · Project: `sbs-staging-env`
-   - If not: `gcloud tasks queues create auto-draft-queue --location=us-central1 --project=sbs-staging-env`
+### Step 3: Create Cloud Tasks queue (if not already exists)
+```bash
+gcloud tasks queues create auto-draft-queue --location=us-central1 --project=sbs-staging-env
+```
+(If it says "already exists" that's fine)
 
-4. **Confirm these env vars are set on staging Cloud Run:**
-   - `GCP_PROJECT_ID=sbs-staging-env`
-   - `GCP_LOCATION=us-central1`
-   - `CLOUD_TASKS_QUEUE_NAME=auto-draft-queue`
-   - `STAGING_API_URL=https://sbs-drafts-api-staging-652484219017.us-central1.run.app`
+### Step 4: Set env vars on staging Cloud Run
+```bash
+gcloud run services update sbs-drafts-api-staging \
+  --region us-central1 \
+  --project sbs-staging-env \
+  --set-env-vars="GCP_PROJECT_ID=sbs-staging-env,GCP_LOCATION=us-central1,CLOUD_TASKS_QUEUE_NAME=auto-draft-queue,STAGING_API_URL=https://sbs-drafts-api-staging-652484219017.us-central1.run.app"
+```
+
+### Step 5: Confirm by updating this section
+Replace this section with: `## DONE: Staging API deployed with playoff-scripts (Boris, DATE)`
+
+**Richard's Claude is blocked on this — cannot start the full timer/WebSocket migration until these endpoints are live.**
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
