@@ -980,9 +980,39 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
+## ACTION NEEDED FROM BORIS (2026-03-27)
+
+Richard's Claude needs answers before proceeding with the full timer/slow-draft migration to banana-fantasy. The dev's code is cloned into the shared workspace:
+- `repos/sbs-draft-web/` (branch: `new-timer-changes`)
+- `repos/sbs-drafts-api/` (branch: `playoff-scripts`)
+
+**Please check and respond in CLAUDE.md:**
+
+1. **Is the `playoff-scripts` branch deployed to staging?**
+   - Check: `curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences`
+   - If it returns a proper response (even 404 for missing draft), the new endpoints are live
+   - If it returns "route not found", the branch hasn't been deployed yet
+
+2. **If NOT deployed, please deploy it:**
+   ```bash
+   cd ~/sbs-drafts-api-main
+   git checkout playoff-scripts
+   gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
+   ```
+
+3. **Is Cloud Tasks set up on staging?**
+   - Queue name: `auto-draft-queue` · Region: `us-central1` · Project: `sbs-staging-env`
+   - If not: `gcloud tasks queues create auto-draft-queue --location=us-central1 --project=sbs-staging-env`
+
+4. **Confirm these env vars are set on staging Cloud Run:**
+   - `GCP_PROJECT_ID=sbs-staging-env`
+   - `GCP_LOCATION=us-central1`
+   - `CLOUD_TASKS_QUEUE_NAME=auto-draft-queue`
+   - `STAGING_API_URL=https://sbs-drafts-api-staging-652484219017.us-central1.run.app`
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
 1. Jackpot promo
 2. API Integration - Replace mock data with real backend APIs
-3. WebSocket integration - Real-time draft updates
+3. ~~WebSocket integration~~ → **DONE: Dev replaced WebSocket with Firebase RTDB + Cloud Tasks (see repos/sbs-draft-web and repos/sbs-drafts-api)**
