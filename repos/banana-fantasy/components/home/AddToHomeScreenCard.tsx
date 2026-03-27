@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
@@ -231,36 +231,73 @@ export function AddToHomeScreenCard() {
     localStorage.setItem(DISMISS_KEY, String(Date.now()));
   }, []);
 
+  // Swipe-to-dismiss
+  const cardRef = useRef<HTMLDivElement>(null);
+  const startX = useRef(0);
+  const currentX = useRef(0);
+  const swiping = useRef(false);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    currentX.current = 0;
+    swiping.current = true;
+    if (cardRef.current) cardRef.current.style.transition = 'none';
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!swiping.current) return;
+    const diff = e.touches[0].clientX - startX.current;
+    currentX.current = diff;
+    if (cardRef.current) {
+      cardRef.current.style.transform = `translateX(${diff}px)`;
+      cardRef.current.style.opacity = String(Math.max(0, 1 - Math.abs(diff) / 250));
+    }
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    swiping.current = false;
+    if (!cardRef.current) return;
+    cardRef.current.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+    if (Math.abs(currentX.current) > 100) {
+      // Swiped far enough — dismiss
+      const direction = currentX.current > 0 ? 1 : -1;
+      cardRef.current.style.transform = `translateX(${direction * 400}px)`;
+      cardRef.current.style.opacity = '0';
+      setTimeout(handleDismiss, 300);
+    } else {
+      // Snap back
+      cardRef.current.style.transform = 'translateX(0)';
+      cardRef.current.style.opacity = '1';
+    }
+  }, [handleDismiss]);
+
   if (!show) return null;
 
   return (
     <>
-      <aside
-        onClick={handleInstall}
-        className="relative mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden cursor-pointer hover:border-banana/40 transition-colors active:scale-[0.99]"
-      >
-        {/* Dismiss X */}
-        <button
-          onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
-          className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-colors z-10"
+      <div className="mb-6 overflow-hidden">
+        <aside
+          ref={cardRef}
+          onClick={handleInstall}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          className="rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent cursor-pointer hover:border-banana/40 transition-colors active:scale-[0.99]"
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-        <div className="flex items-center gap-3 px-4 py-3">
-          <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
-            <Image src="/icons/icon-192.png" alt="SBS" width={32} height={32} className="rounded-lg" />
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
+              <Image src="/icons/icon-192.png" alt="SBS" width={32} height={32} className="rounded-lg" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-[13px]">Get the App</p>
+              <p className="text-white/40 text-[11px]">Add to home screen — works like a real app</p>
+            </div>
+            <span className="px-4 py-1.5 bg-banana text-black text-xs font-bold rounded-full flex-shrink-0 pointer-events-none">
+              Install
+            </span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold text-[13px]">Get the App</p>
-            <p className="text-white/40 text-[11px]">Add to home screen — works like a real app</p>
-          </div>
-          <span className="px-4 py-1.5 bg-banana text-black text-xs font-bold rounded-full flex-shrink-0 pointer-events-none">
-            Install
-          </span>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       {modalBrowser && (
         <InstallModal
