@@ -980,32 +980,41 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## STAGING API STATUS (2026-03-27) — PARTIALLY DONE, NEED RICHARD'S HELP
+## STAGING API STATUS (2026-03-27) — RICHARD FOUND THE BUG, BORIS DO THIS
 
-### What Boris's Claude completed:
-- ✅ **Cloud Tasks API** enabled on `sbs-staging-env`
-- ✅ **Cloud Tasks queue** `auto-draft-queue` created in `us-central1`
-- ✅ **Env vars set** on `sbs-drafts-api-staging` Cloud Run: `GCP_PROJECT_ID`, `GCP_LOCATION`, `CLOUD_TASKS_QUEUE_NAME`, `STAGING_API_URL`
-- ✅ **Deployed code** from `repos/sbs-drafts-api/` in the shared workspace to `sbs-drafts-api-staging`
+### Root cause: missing service account JSON files
+Richard's Claude identified why `/draft-actions/` returns 404. The shared workspace copy is **missing the GCP service account config files** (`configs/*.json`) — they were stripped because GitHub blocks secrets in pushes. The Dockerfile references `configs/sbs-test-env-config.json` for `GOOGLE_APPLICATION_CREDENTIALS`. Without it, `InitCloudTasksClient()` in `utils/cloudtasks.go` fails silently at startup, preventing `/draft-actions/` routes from registering.
 
-### The problem — `/draft-actions/` returns 404:
-We deployed the code from `repos/sbs-drafts-api/` in the shared workspace. The `main.go` in that code DOES have `r.Mount("/draft-actions", dra.Routes())` and the `draft-actions/` package exists with the preferences endpoint. The Docker build succeeds with no errors. But at runtime, `/draft-actions/` returns `404 page not found`.
+### Boris — deploy from the ACTUAL GitHub repo, not the shared workspace:
+```bash
+# Clone the real repo with the playoff-scripts branch (configs included)
+cd ~/
+git clone -b playoff-scripts https://github.com/Spoiled-Banana-Society/sbs-drafts-api.git sbs-drafts-api-deploy
+cd sbs-drafts-api-deploy
 
-**What we verified:**
-- `/owner/test` works (returns JSON) → the new code IS running
-- `/staging/fill-bots` returns 404 → confirms old code is NOT running (old code had `/staging`, new code doesn't)
-- `/draft-actions/test/owner/test/preferences` returns `404 page not found` → route not registering at runtime
-- No panics or errors in Cloud Run logs
-- Docker image digest is consistent across deploys
+# Verify the config files exist
+ls configs/*.json
+# Should see: sbs-test-env-config.json, prodServiceAccount.json, etc.
 
-**Our theory:** The `repos/sbs-drafts-api/` in the shared workspace may not be the complete `playoff-scripts` branch. It could be missing dependencies, or the Go compiler may have silently skipped the `draft-actions` package for some reason. We can't clone the actual `SBS-Drafts-API` GitHub repo because Boris's machine doesn't have SSH/token access.
+# For STAGING, you need a staging config. If only test/prod configs exist,
+# copy the test config and update it for staging:
+# cp configs/sbs-test-env-config.json configs/sbs-staging-config.json
+# Then update Dockerfile ENV GOOGLE_APPLICATION_CREDENTIALS path if needed
 
-### Richard — please help with one of these:
-1. **Option A:** Push the `playoff-scripts` branch to a location Boris can access (e.g., add the full repo to the shared workspace as a proper git repo, or provide a GitHub token)
-2. **Option B:** Tell us exactly what's different between the shared workspace copy and the actual `playoff-scripts` branch — maybe files are missing
-3. **Option C:** If you have `gcloud` access, deploy directly: `gcloud run deploy sbs-drafts-api-staging --source <your-local-checkout> --region us-central1 --project sbs-staging-env`
+# Deploy to staging
+gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
 
-Everything else is ready — Cloud Tasks, env vars, queue. Just need the API code to register `/draft-actions/` properly.
+# Verify
+curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences
+# Should return JSON (not 404)
+```
+
+If you can't clone from GitHub, ask Richard for the read-only PAT token to clone with.
+
+### What's already done (don't redo):
+- ✅ Cloud Tasks API enabled
+- ✅ Cloud Tasks queue `auto-draft-queue` created
+- ✅ Env vars set on Cloud Run
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
