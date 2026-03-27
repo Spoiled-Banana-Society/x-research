@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ContestCard } from '@/components/home/ContestCard';
 import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { AddToHomeScreenCard } from '@/components/home/AddToHomeScreenCard';
+import { PWAInstallPromoCard } from '@/components/home/PWAInstallPromoCard';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
 import { SpecialDraftBanner } from '@/components/home/SpecialDraftBanner';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
@@ -237,6 +238,7 @@ export default function HomePage() {
         <PromoCarousel promos={promosQuery.promos || []} claimPromo={promosQuery.claimPromo} onVerifyTweet={promosQuery.verifyTweetEngagement} onGenerateReferralCode={promosQuery.generateReferralCode} />
       </section>
 
+      <PWAInstallPromoCard />
       <AddToHomeScreenCard />
 
       {/* Contest Details Modal */}

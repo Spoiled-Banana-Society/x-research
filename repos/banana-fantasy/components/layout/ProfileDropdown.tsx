@@ -93,7 +93,7 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-bg-secondary border border-bg-tertiary rounded-xl shadow-2xl overflow-hidden animate-slide-up z-50">
+        <div className="absolute right-0 top-full mt-2 w-72 max-h-[calc(100vh-80px)] bg-bg-secondary border border-bg-tertiary rounded-xl shadow-2xl overflow-y-auto animate-slide-up z-50">
           {/* User Info */}
           <div className="px-4 py-3 border-b border-bg-tertiary">
             <p className="font-semibold text-text-primary">{user.username}</p>

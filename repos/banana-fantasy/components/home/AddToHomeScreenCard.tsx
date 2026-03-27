@@ -1,17 +1,21 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 const DISMISS_KEY = 'sbs-a2hs-dismissed';
-const DISMISS_DAYS = 0; // TODO: set back to 3 after testing
+const ENGAGED_KEY = 'sbs-a2hs-engaged'; // They saw the install steps
 
 function isDismissed(): boolean {
   if (typeof window === 'undefined') return true;
+  // If they've engaged with the modal (saw install steps), don't show card again
+  // They can still find it in profile dropdown
+  if (localStorage.getItem(ENGAGED_KEY) === '1') return true;
   const ts = localStorage.getItem(DISMISS_KEY);
   if (!ts) return false;
-  return (Date.now() - Number(ts)) / (1000 * 60 * 60 * 24) < DISMISS_DAYS;
+  return (Date.now() - Number(ts)) / (1000 * 60 * 60 * 24) < 7;
 }
 
 function isIOS(): boolean {
@@ -27,7 +31,7 @@ function isIOSSafari(): boolean {
 
 // ── Install Steps Modal ─────────────────────────────────────────────────
 
-function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'safari' | 'chrome' }) {
+export function InstallModal({ onClose, browser, promoBanner }: { onClose: () => void; browser: 'safari' | 'chrome'; promoBanner?: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
@@ -35,6 +39,9 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
         className="relative w-full max-w-[340px] bg-[#111118] border border-white/[0.08] rounded-2xl overflow-hidden animate-modal-sheet"
         onClick={e => e.stopPropagation()}
       >
+        {/* Promo Banner */}
+        {promoBanner}
+
         {/* Header */}
         <div className="px-5 pt-5 pb-1 text-center">
           <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-black border border-white/10 flex items-center justify-center">
@@ -42,7 +49,7 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
           </div>
           <h3 className="text-white font-bold text-lg">Install SBS</h3>
           <p className="text-white/40 text-xs mt-1">
-            {browser === 'safari' ? '4 simple steps' : 'Open in Safari first'}
+            {browser === 'safari' ? '3 simple steps' : 'Open in Safari first'}
           </p>
         </div>
 
@@ -80,27 +87,21 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
               <div className="space-y-3.5">
                 <Step
                   num={1}
-                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1.5" fill="#fbbf24" /><circle cx="12" cy="12" r="1.5" fill="#fbbf24" /><circle cx="12" cy="19" r="1.5" fill="#fbbf24" /></svg>}
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" fill="#fbbf24" /><circle cx="12" cy="12" r="1.5" fill="#fbbf24" /><circle cx="19" cy="12" r="1.5" fill="#fbbf24" /></svg>}
                   title={<>Tap the <span className="text-banana">three dots</span> next to the URL</>}
-                  desc="Top-right of your browser"
+                  desc="Bottom-right of your browser"
                 />
                 <Step
                   num={2}
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>}
-                  title={<>Tap <span className="text-banana">&quot;Share...&quot;</span></>}
+                  title={<>Tap <span className="text-banana">Share</span></>}
                   desc=""
                 />
                 <Step
                   num={3}
-                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
-                  title={<>Scroll down &amp; tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
-                  desc="Don&apos;t see it? Tap &quot;More&quot; first"
-                />
-                <Step
-                  num={4}
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
-                  title={<>Tap <span className="text-banana">&quot;Add&quot;</span> — you&apos;re done!</>}
-                  desc="SBS is now on your home screen"
+                  title={<>Scroll down &amp; tap <span className="text-banana">Add to Home Screen</span></>}
+                  desc="Don&apos;t see it? Tap More first"
                 />
               </div>
             </div>
@@ -111,13 +112,13 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
                 num={1}
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="5" r="1.5" fill="#fbbf24" />
+                    <circle cx="5" cy="12" r="1.5" fill="#fbbf24" />
                     <circle cx="12" cy="12" r="1.5" fill="#fbbf24" />
-                    <circle cx="12" cy="19" r="1.5" fill="#fbbf24" />
+                    <circle cx="19" cy="12" r="1.5" fill="#fbbf24" />
                   </svg>
                 }
-                title={<>Tap the <span className="text-banana">three dots</span> next to the URL</>}
-                desc="Top-right of your browser"
+                title={<>Tap the <span className="text-banana">three dots</span> — bottom right</>}
+                desc=""
               />
               <Step
                 num={2}
@@ -128,30 +129,18 @@ function InstallModal({ onClose, browser }: { onClose: () => void; browser: 'saf
                     <line x1="12" y1="2" x2="12" y2="15" />
                   </svg>
                 }
-                title={<>Tap <span className="text-banana">&quot;Share...&quot;</span></>}
+                title={<>Tap <span className="text-banana">Share</span></>}
                 desc=""
               />
               <Step
                 num={3}
                 icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                    <line x1="8" y1="12" x2="16" y2="12" />
-                  </svg>
-                }
-                title={<>Scroll down &amp; tap <span className="text-banana">&quot;Add to Home Screen&quot;</span></>}
-                desc="Don&apos;t see it? Tap &quot;More&quot; first"
-              />
-              <Step
-                num={4}
-                icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 }
-                title={<>Tap <span className="text-banana">&quot;Add&quot;</span> — you&apos;re done!</>}
-                desc="SBS is now on your home screen"
+                title={<>Scroll down &amp; tap <span className="text-banana">Add to Home Screen</span></>}
+                desc="Don&apos;t see it? Tap More first"
               />
             </div>
           )}
@@ -227,6 +216,10 @@ export function AddToHomeScreenCard() {
   }, [isStandalone]);
 
   const handleInstall = useCallback(async () => {
+    // Mark as engaged — they've seen the steps. Home card won't show again.
+    // Profile dropdown button stays until they actually install (standalone).
+    localStorage.setItem(ENGAGED_KEY, '1');
+
     if (isIOS()) {
       setModalBrowser(isIOSSafari() ? 'safari' : 'chrome');
     } else {
@@ -310,11 +303,12 @@ export function InstallAppButton() {
         Install App
       </button>
 
-      {modalBrowser && (
+      {modalBrowser && typeof document !== 'undefined' && createPortal(
         <InstallModal
           browser={modalBrowser}
           onClose={() => setModalBrowser(null)}
-        />
+        />,
+        document.body
       )}
     </>
   );
