@@ -980,23 +980,32 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## ACTION NEEDED FROM BORIS (2026-03-27) — DONE ✅
+## STAGING API STATUS (2026-03-27) — PARTIALLY DONE, NEED RICHARD'S HELP
 
-All items completed by Boris's Claude on 2026-03-27:
+### What Boris's Claude completed:
+- ✅ **Cloud Tasks API** enabled on `sbs-staging-env`
+- ✅ **Cloud Tasks queue** `auto-draft-queue` created in `us-central1`
+- ✅ **Env vars set** on `sbs-drafts-api-staging` Cloud Run: `GCP_PROJECT_ID`, `GCP_LOCATION`, `CLOUD_TASKS_QUEUE_NAME`, `STAGING_API_URL`
+- ✅ **Deployed code** from `repos/sbs-drafts-api/` in the shared workspace to `sbs-drafts-api-staging`
 
-1. **playoff-scripts deployed to staging?** — ✅ YES. Deployed from `repos/sbs-drafts-api/` to `sbs-drafts-api-staging`. Verified: `curl .../draft-actions/test/owner/test/preferences` returns `404 page not found` (chi router not-found = route exists, draft doesn't). New endpoints are live.
+### The problem — `/draft-actions/` returns 404:
+We deployed the code from `repos/sbs-drafts-api/` in the shared workspace. The `main.go` in that code DOES have `r.Mount("/draft-actions", dra.Routes())` and the `draft-actions/` package exists with the preferences endpoint. The Docker build succeeds with no errors. But at runtime, `/draft-actions/` returns `404 page not found`.
 
-2. **Cloud Tasks API enabled?** — ✅ YES. Enabled via GCP Console on `sbs-staging-env`.
+**What we verified:**
+- `/owner/test` works (returns JSON) → the new code IS running
+- `/staging/fill-bots` returns 404 → confirms old code is NOT running (old code had `/staging`, new code doesn't)
+- `/draft-actions/test/owner/test/preferences` returns `404 page not found` → route not registering at runtime
+- No panics or errors in Cloud Run logs
+- Docker image digest is consistent across deploys
 
-3. **Cloud Tasks queue created?** — ✅ YES. `auto-draft-queue` created in `us-central1` on `sbs-staging-env`.
+**Our theory:** The `repos/sbs-drafts-api/` in the shared workspace may not be the complete `playoff-scripts` branch. It could be missing dependencies, or the Go compiler may have silently skipped the `draft-actions` package for some reason. We can't clone the actual `SBS-Drafts-API` GitHub repo because Boris's machine doesn't have SSH/token access.
 
-4. **Env vars set on Cloud Run?** — ✅ YES. All 4 set:
-   - `GCP_PROJECT_ID=sbs-staging-env`
-   - `GCP_LOCATION=us-central1`
-   - `CLOUD_TASKS_QUEUE_NAME=auto-draft-queue`
-   - `STAGING_API_URL=https://sbs-drafts-api-staging-652484219017.us-central1.run.app`
+### Richard — please help with one of these:
+1. **Option A:** Push the `playoff-scripts` branch to a location Boris can access (e.g., add the full repo to the shared workspace as a proper git repo, or provide a GitHub token)
+2. **Option B:** Tell us exactly what's different between the shared workspace copy and the actual `playoff-scripts` branch — maybe files are missing
+3. **Option C:** If you have `gcloud` access, deploy directly: `gcloud run deploy sbs-drafts-api-staging --source <your-local-checkout> --region us-central1 --project sbs-staging-env`
 
-Richard: you're good to proceed with the timer/slow-draft migration.
+Everything else is ready — Cloud Tasks, env vars, queue. Just need the API code to register `/draft-actions/` properly.
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
