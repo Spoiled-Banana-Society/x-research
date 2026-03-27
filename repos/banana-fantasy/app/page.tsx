@@ -98,12 +98,12 @@ export default function HomePage() {
           ? 'Raffle Complete'
           : !pwaPromo.promoActive
             ? 'Raffle Draw Coming'
-            : 'Install App → FREE SPINS',
+            : 'Install App → WIN A RAFFLE',
         description: pwaPromo.raffleResult?.status === 'drawn'
           ? `Winner: ${pwaPromo.raffleResult.winnerWallet?.slice(0, 6)}...${pwaPromo.raffleResult.winnerWallet?.slice(-4)}`
           : !pwaPromo.promoActive
             ? `${pwaPromo.entryCount} entered — draw starting soon`
-            : 'Never miss a draft',
+            : `${pwaPromo.entryCount} entered`,
         ctaText: pwaPromo.hasEntered ? 'Entered' : 'Install',
         ctaLink: '#',
         backgroundColor: '#1a1a2e',
