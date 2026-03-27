@@ -980,35 +980,23 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## ACTION NEEDED FROM BORIS (2026-03-27)
+## ACTION NEEDED FROM BORIS (2026-03-27) — DONE ✅
 
-Richard's Claude needs answers before proceeding with the full timer/slow-draft migration to banana-fantasy. The dev's code is cloned into the shared workspace:
-- `repos/sbs-draft-web/` (branch: `new-timer-changes`)
-- `repos/sbs-drafts-api/` (branch: `playoff-scripts`)
+All items completed by Boris's Claude on 2026-03-27:
 
-**Please check and respond in CLAUDE.md:**
+1. **playoff-scripts deployed to staging?** — ✅ YES. Deployed from `repos/sbs-drafts-api/` to `sbs-drafts-api-staging`. Verified: `curl .../draft-actions/test/owner/test/preferences` returns `404 page not found` (chi router not-found = route exists, draft doesn't). New endpoints are live.
 
-1. **Is the `playoff-scripts` branch deployed to staging?**
-   - Check: `curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences`
-   - If it returns a proper response (even 404 for missing draft), the new endpoints are live
-   - If it returns "route not found", the branch hasn't been deployed yet
+2. **Cloud Tasks API enabled?** — ✅ YES. Enabled via GCP Console on `sbs-staging-env`.
 
-2. **If NOT deployed, please deploy it:**
-   ```bash
-   cd ~/sbs-drafts-api-main
-   git checkout playoff-scripts
-   gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
-   ```
+3. **Cloud Tasks queue created?** — ✅ YES. `auto-draft-queue` created in `us-central1` on `sbs-staging-env`.
 
-3. **Is Cloud Tasks set up on staging?**
-   - Queue name: `auto-draft-queue` · Region: `us-central1` · Project: `sbs-staging-env`
-   - If not: `gcloud tasks queues create auto-draft-queue --location=us-central1 --project=sbs-staging-env`
-
-4. **Confirm these env vars are set on staging Cloud Run:**
+4. **Env vars set on Cloud Run?** — ✅ YES. All 4 set:
    - `GCP_PROJECT_ID=sbs-staging-env`
    - `GCP_LOCATION=us-central1`
    - `CLOUD_TASKS_QUEUE_NAME=auto-draft-queue`
    - `STAGING_API_URL=https://sbs-drafts-api-staging-652484219017.us-central1.run.app`
+
+Richard: you're good to proceed with the timer/slow-draft migration.
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
