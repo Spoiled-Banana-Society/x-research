@@ -1,0 +1,23 @@
+name: Sync main to dev
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  sync-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Merge main -> dev
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: main
+          target_branch: dev
+          github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -7,3 +7,4 @@ node_modules/
 *.pem
 credentials.json
 configs/*.json
+repos/sbs-drafts-api/configs/*.json
