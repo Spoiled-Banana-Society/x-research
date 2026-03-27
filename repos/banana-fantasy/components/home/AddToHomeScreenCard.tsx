@@ -209,10 +209,8 @@ export function AddToHomeScreenCard() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
-    if (isMobile && !isStandalone && !isDismissed()) {
-      setShow(true);
-    }
+    // TEMP: always show for Boris to preview
+    setShow(true);
   }, [isStandalone]);
 
   const handleInstall = useCallback(async () => {
