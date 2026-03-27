@@ -209,8 +209,10 @@ export function AddToHomeScreenCard() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // TEMP: always show for preview — revert after Boris approves position
-    setShow(true);
+    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+    if (isMobile && !isStandalone && !isDismissed()) {
+      setShow(true);
+    }
   }, [isStandalone]);
 
   const handleInstall = useCallback(async () => {
@@ -235,11 +237,20 @@ export function AddToHomeScreenCard() {
 
   return (
     <>
-      <aside
-        onClick={handleInstall}
-        className="mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden cursor-pointer hover:border-banana/40 transition-colors active:scale-[0.99]"
-      >
-        <div className="flex items-center gap-3 px-4 py-3">
+      <aside className="relative mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden">
+        {/* Dismiss X */}
+        <button
+          onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+          className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-colors z-10"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+        <div
+          onClick={handleInstall}
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors active:scale-[0.99]"
+        >
           <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
             <Image src="/icons/icon-192.png" alt="SBS" width={32} height={32} className="rounded-lg" />
           </div>
