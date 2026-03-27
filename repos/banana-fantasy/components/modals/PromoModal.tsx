@@ -702,7 +702,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
           </div>
         )}
 
-        {/* Step 1: Install */}
+        {/* Install + entry explanation */}
         <div className="bg-bg-tertiary rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isStandalone ? 'bg-success/20' : 'bg-bg-elevated'}`}>
@@ -717,11 +717,11 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
               )}
             </div>
             <div className="flex-1">
-              <p className="font-medium text-text-primary">Step 1: Install the app</p>
+              <p className="font-medium text-text-primary">Add SBS to your home screen</p>
               {isStandalone ? (
-                <p className="text-sm text-success">Installed</p>
+                <p className="text-sm text-success">Installed — you&apos;re entered!</p>
               ) : (
-                <p className="text-sm text-text-muted">Add SBS to your home screen</p>
+                <p className="text-sm text-text-muted">Once you open the app from your home screen, you&apos;re automatically entered</p>
               )}
             </div>
             {!isStandalone && (
@@ -732,44 +732,23 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
           </div>
         </div>
 
-        {/* Step 2: Enable notifications */}
-        <div className="bg-bg-tertiary rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isSubscribed ? 'bg-success/20' : 'bg-bg-elevated'}`}>
-              {isSubscribed ? (
-                <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
+        {/* Notifications — optional, not a requirement */}
+        {!isSubscribed && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-bg-elevated">
                 <span className="text-lg">🔔</span>
-              )}
-            </div>
-            <div className="flex-1">
-              <p className="font-medium text-text-primary">Step 2: Turn on notifications</p>
-              {isSubscribed ? (
-                <p className="text-sm text-success">Enabled</p>
-              ) : (
-                <p className="text-sm text-text-muted">Get draft reminders &amp; promo alerts</p>
-              )}
-            </div>
-            {!isSubscribed && (
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-text-primary">Want draft reminders?</p>
+                <p className="text-sm text-text-muted">Get notified before your drafts start</p>
+              </div>
               <Button size="sm" onClick={acceptOptIn} disabled={notifLoading}>
-                {notifLoading ? 'Enabling...' : 'Allow'}
+                {notifLoading ? '...' : 'Allow'}
               </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Raffle bonus */}
-        <div className="bg-banana/5 border border-banana/20 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-xl flex-shrink-0">🎰</span>
-            <div>
-              <p className="font-medium text-text-primary text-sm">Bonus: Win 5 free spins</p>
-              <p className="text-text-muted text-xs mt-1">1 random person who installs within 48 hours wins 5 free spins. Winner drawn live on site.</p>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Post-promo state */}
         {timerEnded && (

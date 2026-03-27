@@ -112,7 +112,7 @@ export default function HomePage() {
         claimable: false,
         modalContent: {
           title: 'Install SBS App → Win Free Spins',
-          explanation: 'Add SBS to your home screen to get real-time notifications — never miss a draft, promo, or result again. Plus, 1 random person who installs within 48 hours wins 5 free spins!',
+          explanation: 'Add SBS to your home screen and open it from there — you\'re automatically entered into the raffle. 1 random winner gets 5 free spins! Winner drawn live on site after the timer ends.',
         },
       };
       return [pwaPromoObj, ...base];
