@@ -235,33 +235,28 @@ export function AddToHomeScreenCard() {
 
   return (
     <>
-      <aside className="mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden">
+      <aside
+        onClick={handleInstall}
+        className="mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden cursor-pointer hover:border-banana/40 transition-colors active:scale-[0.99]"
+      >
         <div className="flex items-center gap-3 px-4 py-3">
-          <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
-            <Image src="/icons/icon-192.png" alt="SBS" width={40} height={40} className="rounded-lg" />
+          <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
+            <Image src="/icons/icon-192.png" alt="SBS" width={32} height={32} className="rounded-lg" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold text-[13px]">Get the App</p>
             <p className="text-white/40 text-[11px]">Add to home screen — works like a real app</p>
           </div>
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <button
-              onClick={handleInstall}
-              className="px-4 py-1.5 bg-banana text-black text-xs font-bold rounded-full hover:bg-banana/90 transition-colors"
-            >
-              Install
-            </button>
-            <button onClick={handleDismiss} className="text-white/20 text-[9px]">
-              Later
-            </button>
-          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30 flex-shrink-0">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </div>
       </aside>
 
       {modalBrowser && (
         <InstallModal
           browser={modalBrowser}
-          onClose={() => { setModalBrowser(null); handleDismiss(); }}
+          onClose={() => { setModalBrowser(null); setShow(false); localStorage.setItem(ENGAGED_KEY, '1'); }}
         />
       )}
     </>
