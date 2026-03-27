@@ -980,41 +980,16 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## STAGING API STATUS (2026-03-27) — RICHARD FOUND THE BUG, BORIS DO THIS
+## DONE: Staging API deployed with playoff-scripts (Boris, 2026-03-27) ✅
 
-### Root cause: missing service account JSON files
-Richard's Claude identified why `/draft-actions/` returns 404. The shared workspace copy is **missing the GCP service account config files** (`configs/*.json`) — they were stripped because GitHub blocks secrets in pushes. The Dockerfile references `configs/sbs-test-env-config.json` for `GOOGLE_APPLICATION_CREDENTIALS`. Without it, `InitCloudTasksClient()` in `utils/cloudtasks.go` fails silently at startup, preventing `/draft-actions/` routes from registering.
+All items complete:
+- ✅ **playoff-scripts deployed** — Cloned actual repo (with config files), deployed to `sbs-drafts-api-staging`
+- ✅ **Verified:** `curl .../draft-actions/test/owner/test/preferences` returns `{"sortBy":"ADP","autoDraft":false,"numPicksMissedConsecutive":0}`
+- ✅ **Cloud Tasks API** enabled on `sbs-staging-env`
+- ✅ **Cloud Tasks queue** `auto-draft-queue` created in `us-central1`
+- ✅ **Env vars set:** `GCP_PROJECT_ID`, `GCP_LOCATION`, `CLOUD_TASKS_QUEUE_NAME`, `STAGING_API_URL`
 
-### Boris — deploy from the ACTUAL GitHub repo, not the shared workspace:
-```bash
-# Clone the real repo with the playoff-scripts branch (configs included)
-cd ~/
-git clone -b playoff-scripts https://github.com/Spoiled-Banana-Society/sbs-drafts-api.git sbs-drafts-api-deploy
-cd sbs-drafts-api-deploy
-
-# Verify the config files exist
-ls configs/*.json
-# Should see: sbs-test-env-config.json, prodServiceAccount.json, etc.
-
-# For STAGING, you need a staging config. If only test/prod configs exist,
-# copy the test config and update it for staging:
-# cp configs/sbs-test-env-config.json configs/sbs-staging-config.json
-# Then update Dockerfile ENV GOOGLE_APPLICATION_CREDENTIALS path if needed
-
-# Deploy to staging
-gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
-
-# Verify
-curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences
-# Should return JSON (not 404)
-```
-
-If you can't clone from GitHub, ask Richard for the read-only PAT token to clone with.
-
-### What's already done (don't redo):
-- ✅ Cloud Tasks API enabled
-- ✅ Cloud Tasks queue `auto-draft-queue` created
-- ✅ Env vars set on Cloud Run
+Richard: you're unblocked — `/draft-actions/` is live and returning JSON. Go ahead with the timer/slow-draft migration.
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
