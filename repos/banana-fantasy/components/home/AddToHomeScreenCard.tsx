@@ -235,20 +235,20 @@ export function AddToHomeScreenCard() {
 
   return (
     <>
-      <aside className="relative mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden">
+      <aside
+        onClick={handleInstall}
+        className="relative mb-6 rounded-2xl border border-banana/20 bg-gradient-to-r from-banana/[0.06] to-transparent overflow-hidden cursor-pointer hover:border-banana/40 transition-colors active:scale-[0.99]"
+      >
         {/* Dismiss X */}
         <button
           onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
           className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-colors z-10"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
-        <div
-          onClick={handleInstall}
-          className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors active:scale-[0.99]"
-        >
+        <div className="flex items-center gap-3 px-4 py-3">
           <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
             <Image src="/icons/icon-192.png" alt="SBS" width={32} height={32} className="rounded-lg" />
           </div>
@@ -256,9 +256,9 @@ export function AddToHomeScreenCard() {
             <p className="text-white font-semibold text-[13px]">Get the App</p>
             <p className="text-white/40 text-[11px]">Add to home screen — works like a real app</p>
           </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30 flex-shrink-0">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          <span className="px-4 py-1.5 bg-banana text-black text-xs font-bold rounded-full flex-shrink-0 pointer-events-none">
+            Install
+          </span>
         </div>
       </aside>
 
