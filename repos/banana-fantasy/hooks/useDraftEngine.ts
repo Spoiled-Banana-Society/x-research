@@ -9,6 +9,7 @@ import {
   positionFromPlayerId,
 } from '@/lib/draftRoomConstants';
 import type { PlayerData, DraftPick, PositionRoster } from '@/lib/draftRoomConstants';
+import type { RealTimeDraftInfo, LastPickInfo } from '@/hooks/useRealTimeDraftInfo';
 
 export type DraftPlayer = typeof DRAFT_PLAYERS[number];
 export type DraftMode = 'local' | 'live';
@@ -547,6 +548,123 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     setDraftStatus('completed');
   }, []);
 
+  // ==================== LIVE MODE: Firebase RTDB state handler ====================
+  // Accepts a Firebase RTDB snapshot and updates engine state accordingly.
+  // This replaces the WebSocket timer_update, new_pick, and draft_info_update handlers.
+  const setFirebaseState = useCallback((rtdb: RealTimeDraftInfo) => {
+    // Update current drafter
+    setCurrentDrafterAddress(rtdb.currentDrafter);
+
+    // Update pick number (never go backwards)
+    setCurrentPickNumber(prev => {
+      if (rtdb.pickNumber < prev) {
+        console.warn(`[Firebase] Ignoring backwards pickNumber: ${rtdb.pickNumber} < ${prev}`);
+        return prev;
+      }
+      return rtdb.pickNumber;
+    });
+
+    // Update timer from pickEndTime (replaces WS timer_update)
+    if (rtdb.pickEndTime) {
+      setEndOfTurnTimestamp(rtdb.pickEndTime);
+      const remaining = Math.max(0, Math.ceil((rtdb.pickEndTime * 1000 - Date.now()) / 1000));
+      setTimeRemaining(prev => prev === remaining ? prev : remaining);
+      setDraftPhase('live');
+    }
+
+    // Detect draft start countdown
+    if (rtdb.draftStartTime && Date.now() < rtdb.draftStartTime * 1000) {
+      const remaining = Math.max(0, Math.ceil((rtdb.draftStartTime * 1000 - Date.now()) / 1000));
+      setPreTimeRemaining(remaining);
+      setDraftPhase('countdown');
+    }
+
+    // Check completion
+    if (rtdb.isDraftComplete) {
+      setDraftStatus('completed');
+    }
+  }, []);
+
+  // Process a new pick detected by the Firebase RTDB listener.
+  // Called by the page when useRealTimeDraftInfo signals newPickDetected.
+  const handleFirebaseNewPick = useCallback((pick: LastPickInfo) => {
+    if (!pick.playerId) {
+      console.warn('[handleFirebaseNewPick] Empty playerId, skipping');
+      return;
+    }
+
+    // Guard: reject duplicate/stale picks
+    if (pick.pickNum <= lastPickRef.current) {
+      console.warn('[handleFirebaseNewPick] Rejecting stale pick:', pick.pickNum, '<=', lastPickRef.current);
+      return;
+    }
+    lastPickRef.current = pick.pickNum;
+
+    const basePos = positionFromPlayerId(pick.playerId);
+
+    const newPick: DraftPick = {
+      pickNumber: pick.pickNum,
+      round: pick.round,
+      pickInRound: ((pick.pickNum - 1) % 10) + 1,
+      ownerName: pick.ownerAddress,
+      ownerIndex: getSnakeDrafterIndex(pick.pickNum),
+      playerId: pick.playerId,
+      position: pick.position,
+      team: pick.team,
+    };
+
+    setPicks(prev => [...prev, newPick]);
+    setAvailablePlayers(prev => prev.filter(p => p.playerId !== pick.playerId));
+    setMostRecentPick(newPick);
+
+    // Update roster (idempotent)
+    setRosters(prev => {
+      const updated = { ...prev };
+      const ownerAddr = pick.ownerAddress;
+      const roster = { ...(updated[ownerAddr] || createEmptyRoster()) };
+      const rosterKey = basePos as keyof PositionRoster;
+      if (roster[rosterKey] && !roster[rosterKey].includes(pick.playerId)) {
+        roster[rosterKey] = [...roster[rosterKey], pick.playerId];
+      }
+      updated[ownerAddr] = roster;
+      return updated;
+    });
+
+    // Update draft summary
+    setDraftSummary(prev => {
+      const updated = [...prev];
+      const idx = pick.pickNum - 1;
+      if (updated[idx]) {
+        updated[idx] = { ...updated[idx], playerId: pick.playerId, position: pick.position, team: pick.team };
+      }
+      return updated;
+    });
+
+    // Remove from queue if queued
+    setQueuedPlayers(prev => prev.filter(p => p.playerId !== pick.playerId));
+
+    // Track consecutive auto-picks for airplane mode
+    const wallet = walletAddressRef.current;
+    if (wallet && pick.ownerAddress.toLowerCase() === wallet) {
+      if (userPickedManuallyRef.current) {
+        consecutiveTimeoutsRef.current = 0;
+      } else {
+        consecutiveTimeoutsRef.current += 1;
+        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
+        if (consecutiveTimeoutsRef.current >= 2) {
+          console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
+          setAirplaneMode(true);
+        }
+      }
+      userPickedManuallyRef.current = false;
+    }
+
+    // Check completion
+    if (pick.pickNum >= TOTAL_PICKS) {
+      setDraftStatus('completed');
+    }
+  }, []);
+
   // ==================== LOCAL MODE: DRAFT A PLAYER ====================
   const draftPlayer = useCallback((playerId: string): ServerPickPayload | null => {
     if (draftStatus !== 'active' || currentPickNumber > TOTAL_PICKS) return null;
@@ -861,6 +979,10 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     handleDraftInfoUpdate,
     handleDraftComplete,
     handleFinalCard,
+
+    // Firebase RTDB actions (replaces WS handlers)
+    setFirebaseState,
+    handleFirebaseNewPick,
 
     // Shared actions
     addToQueue,
