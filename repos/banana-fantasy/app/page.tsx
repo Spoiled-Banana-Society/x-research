@@ -98,7 +98,7 @@ export default function HomePage() {
           ? 'Raffle Complete'
           : !pwaPromo.promoActive
             ? 'Raffle Draw Coming'
-            : 'Install App → WIN A RAFFLE',
+            : 'Install App → FREE SPINS',
         description: pwaPromo.raffleResult?.status === 'drawn'
           ? `Winner: ${pwaPromo.raffleResult.winnerWallet?.slice(0, 6)}...${pwaPromo.raffleResult.winnerWallet?.slice(-4)}`
           : !pwaPromo.promoActive
