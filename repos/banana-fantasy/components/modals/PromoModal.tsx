@@ -6,6 +6,8 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Promo } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { InstallModal } from '@/components/home/AddToHomeScreenCard';
+import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 interface PromoModalProps {
   isOpen: boolean;
@@ -28,6 +30,8 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   const [tweetVerifying, setTweetVerifying] = useState(false);
   const [tweetVerifyResult, setTweetVerifyResult] = useState<{ verified: boolean; alreadyVerified?: boolean; hasReplied?: boolean; hasQuoted?: boolean; message?: string } | null>(null);
   const [generatingReferral, setGeneratingReferral] = useState(false);
+  const [installModalBrowser, setInstallModalBrowser] = useState<'safari' | 'chrome' | null>(null);
+  const { triggerInstall } = useInstallPrompt();
 
   // Timer tick for countdown updates
   useEffect(() => {
@@ -665,6 +669,75 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
     );
   };
 
+  const renderAddToHomeScreenContent = () => {
+    const handleInstallClick = async () => {
+      if (typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
+        const ua = navigator.userAgent.toLowerCase();
+        const isSafari = /iphone|ipad|ipod/.test(ua) && /safari/.test(ua) && !/chrome|crios|fxios/.test(ua);
+        setInstallModalBrowser(isSafari ? 'safari' : 'chrome');
+      } else {
+        await triggerInstall();
+      }
+    };
+
+    const timerEnded = promo.timerEndTime && new Date(promo.timerEndTime).getTime() <= Date.now();
+
+    return (
+      <>
+        {/* Timer */}
+        {promo.timerEndTime && !timerEnded && (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-text-secondary">Time Remaining</span>
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-banana">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span className="text-xl font-bold text-banana tabular-nums">{formatTimeRemaining(promo.timerEndTime)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* How it works */}
+        <div className="bg-bg-tertiary rounded-xl p-4">
+          <h4 className="font-semibold mb-3 text-text-primary">How It Works</h4>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-banana/20 text-banana text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
+              <p className="text-text-secondary text-sm">Tap Install below and add SBS to your home screen</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-banana/20 text-banana text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
+              <p className="text-text-secondary text-sm">Open SBS from your home screen (you&apos;ll be automatically entered)</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-banana/20 text-banana text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
+              <p className="text-text-secondary text-sm">After the timer ends, 1 random winner gets 5 free spins!</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Install CTA or status */}
+        {timerEnded ? (
+          <div className="bg-bg-tertiary rounded-xl p-4 text-center">
+            <p className="text-text-secondary text-sm mb-3">The promo has ended. Watch the raffle draw!</p>
+            <Button className="w-full" onClick={() => { onClose(); router.push('/banana-wheel/raffle'); }}>
+              Watch the Draw
+            </Button>
+          </div>
+        ) : (
+          <div className="pt-2">
+            <Button className="w-full" onClick={handleInstallClick}>
+              Install SBS
+            </Button>
+          </div>
+        )}
+      </>
+    );
+  };
+
   const renderPromoContent = () => {
     switch (promo.type) {
       case 'daily-drafts':
@@ -683,6 +756,8 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
         return renderBuyBonusContent();
       case 'tweet-engagement':
         return renderTweetEngagementContent();
+      case 'add-to-home-screen':
+        return renderAddToHomeScreenContent();
       default:
         return null;
     }
@@ -697,6 +772,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
     : 'CLAIM';
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={onClose} title={promo.modalContent.title} size="lg">
       <div className="space-y-5">
         {/* Explanation */}
@@ -758,8 +834,8 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
         {/* Dynamic Content Based on Promo Type */}
         {renderPromoContent()}
 
-        {/* Claim Button */}
-        {(
+        {/* Claim Button (not for add-to-home-screen — it has its own CTA) */}
+        {promo.type !== 'add-to-home-screen' && (
           <div className="pt-4 border-t border-bg-tertiary">
             <Button
               className={`w-full transition-all ${canClaim ? 'hover:scale-105  hover:!bg-banana' : ''}`}
@@ -821,5 +897,14 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
         </div>
       )}
     </Modal>
+
+    {/* PWA Install Modal (opened from add-to-home-screen promo) */}
+    {installModalBrowser && (
+      <InstallModal
+        browser={installModalBrowser}
+        onClose={() => setInstallModalBrowser(null)}
+      />
+    )}
+    </>
   );
 }

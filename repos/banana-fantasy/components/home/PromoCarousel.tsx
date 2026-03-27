@@ -1,13 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Promo } from '@/types';
 import { PromoModal } from '../modals/PromoModal';
 import { useAuth } from '@/hooks/useAuth';
 import { reservePromoDraftType } from '@/lib/promoDraftType';
-import { InstallModal } from '@/components/home/AddToHomeScreenCard';
-import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 interface PromoCarouselProps {
   promos: Promo[];
@@ -58,27 +56,6 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
   const [claimedPromos, setClaimedPromos] = useState<Set<string>>(new Set());
   const [_timerTick, setTimerTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [installModalBrowser, setInstallModalBrowser] = useState<'safari' | 'chrome' | null>(null);
-  const { triggerInstall } = useInstallPrompt();
-
-  const handlePWAInstallClick = useCallback(async (promo: Promo) => {
-    // After promo ends, navigate to raffle page
-    if (promo.timerEndTime) {
-      const diff = new Date(promo.timerEndTime).getTime() - Date.now();
-      if (diff <= 0) {
-        router.push('/banana-wheel/raffle');
-        return;
-      }
-    }
-    // During promo, open install modal
-    if (typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
-      const ua = navigator.userAgent.toLowerCase();
-      const isSafari = /iphone|ipad|ipod/.test(ua) && /safari/.test(ua) && !/chrome|crios|fxios/.test(ua);
-      setInstallModalBrowser(isSafari ? 'safari' : 'chrome');
-    } else {
-      await triggerInstall();
-    }
-  }, [router, triggerInstall]);
 
   // Check if a promo's CLAIM button is actually visible in the UI
   const hasVisibleClaim = (p: Promo) => {
@@ -171,10 +148,6 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
   }, [currentIndex, sortedPromos.length]);
 
   const handlePromoClick = (promo: Promo) => {
-    if (promo.type === 'add-to-home-screen') {
-      handlePWAInstallClick(promo);
-      return;
-    }
     setSelectedPromo(promo);
     setIsModalOpen(true);
   };
@@ -477,14 +450,6 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
         onVerifyTweet={onVerifyTweet}
         onGenerateReferralCode={onGenerateReferralCode}
       />
-
-      {/* PWA Install Modal */}
-      {installModalBrowser && (
-        <InstallModal
-          browser={installModalBrowser}
-          onClose={() => setInstallModalBrowser(null)}
-        />
-      )}
 
       {/* Claim Success Popup - Apple-style */}
       {claimSuccess.show && (
