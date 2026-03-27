@@ -237,6 +237,9 @@ export default function HomePage() {
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 pt-16 flex flex-col min-h-[calc(100vh-64px)]">
+      {/* Get the App banner */}
+      <AddToHomeScreenCard />
+
       {/* Special Draft Banner (shows when user has Jackpot/HOF entries) */}
       <SpecialDraftBanner />
 
@@ -272,8 +275,6 @@ export default function HomePage() {
       <section className="mb-4">
         <PromoCarousel promos={allPromos} claimPromo={promosQuery.claimPromo} onVerifyTweet={promosQuery.verifyTweetEngagement} onGenerateReferralCode={promosQuery.generateReferralCode} />
       </section>
-
-      <AddToHomeScreenCard />
 
       {/* Contest Details Modal */}
       {selectedContest && (
