@@ -8,6 +8,7 @@ import { Promo } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { InstallModal } from '@/components/home/AddToHomeScreenCard';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
+import { useNotificationOptIn } from '@/hooks/useNotificationOptIn';
 
 interface PromoModalProps {
   isOpen: boolean;
@@ -31,7 +32,8 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   const [tweetVerifyResult, setTweetVerifyResult] = useState<{ verified: boolean; alreadyVerified?: boolean; hasReplied?: boolean; hasQuoted?: boolean; message?: string } | null>(null);
   const [generatingReferral, setGeneratingReferral] = useState(false);
   const [installModalBrowser, setInstallModalBrowser] = useState<'safari' | 'chrome' | null>(null);
-  const { triggerInstall } = useInstallPrompt();
+  const { triggerInstall, isStandalone } = useInstallPrompt();
+  const { isSubscribed, isLoading: notifLoading, acceptOptIn } = useNotificationOptIn();
 
   // Timer tick for countdown updates
   useEffect(() => {
@@ -688,7 +690,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
         {promo.timerEndTime && !timerEnded && (
           <div className="bg-bg-tertiary rounded-xl p-4">
             <div className="flex items-center justify-between">
-              <span className="text-text-secondary">Time Remaining</span>
+              <span className="text-text-secondary">Raffle ends in</span>
               <div className="flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-banana">
                   <circle cx="12" cy="12" r="10"/>
@@ -700,37 +702,80 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
           </div>
         )}
 
-        {/* How it works */}
+        {/* Step 1: Install */}
         <div className="bg-bg-tertiary rounded-xl p-4">
-          <h4 className="font-semibold mb-3 text-text-primary">How It Works</h4>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-banana/20 text-banana text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-              <p className="text-text-secondary text-sm">Tap Install below and add SBS to your home screen</p>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isStandalone ? 'bg-success/20' : 'bg-bg-elevated'}`}>
+              {isStandalone ? (
+                <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              )}
             </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-banana/20 text-banana text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
-              <p className="text-text-secondary text-sm">Open SBS from your home screen (you&apos;ll be automatically entered)</p>
+            <div className="flex-1">
+              <p className="font-medium text-text-primary">Step 1: Install the app</p>
+              {isStandalone ? (
+                <p className="text-sm text-success">Installed</p>
+              ) : (
+                <p className="text-sm text-text-muted">Add SBS to your home screen</p>
+              )}
             </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-banana/20 text-banana text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
-              <p className="text-text-secondary text-sm">After the timer ends, 1 random winner gets 5 free spins!</p>
+            {!isStandalone && (
+              <Button size="sm" onClick={handleInstallClick}>
+                Install
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Step 2: Enable notifications */}
+        <div className="bg-bg-tertiary rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isSubscribed ? 'bg-success/20' : 'bg-bg-elevated'}`}>
+              {isSubscribed ? (
+                <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <span className="text-lg">🔔</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-text-primary">Step 2: Turn on notifications</p>
+              {isSubscribed ? (
+                <p className="text-sm text-success">Enabled</p>
+              ) : (
+                <p className="text-sm text-text-muted">Get draft reminders &amp; promo alerts</p>
+              )}
+            </div>
+            {!isSubscribed && (
+              <Button size="sm" onClick={acceptOptIn} disabled={notifLoading}>
+                {notifLoading ? 'Enabling...' : 'Allow'}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Raffle bonus */}
+        <div className="bg-banana/5 border border-banana/20 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-xl flex-shrink-0">🎰</span>
+            <div>
+              <p className="font-medium text-text-primary text-sm">Bonus: Win 5 free spins</p>
+              <p className="text-text-muted text-xs mt-1">1 random person who installs within 48 hours wins 5 free spins. Winner drawn live on site.</p>
             </div>
           </div>
         </div>
 
-        {/* Install CTA or status */}
-        {timerEnded ? (
-          <div className="bg-bg-tertiary rounded-xl p-4 text-center">
-            <p className="text-text-secondary text-sm mb-3">The promo has ended. Watch the raffle draw!</p>
+        {/* Post-promo state */}
+        {timerEnded && (
+          <div className="pt-2">
             <Button className="w-full" onClick={() => { onClose(); router.push('/banana-wheel/raffle'); }}>
               Watch the Draw
-            </Button>
-          </div>
-        ) : (
-          <div className="pt-2">
-            <Button className="w-full" onClick={handleInstallClick}>
-              Install SBS
             </Button>
           </div>
         )}

@@ -98,12 +98,12 @@ export default function HomePage() {
           ? 'Raffle Complete'
           : !pwaPromo.promoActive
             ? 'Raffle Draw Coming'
-            : 'Install SBS — Win 5 Free Spins',
+            : 'Install App → FREE SPINS',
         description: pwaPromo.raffleResult?.status === 'drawn'
           ? `Winner: ${pwaPromo.raffleResult.winnerWallet?.slice(0, 6)}...${pwaPromo.raffleResult.winnerWallet?.slice(-4)}`
           : !pwaPromo.promoActive
             ? `${pwaPromo.entryCount} entered — draw starting soon`
-            : `${pwaPromo.entryCount} entered`,
+            : 'Never miss a draft',
         ctaText: pwaPromo.hasEntered ? 'Entered' : 'Install',
         ctaLink: '#',
         backgroundColor: '#1a1a2e',
@@ -111,8 +111,8 @@ export default function HomePage() {
         timerEndTime: pwaPromo.promoActive ? pwaPromo.promoEnd : pwaPromo.drawTime,
         claimable: false,
         modalContent: {
-          title: 'Install SBS — Win Free Spins',
-          explanation: 'Add Banana Fantasy to your home screen for a chance to win 5 free spins. 1 random winner chosen after the timer ends.',
+          title: 'Install SBS App → Win Free Spins',
+          explanation: 'Add SBS to your home screen to get real-time notifications — never miss a draft, promo, or result again. Plus, 1 random person who installs within 48 hours wins 5 free spins!',
         },
       };
       return [pwaPromoObj, ...base];
