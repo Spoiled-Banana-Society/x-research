@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString, requireNumber } from '@/lib/api/routeUtils';
-import { updateQueueRoundDraftId } from '@/lib/db';
+import { updateQueueRoundDraftId, fillQueueRoundWithBots } from '@/lib/db';
 
 const STAGING_API_URL = 'https://sbs-drafts-api-staging-652484219017.us-central1.run.app';
 
@@ -55,12 +55,15 @@ export async function POST(req: Request) {
     // 3. Update the queue round in Firestore with the draftId
     await updateQueueRoundDraftId(queueType, roundId, String(draftId));
 
-    // 4. Fill with 9 bots in background (don't block the response)
-    fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, {
+    // 4. Fill with 9 bots on Go API
+    await fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, {
       method: 'POST',
     }).catch(() => {});
 
-    // 5. Return the draftId to the client
+    // 5. Sync Firestore queue: add bot members + set status to 'drafting'
+    await fillQueueRoundWithBots(queueType, roundId, 9).catch(() => {});
+
+    // 6. Return the draftId to the client
     return json({ draftId: String(draftId) }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);

@@ -14,9 +14,9 @@ function getSnakeDrafterIndex(pickNumber: number): number {
   return round % 2 === 1 ? posInRound : 9 - posInRound;
 }
 
-function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; userId?: string; typeLabel: string; queueType: string }) {
+function RoundRow({ round, userId, walletAddress, typeLabel, queueType }: { round: QueueRound; userId?: string; walletAddress?: string | null; typeLabel: string; queueType: string }) {
   const router = useRouter();
-  const isMember = round.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase());
+  const isMember = round.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase() || m.wallet?.toLowerCase() === walletAddress?.toLowerCase());
   const [creating, setCreating] = useState(false);
   const [draftState, setDraftState] = useState<{
     turnsAway: number;
@@ -166,12 +166,12 @@ function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; 
   );
 }
 
-function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string }) {
+function QueueSection({ queue, userId, walletAddress }: { queue: DraftQueue; userId?: string; walletAddress?: string | null }) {
   const isJackpot = queue.type === 'jackpot';
   const color = isJackpot ? '#ef4444' : '#D4AF37';
   const label = isJackpot ? 'Jackpot' : 'HOF';
   const activeRounds = (queue.rounds || []).filter(r =>
-    r.status !== 'completed' && r.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase())
+    r.status !== 'completed' && r.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase() || m.wallet?.toLowerCase() === walletAddress?.toLowerCase())
   );
 
   if (activeRounds.length === 0) return null;
@@ -185,7 +185,7 @@ function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string })
         <span className="text-white/50 text-xs">8-hour picks</span>
       </div>
       {activeRounds.map(round => (
-        <RoundRow key={round.roundId} round={round} userId={userId} typeLabel={label} queueType={queue.type} />
+        <RoundRow key={round.roundId} round={round} userId={userId} walletAddress={walletAddress} typeLabel={label} queueType={queue.type} />
       ))}
     </div>
   );
@@ -212,7 +212,9 @@ export default function SpecialDraftsPage() {
   }, [fetchQueues]);
 
   const hasActiveRounds = queues && Object.values(queues).some(q =>
-    q.rounds?.some(r => r.status !== 'completed' && r.members.some(m => m.wallet === user?.id))
+    q.rounds?.some(r => r.status !== 'completed' && r.members.some(m =>
+      m.wallet?.toLowerCase() === user?.id?.toLowerCase() || m.wallet?.toLowerCase() === user?.walletAddress?.toLowerCase()
+    ))
   );
 
   return (
@@ -231,7 +233,7 @@ export default function SpecialDraftsPage() {
         ) : hasActiveRounds ? (
           <div className="space-y-6">
             {queues && ['jackpot', 'hof'].map(type =>
-              queues[type] && <QueueSection key={type} queue={queues[type]} userId={user?.id} />
+              queues[type] && <QueueSection key={type} queue={queues[type]} userId={user?.id} walletAddress={user?.walletAddress} />
             )}
           </div>
         ) : (
