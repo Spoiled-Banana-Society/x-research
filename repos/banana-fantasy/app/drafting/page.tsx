@@ -154,6 +154,8 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
             <span className="text-white/50 text-sm">
               {draftState.turnsAway} pick{draftState.turnsAway !== 1 ? 's' : ''} away
             </span>
+          ) : isLive && draftState ? (
+            <span className="text-white/50 text-sm">In progress</span>
           ) : isLive ? (
             <span className="text-banana font-bold text-sm animate-pulse">
               {r.status === 'ready' ? 'Starting!' : 'Live!'}
