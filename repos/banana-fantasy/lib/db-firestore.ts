@@ -918,6 +918,32 @@ export async function updateQueueRoundDraftId(
   });
 }
 
+/**
+ * Update a queue round's status (e.g., to 'drafting' when draft starts).
+ * Also optionally updates member count for display purposes.
+ */
+export async function updateQueueRoundStatus(
+  type: 'jackpot' | 'hof',
+  roundId: number,
+  status: 'filling' | 'ready' | 'drafting' | 'completed',
+): Promise<void> {
+  const db = getAdminFirestore();
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(type);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(queueRef);
+    if (!snap.exists) return;
+    const queue = snap.data() as DraftQueue;
+    if (!queue.rounds) return;
+
+    const round = queue.rounds.find(r => r.roundId === roundId);
+    if (!round) return;
+
+    round.status = status;
+    tx.set(queueRef, queue);
+  });
+}
+
 export async function resetQueue(type: 'jackpot' | 'hof'): Promise<void> {
   const db = getAdminFirestore();
   await db.collection(QUEUES_COLLECTION).doc(type).set(emptyQueueDoc(type));

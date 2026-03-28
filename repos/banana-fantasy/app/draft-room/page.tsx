@@ -506,6 +506,15 @@ function DraftRoomContent() {
             type: specialTypeParam || draftType, draftType: specialTypeParam || draftType,
             isSpecial: true,
           });
+          // Update queue round status so special-drafts & drafting pages show "Live!"
+          const queueType = specialTypeParam || 'jackpot';
+          const qRoundId = searchParams?.get('queueRoundId');
+          if (qRoundId || queueType) {
+            fetch('/api/queues/update-status', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ queueType, roundId: qRoundId ? parseInt(qRoundId) : 1, status: 'drafting' }),
+            }).catch(() => {});
+          }
         } else if (playerCount >= 10 && info.draftStartTime) {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
