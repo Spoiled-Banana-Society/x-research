@@ -216,7 +216,7 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
     const isJP = q.type === 'jackpot';
     for (const r of q.rounds || []) {
       if (r.status === 'completed') continue;
-      if (!r.members.some((m: any) => m.wallet?.toLowerCase() === userId?.toLowerCase())) continue;
+      if (!r.members.some((m: any) => m.wallet?.toLowerCase() === userId?.toLowerCase() || m.wallet?.toLowerCase() === walletAddress?.toLowerCase())) continue;
       myRounds.push({
         type: q.type,
         round: r,
