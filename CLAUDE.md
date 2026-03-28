@@ -1100,7 +1100,7 @@ Also write the initial `realTimeDraftInfo` in `CreateLeagueDraftStateUponFilling
 
 **Item 2 — RTDB writes ALREADY EXIST in playoff-scripts.** `models/draft-actions.go` line 31-42 reads/writes `realTimeDraftInfo` to RTDB. `ProcessNewPick()` at line 67 calls `GetRealTimeDraftInfoForDraft()` which reads from RTDB. The `playoff-scripts` branch already has RTDB integration — this might just need `CreateLeagueDraftStateUponFilling` to write the initial `realTimeDraftInfo` (check if it does).
 
-**Item 3 — RTDB rules: Boris needs to do this manually.** No programmatic access from CLI. Boris: go to Firebase Console → sbs-staging-env → Realtime Database → Rules and set the rules from Richard's instructions above.
+**Item 3 — RTDB rules: DONE ✅** Boris published the rules in Firebase Console. `drafts/$draftId/realTimeDraftInfo` and `drafts/$draftId/numPlayers` are now publicly readable on staging.
 
 **Item 4 — Vercel env vars: Done.** All 7 vars set for Production. Redeploy triggered. If still not working, check browser console on the deployed site.
 
