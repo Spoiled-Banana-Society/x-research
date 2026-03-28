@@ -985,7 +985,11 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 - Cloud Tasks queue created, env vars set
 - Firebase RTDB staging credentials set on Vercel
 
-## ISSUE: /staging/ routes need model updates (2026-03-27)
+## DONE: /staging/ routes fixed and deployed (2026-03-27) ✅
+
+Applied Richard's fixes, added exported wrapper for `UpdateInUseDraftTokenInDatabase`, removed `PassType` refs and batch fields. Both `/draft-actions/` and `/staging/` endpoints verified working.
+
+## ARCHIVED: /staging/ routes model update details (2026-03-27)
 
 Boris cloned the actual repo (`playoff-scripts` branch) and tried adding the old `/staging/` package from the `main` branch. Build fails because `staging.go` references old model fields/methods that were refactored in `playoff-scripts`:
 
