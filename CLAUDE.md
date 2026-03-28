@@ -980,41 +980,52 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## STAGING API STATUS (2026-03-27) — RICHARD FOUND THE BUG, BORIS DO THIS
+## DONE: Staging API deployed with playoff-scripts ✅
+- `/draft-actions/` endpoints live and working
+- Cloud Tasks queue created, env vars set
 
-### Root cause: missing service account JSON files
-Richard's Claude identified why `/draft-actions/` returns 404. The shared workspace copy is **missing the GCP service account config files** (`configs/*.json`) — they were stripped because GitHub blocks secrets in pushes. The Dockerfile references `configs/sbs-test-env-config.json` for `GOOGLE_APPLICATION_CREDENTIALS`. Without it, `InitCloudTasksClient()` in `utils/cloudtasks.go` fails silently at startup, preventing `/draft-actions/` routes from registering.
+## ACTION NEEDED FROM BORIS (2026-03-27) — Firebase RTDB Credentials for Vercel
 
-### Boris — deploy from the ACTUAL GitHub repo, not the shared workspace:
-```bash
-# Clone the real repo with the playoff-scripts branch (configs included)
-cd ~/
-git clone -b playoff-scripts https://github.com/Spoiled-Banana-Society/sbs-drafts-api.git sbs-drafts-api-deploy
-cd sbs-drafts-api-deploy
+### What happened
+Richard's Claude completed the full Firebase RTDB migration — WebSocket replaced with Firebase Realtime DB for draft updates. Everything works, BUT the staging Vercel site (`banana-fantasy-sbs.vercel.app`) uses **prod Firebase credentials** while trying to read the **staging RTDB** (`sbs-staging-env-default-rtdb`). Different Firebase projects = `permission_denied`. The code auto-falls back to WebSocket, but we want Firebase RTDB to work properly.
 
-# Verify the config files exist
-ls configs/*.json
-# Should see: sbs-test-env-config.json, prodServiceAccount.json, etc.
+### Boris — set staging Firebase env vars on Vercel:
 
-# For STAGING, you need a staging config. If only test/prod configs exist,
-# copy the test config and update it for staging:
-# cp configs/sbs-test-env-config.json configs/sbs-staging-config.json
-# Then update Dockerfile ENV GOOGLE_APPLICATION_CREDENTIALS path if needed
-
-# Deploy to staging
-gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
-
-# Verify
-curl https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft-actions/test/owner/test/preferences
-# Should return JSON (not 404)
+**Option A (preferred): Set staging Firebase credentials on Vercel**
+1. Go to https://vercel.com → banana-fantasy project → Settings → Environment Variables
+2. Add/update these for the **Preview** and **Production** environments:
 ```
+NEXT_PUBLIC_FIREBASE_API_KEY=<staging Firebase API key from sbs-staging-env>
+NEXT_PUBLIC_AUTH_DOMAIN=sbs-staging-env.firebaseapp.com
+NEXT_PUBLIC_DATABASE_URL=https://sbs-staging-env-default-rtdb.firebaseio.com
+NEXT_PUBLIC_PROJECT_ID=sbs-staging-env
+NEXT_PUBLIC_STORAGE_BUCKET=sbs-staging-env.appspot.com
+NEXT_PUBLIC_MESSAGING_SENDER_ID=<staging sender ID>
+NEXT_PUBLIC_APP_ID=<staging app ID>
+```
+3. Find these values in: Firebase Console → sbs-staging-env → Project Settings → General → Your apps → Web app config
+4. Redeploy after setting vars (or trigger: `curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH"`)
 
-If you can't clone from GitHub, ask Richard for the read-only PAT token to clone with.
+**Option B (quick): Update RTDB rules to allow public read on staging**
+1. Firebase Console → sbs-staging-env → Realtime Database → Rules
+2. Set:
+```json
+{
+  "rules": {
+    "drafts": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}
+```
+This allows any authenticated Firebase client to read draft data (staging only, not prod).
 
-### What's already done (don't redo):
-- ✅ Cloud Tasks API enabled
-- ✅ Cloud Tasks queue `auto-draft-queue` created
-- ✅ Env vars set on Cloud Run
+### How to verify it worked:
+After setting vars and redeploying, open browser console on `banana-fantasy-sbs.vercel.app/draft-room?draftId=test&id=test&speed=fast&mode=live&wallet=test` and look for:
+- `[useRealTimeDraftInfo] Subscribing to drafts/test/realTimeDraftInfo` — Firebase connected
+- NO `PERMISSION_DENIED` errors
+- Connection indicator shows "Live" (not "WS")
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
