@@ -32,11 +32,42 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
   userId?: string;
 }) {
   const [creating, setCreating] = useState(false);
+  const [draftState, setDraftState] = useState<{ turnsAway: number; isYourTurn: boolean; pickEndTime: number } | null>(null);
   const r = item.round;
   const canEnter = !!r.draftId;
   const accentColor = item.color;
   const isFilling = r.status === 'filling';
   const isLive = r.status === 'ready' || r.status === 'drafting';
+
+  // Poll Go API for draft progress when live
+  useEffect(() => {
+    if (!isLive || !r.draftId || !walletAddress) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const info = await draftApi.getDraftInfo(r.draftId);
+        if (cancelled) return;
+        const wallet = walletAddress.toLowerCase();
+        const currentDrafter = (info.currentDrafter || '').toLowerCase();
+        const isYourTurn = wallet === currentDrafter;
+        const userIndex = info.draftOrder.findIndex((e: { ownerId: string }) => e.ownerId.toLowerCase() === wallet);
+        let turnsAway = 0;
+        if (!isYourTurn && userIndex >= 0) {
+          const totalPicks = (info.draftOrder.length || 10) * 15;
+          for (let i = 1; i <= totalPicks - info.pickNumber + 1; i++) {
+            const round = Math.ceil((info.pickNumber + i) / 10);
+            const posInRound = ((info.pickNumber + i - 1) % 10);
+            const drafterIdx = round % 2 === 1 ? posInRound : 9 - posInRound;
+            if (drafterIdx === userIndex) { turnsAway = i; break; }
+          }
+        }
+        setDraftState({ turnsAway, isYourTurn, pickEndTime: info.currentPickEndTime || 0 });
+      } catch { /* draft state not ready yet */ }
+    };
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [isLive, r.draftId, walletAddress]);
 
   async function handleEnter(e?: React.MouseEvent) {
     if (e) e.stopPropagation();
@@ -116,6 +147,12 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
                 <span className="text-white/40">/10</span>
               </span>
             </div>
+          ) : isLive && draftState?.isYourTurn ? (
+            <span className="text-banana font-bold text-sm animate-pulse">Your turn!</span>
+          ) : isLive && draftState && draftState.turnsAway > 0 ? (
+            <span className="text-white/50 text-sm">
+              {draftState.turnsAway} pick{draftState.turnsAway !== 1 ? 's' : ''} away
+            </span>
           ) : isLive ? (
             <span className="text-banana font-bold text-sm animate-pulse">
               {r.status === 'ready' ? 'Starting!' : 'Live!'}
