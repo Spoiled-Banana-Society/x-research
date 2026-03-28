@@ -32,7 +32,7 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
   userId?: string;
 }) {
   const [creating, setCreating] = useState(false);
-  const [draftState, setDraftState] = useState<{ turnsAway: number; isYourTurn: boolean; pickEndTime: number } | null>(null);
+  const [draftState, setDraftState] = useState<{ turnsAway: number; isYourTurn: boolean; pickEndTime: number; playerCount: number } | null>(null);
   const r = item.round;
   const canEnter = !!r.draftId;
   const accentColor = item.color;
@@ -50,6 +50,7 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
         const wallet = walletAddress.toLowerCase();
         const currentDrafter = (info.currentDrafter || '').toLowerCase();
         const isYourTurn = wallet === currentDrafter;
+        const playerCount = info.draftOrder?.length || 10;
         const userIndex = info.draftOrder.findIndex((e: { ownerId: string }) => e.ownerId.toLowerCase() === wallet);
         let turnsAway = 0;
         if (!isYourTurn && userIndex >= 0) {
@@ -61,7 +62,7 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
             if (drafterIdx === userIndex) { turnsAway = i; break; }
           }
         }
-        setDraftState({ turnsAway, isYourTurn, pickEndTime: info.currentPickEndTime || 0 });
+        setDraftState({ turnsAway, isYourTurn, pickEndTime: info.currentPickEndTime || 0, playerCount });
       } catch { /* draft state not ready yet */ }
     };
     poll();
@@ -160,6 +161,12 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
           ) : (
             <span className="text-white/50 text-sm">In progress</span>
           )}
+          {/* Show Go API player count when live */}
+          {isLive && draftState?.playerCount && (
+            <span className="text-white/40 text-xs ml-1.5 tabular-nums">
+              {draftState.playerCount}/10
+            </span>
+          )}
         </div>
 
         {/* Button */}
@@ -172,9 +179,13 @@ function SpecialDraftRow({ item, walletAddress, userId }: {
           ) : (
             <button
               onClick={(e) => handleEnter(e)}
-              className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90 flex items-center justify-center"
+              className={`w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 flex items-center justify-center ${
+                draftState?.isYourTurn
+                  ? 'bg-banana text-black hover:bg-banana/90 animate-pulse'
+                  : 'bg-white text-black hover:bg-white/90'
+              }`}
             >
-              Enter
+              {draftState?.isYourTurn ? 'Pick Now' : 'Enter'}
             </button>
           )}
         </div>

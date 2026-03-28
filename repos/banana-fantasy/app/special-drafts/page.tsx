@@ -4,12 +4,64 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
+import * as draftApi from '@/lib/draftApi';
 import type { DraftQueue, QueueRound } from '@/types';
+
+/** Snake draft: get drafter index for a given pick number (10 players) */
+function getSnakeDrafterIndex(pickNumber: number): number {
+  const round = Math.ceil(pickNumber / 10);
+  const posInRound = ((pickNumber - 1) % 10);
+  return round % 2 === 1 ? posInRound : 9 - posInRound;
+}
 
 function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; userId?: string; typeLabel: string; queueType: string }) {
   const router = useRouter();
   const isMember = round.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase());
   const [creating, setCreating] = useState(false);
+  const [draftState, setDraftState] = useState<{
+    turnsAway: number;
+    isYourTurn: boolean;
+    pickEndTime: number;
+    playerCount: number;
+  } | null>(null);
+
+  const isLive = round.status === 'ready' || round.status === 'drafting';
+
+  // Poll Go API for draft progress when live
+  useEffect(() => {
+    if (!isLive || !round.draftId || !userId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const info = await draftApi.getDraftInfo(round.draftId!);
+        if (cancelled) return;
+        const wallet = userId.toLowerCase();
+        const currentDrafter = (info.currentDrafter || '').toLowerCase();
+        const isYourTurn = wallet === currentDrafter;
+        const playerCount = info.draftOrder?.length || 10;
+
+        const userIndex = info.draftOrder.findIndex(
+          (e: { ownerId: string }) => e.ownerId.toLowerCase() === wallet
+        );
+        let turnsAway = 0;
+        if (!isYourTurn && userIndex >= 0) {
+          const totalPicks = (info.draftOrder.length || 10) * 15;
+          for (let i = 1; i <= totalPicks - info.pickNumber + 1; i++) {
+            if (getSnakeDrafterIndex(info.pickNumber + i) === userIndex) {
+              turnsAway = i;
+              break;
+            }
+          }
+        }
+        setDraftState({ turnsAway, isYourTurn, pickEndTime: info.currentPickEndTime || 0, playerCount });
+      } catch {
+        // draft state not ready yet — ignore
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [isLive, round.draftId, userId]);
 
   async function handleEnterDraft() {
     // If draftId already exists, navigate directly
@@ -44,6 +96,9 @@ function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; 
     }
   }
 
+  // Use Go API player count when available, otherwise fall back to queue members
+  const displayPlayerCount = (isLive && draftState?.playerCount) ? draftState.playerCount : round.members.length;
+
   return (
     <div className={`rounded-lg border ${isMember ? 'border-banana/30 bg-banana/5' : 'border-white/[0.06] bg-white/[0.01]'} p-3`}>
       <div className="flex items-center justify-between mb-2">
@@ -55,17 +110,25 @@ function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; 
           {round.status === 'ready' && (
             <span className="text-green-400 text-xs font-semibold animate-pulse">Starting!</span>
           )}
-          {round.status === 'drafting' && (
+          {round.status === 'drafting' && draftState?.isYourTurn && (
+            <span className="text-banana text-xs font-semibold animate-pulse">Your turn!</span>
+          )}
+          {round.status === 'drafting' && draftState && !draftState.isYourTurn && draftState.turnsAway > 0 && (
+            <span className="text-white/60 text-xs font-semibold">
+              {draftState.turnsAway} pick{draftState.turnsAway !== 1 ? 's' : ''} away
+            </span>
+          )}
+          {round.status === 'drafting' && !draftState && (
             <span className="text-banana text-xs font-semibold animate-pulse">Live!</span>
           )}
-          <span className="text-white font-bold text-xs">{round.members.length}/10</span>
+          <span className="text-white font-bold text-xs">{displayPlayerCount}/10</span>
         </div>
       </div>
       <div className="h-1 bg-white/10 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
-            width: `${(round.members.length / 10) * 100}%`,
+            width: `${(displayPlayerCount / 10) * 100}%`,
             backgroundColor: round.status === 'ready' ? '#4ade80' : round.status === 'drafting' ? '#fbbf24' : '#6b7280',
           }}
         />
@@ -75,7 +138,9 @@ function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; 
           {round.status === 'filling' && round.draftId && `Enter now — waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''}`}
           {round.status === 'filling' && !round.draftId && `Enter to watch the draft fill up`}
           {round.status === 'ready' && '10 winners in — draft is starting!'}
-          {round.status === 'drafting' && 'Draft is live!'}
+          {round.status === 'drafting' && draftState?.isYourTurn && 'It\'s your turn to pick!'}
+          {round.status === 'drafting' && draftState && !draftState.isYourTurn && `Draft is live — ${draftState.turnsAway} pick${draftState.turnsAway !== 1 ? 's' : ''} until your turn`}
+          {round.status === 'drafting' && !draftState && 'Draft is live!'}
         </p>
         {isMember && (
           creating ? (
@@ -86,9 +151,13 @@ function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; 
           ) : (
             <button
               onClick={handleEnterDraft}
-              className="w-20 py-2 rounded-lg font-semibold text-sm text-center transition-all hover:scale-105 bg-white text-black hover:bg-white/90"
+              className={`w-20 py-2 rounded-lg font-semibold text-sm text-center transition-all hover:scale-105 ${
+                draftState?.isYourTurn
+                  ? 'bg-banana text-black hover:bg-banana/90 animate-pulse'
+                  : 'bg-white text-black hover:bg-white/90'
+              }`}
             >
-              Enter Draft
+              {draftState?.isYourTurn ? 'Pick Now' : 'Enter Draft'}
             </button>
           )
         )}
