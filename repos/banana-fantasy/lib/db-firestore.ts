@@ -888,6 +888,96 @@ export async function joinQueue(
   });
 }
 
+/**
+ * Update a queue round's draftId. Called when the frontend creates a Go API draft
+ * for a special draft round that doesn't have one yet.
+ */
+export async function updateQueueRoundDraftId(
+  type: 'jackpot' | 'hof',
+  roundId: number,
+  draftId: string,
+): Promise<void> {
+  const db = getAdminFirestore();
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(type);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(queueRef);
+    if (!snap.exists) throw new ApiError(404, 'Queue not found');
+    const queue = snap.data() as DraftQueue;
+    if (!queue.rounds) throw new ApiError(404, 'No rounds in queue');
+
+    const round = queue.rounds.find(r => r.roundId === roundId);
+    if (!round) throw new ApiError(404, `Round ${roundId} not found`);
+
+    // Only update if no draftId yet (don't overwrite)
+    if (!round.draftId) {
+      round.draftId = draftId;
+    }
+
+    tx.set(queueRef, queue);
+  });
+}
+
+/**
+ * Update a queue round's status (e.g., to 'drafting' when draft starts).
+ * Also optionally updates member count for display purposes.
+ */
+export async function updateQueueRoundStatus(
+  type: 'jackpot' | 'hof',
+  roundId: number,
+  status: 'filling' | 'ready' | 'drafting' | 'completed',
+): Promise<void> {
+  const db = getAdminFirestore();
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(type);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(queueRef);
+    if (!snap.exists) return;
+    const queue = snap.data() as DraftQueue;
+    if (!queue.rounds) return;
+
+    const round = queue.rounds.find(r => r.roundId === roundId);
+    if (!round) return;
+
+    round.status = status;
+    tx.set(queueRef, queue);
+  });
+}
+
+/**
+ * Fill a queue round with bot members and set status to 'drafting'.
+ * Used in staging when bots are added to the Go API but not to Firestore.
+ */
+export async function fillQueueRoundWithBots(
+  type: 'jackpot' | 'hof',
+  roundId: number,
+  botCount: number,
+): Promise<void> {
+  const db = getAdminFirestore();
+  const queueRef = db.collection(QUEUES_COLLECTION).doc(type);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(queueRef);
+    if (!snap.exists) return;
+    const queue = snap.data() as DraftQueue;
+    if (!queue.rounds) return;
+
+    const round = queue.rounds.find(r => r.roundId === roundId);
+    if (!round) return;
+
+    // Add bot members to match Go API
+    for (let i = 0; i < botCount; i++) {
+      const botWallet = `bot-${type}-${Date.now()}-${i}`;
+      if (!round.members.some(m => m.wallet === botWallet)) {
+        round.members.push({ wallet: botWallet, joinedAt: Date.now() });
+      }
+    }
+
+    round.status = 'drafting';
+    tx.set(queueRef, queue);
+  });
+}
+
 export async function resetQueue(type: 'jackpot' | 'hof'): Promise<void> {
   const db = getAdminFirestore();
   await db.collection(QUEUES_COLLECTION).doc(type).set(emptyQueueDoc(type));
