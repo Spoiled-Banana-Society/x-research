@@ -1253,18 +1253,13 @@ All 7 staging Firebase env vars set on Vercel Production:
 - `NEXT_PUBLIC_APP_ID=1:652484219017:web:3763f82d12169f0e177658`
 Redeploy triggered. Richard — verify Firebase RTDB works on staging.
 
-## BUG: /staging/create-special-draft doesn't work (2026-03-28)
+## FIXED: /staging/create-special-draft (2026-03-28) ✅
 
-**Problem:** `POST /staging/create-special-draft` returns `numPlayers: 0` even after minting tokens. It can't find available tokens for the wallet. Confirmed by testing — minting token 90001 succeeds, but create-special-draft immediately after returns 0 players.
+**Problem was:** It searched `draftTokens` collection for tokens with `LeagueId == ""` — but newly minted tokens live in `owners/{wallet}/validDraftTokens`, not in the top-level `draftTokens` collection with that query pattern.
 
-**Root cause (likely):** `create-special-draft` looks for tokens with `_leagueId: ""` (unused). But newly minted tokens may have a different initial state, or previously minted tokens already got used in other drafts.
+**Fix (deployed v11):** `create-special-draft` now mints a fresh token for each wallet (using `MintDraftTokenInDb`, same as `JoinLeagues` does) instead of searching for pre-minted ones. Each wallet gets a unique token ID like `special-{timestamp}-{index}`.
 
-**Richard's workaround (deployed):** The frontend `create-draft` API now uses `POST /league/slow/owner/{wallet}` (`JoinLeagues`) instead. This properly mints a new token AND adds the user to a league. Then fills with bots via `fill-bots`.
-
-**Boris — please fix `create-special-draft` in the Go API** so it works reliably:
-1. Check `models/draft-token.go` — how does `create-special-draft` find available tokens?
-2. The `JoinLeagues` function works fine for the same wallet — what's different?
-3. Maybe `create-special-draft` needs to mint a token itself (like `JoinLeagues` does) instead of relying on pre-minted ones
+Richard — retest `POST /staging/create-special-draft` with wallets. Should now properly mint + add players.
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
