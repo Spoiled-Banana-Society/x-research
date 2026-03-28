@@ -980,16 +980,52 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 
 **Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
 
-## DONE: Staging API deployed with playoff-scripts (Boris, 2026-03-27) ✅
+## DONE: Staging API deployed with playoff-scripts ✅
+- `/draft-actions/` endpoints live and working
+- Cloud Tasks queue created, env vars set
 
-All items complete:
-- ✅ **playoff-scripts deployed** — Cloned actual repo (with config files), deployed to `sbs-drafts-api-staging`
-- ✅ **Verified:** `curl .../draft-actions/test/owner/test/preferences` returns `{"sortBy":"ADP","autoDraft":false,"numPicksMissedConsecutive":0}`
-- ✅ **Cloud Tasks API** enabled on `sbs-staging-env`
-- ✅ **Cloud Tasks queue** `auto-draft-queue` created in `us-central1`
-- ✅ **Env vars set:** `GCP_PROJECT_ID`, `GCP_LOCATION`, `CLOUD_TASKS_QUEUE_NAME`, `STAGING_API_URL`
+## ACTION NEEDED FROM BORIS (2026-03-27) — Firebase RTDB Credentials for Vercel
 
-Richard: you're unblocked — `/draft-actions/` is live and returning JSON. Go ahead with the timer/slow-draft migration.
+### What happened
+Richard's Claude completed the full Firebase RTDB migration — WebSocket replaced with Firebase Realtime DB for draft updates. Everything works, BUT the staging Vercel site (`banana-fantasy-sbs.vercel.app`) uses **prod Firebase credentials** while trying to read the **staging RTDB** (`sbs-staging-env-default-rtdb`). Different Firebase projects = `permission_denied`. The code auto-falls back to WebSocket, but we want Firebase RTDB to work properly.
+
+### Boris — set staging Firebase env vars on Vercel:
+
+**Option A (preferred): Set staging Firebase credentials on Vercel**
+1. Go to https://vercel.com → banana-fantasy project → Settings → Environment Variables
+2. Add/update these for the **Preview** and **Production** environments:
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=<staging Firebase API key from sbs-staging-env>
+NEXT_PUBLIC_AUTH_DOMAIN=sbs-staging-env.firebaseapp.com
+NEXT_PUBLIC_DATABASE_URL=https://sbs-staging-env-default-rtdb.firebaseio.com
+NEXT_PUBLIC_PROJECT_ID=sbs-staging-env
+NEXT_PUBLIC_STORAGE_BUCKET=sbs-staging-env.appspot.com
+NEXT_PUBLIC_MESSAGING_SENDER_ID=<staging sender ID>
+NEXT_PUBLIC_APP_ID=<staging app ID>
+```
+3. Find these values in: Firebase Console → sbs-staging-env → Project Settings → General → Your apps → Web app config
+4. Redeploy after setting vars (or trigger: `curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH"`)
+
+**Option B (quick): Update RTDB rules to allow public read on staging**
+1. Firebase Console → sbs-staging-env → Realtime Database → Rules
+2. Set:
+```json
+{
+  "rules": {
+    "drafts": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}
+```
+This allows any authenticated Firebase client to read draft data (staging only, not prod).
+
+### How to verify it worked:
+After setting vars and redeploying, open browser console on `banana-fantasy-sbs.vercel.app/draft-room?draftId=test&id=test&speed=fast&mode=live&wallet=test` and look for:
+- `[useRealTimeDraftInfo] Subscribing to drafts/test/realTimeDraftInfo` — Firebase connected
+- NO `PERMISSION_DENIED` errors
+- Connection indicator shows "Live" (not "WS")
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".

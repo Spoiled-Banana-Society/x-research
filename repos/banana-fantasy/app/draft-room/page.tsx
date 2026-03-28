@@ -7,6 +7,8 @@ import { useDraftAudio } from '@/hooks/useDraftAudio';
 import { useDraftEngine } from '@/hooks/useDraftEngine';
 import type { DraftMode } from '@/hooks/useDraftEngine';
 import { useDraftWebSocket } from '@/hooks/useDraftWebSocket';
+import { useRealTimeDraftInfo } from '@/hooks/useRealTimeDraftInfo';
+import { useTimeRemaining } from '@/hooks/useTimeRemaining';
 import * as draftApi from '@/lib/draftApi';
 import { leaveDraft } from '@/lib/api/leagues';
 
@@ -32,6 +34,7 @@ import { useNotifOptIn } from '@/app/providers';
 import * as draftStore from '@/lib/draftStore';
 import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
 import { getDraftTokenLevel } from '@/lib/api/leagues';
+import { isFirebaseAvailable } from '@/lib/api/firebase';
 
 function DraftRoomContent() {
   const searchParams = useSearchParams();
@@ -98,6 +101,70 @@ function DraftRoomContent() {
   // Queue WS messages that arrive before engine initialization (instead of dropping them)
   // Messages are replayed after initializeFromServer completes — matches production behavior
   const pendingWsMessagesRef = useRef<Array<{type: string, payload: any}>>([]);
+
+  // ==================== FIREBASE RTDB: Real-time draft state ====================
+  // Replaces WebSocket for receiving timer updates, new picks, and draft state changes.
+  // Enabled when the engine has been initialized and we're in live mode.
+  const firebaseActive = isLiveMode && engineReady && !!draftId;
+  const firebaseRtdb = useRealTimeDraftInfo(draftId || null, firebaseActive);
+
+  // Wire Firebase RTDB data into the engine whenever it updates
+  useEffect(() => {
+    if (!firebaseActive || !firebaseRtdb.data) return;
+
+    const rtdb = firebaseRtdb.data;
+
+    // Apply slow-draft pickLength fix (same workaround as for WS timer_update)
+    let correctedPickEndTime = rtdb.pickEndTime;
+    if (speedParam === 'slow' && rtdb.pickLength > 0 && rtdb.pickLength < 3600) {
+      // Backend bug: pickLength is 480s instead of 28800s.
+      // pickEndTime = startOfTurn + pickLength, so we recalculate it.
+      const startOfTurn = rtdb.pickEndTime - rtdb.pickLength;
+      correctedPickEndTime = startOfTurn + 28800;
+    }
+
+    // Update engine state from Firebase
+    engine.setFirebaseState({
+      ...rtdb,
+      pickEndTime: correctedPickEndTime,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseActive, firebaseRtdb.data]);
+
+  // Process new picks detected by Firebase RTDB
+  useEffect(() => {
+    if (!firebaseActive || !firebaseRtdb.newPickDetected || !firebaseRtdb.detectedPick) return;
+
+    console.log('[Firebase] New pick detected:', firebaseRtdb.detectedPick.playerId, 'pick#', firebaseRtdb.detectedPick.pickNum);
+    engine.handleFirebaseNewPick(firebaseRtdb.detectedPick);
+    firebaseRtdb.clearNewPick();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseActive, firebaseRtdb.newPickDetected, firebaseRtdb.detectedPick]);
+
+  // Firebase-based timer: use useTimeRemaining with timestamps from RTDB
+  const firebaseEndOfTurn = firebaseRtdb.data?.pickEndTime ?? null;
+  const firebaseDraftStart = firebaseRtdb.data?.draftStartTime ?? null;
+  // Apply slow-draft correction to the timer input too
+  const correctedFirebaseEndOfTurn = (() => {
+    if (!firebaseRtdb.data || !firebaseEndOfTurn) return firebaseEndOfTurn;
+    if (speedParam === 'slow' && firebaseRtdb.data.pickLength > 0 && firebaseRtdb.data.pickLength < 3600) {
+      const startOfTurn = firebaseEndOfTurn - firebaseRtdb.data.pickLength;
+      return startOfTurn + 28800;
+    }
+    return firebaseEndOfTurn;
+  })();
+  const firebaseTimeRemaining = useTimeRemaining(
+    firebaseActive ? correctedFirebaseEndOfTurn : null,
+    firebaseActive ? firebaseDraftStart : null,
+  );
+
+  // Track last Firebase update for watchdog (replaces lastWsUpdateRef for Firebase mode)
+  const lastFirebaseUpdateRef = useRef<number>(Date.now());
+  useEffect(() => {
+    if (firebaseRtdb.data) {
+      lastFirebaseUpdateRef.current = Date.now();
+    }
+  }, [firebaseRtdb.data]);
 
   // ==================== LIVE MODE: Join draft if no draftId yet ====================
   const joinCalledRef = useRef(false);
@@ -715,13 +782,47 @@ function DraftRoomContent() {
       engine.draftPlayer(playerId);
       return;
     }
-    // In live mode, build payload and send via WebSocket
+    // In live mode, build payload and submit via REST API (replaces WebSocket pick_received)
     const pickPayload = engine.draftPlayer(playerId);
-    if (pickPayload) {
-      ws.sendPick(pickPayload);
+    if (pickPayload && draftId) {
+      draftApi.submitPickREST(draftId, walletParam, {
+        playerId: pickPayload.playerId,
+        displayName: pickPayload.displayName,
+        team: pickPayload.team,
+        position: pickPayload.position,
+      }).then(() => {
+        console.log('[REST] Pick submitted successfully:', pickPayload.playerId);
+      }).catch((err) => {
+        console.error('[REST] Pick submission failed:', err);
+        // If in airplane mode, handle stale player (same as old WS invalid_pick)
+        if (engine.airplaneMode && engine.isUserTurn) {
+          const msg = err?.message || '';
+          const match = msg.match(/already picked (\S+)/);
+          if (match) {
+            const staleId = match[1];
+            console.log('[Airplane] Removing stale player and retrying:', staleId);
+            engine.removeFromAvailable(staleId);
+            setTimeout(() => {
+              const nextPick = engine.getAutoPickPlayer();
+              if (nextPick && draftId) {
+                console.log('[Airplane] Retrying auto-pick with:', nextPick);
+                const retryPayload = engine.draftPlayer(nextPick);
+                if (retryPayload) {
+                  draftApi.submitPickREST(draftId, walletParam, {
+                    playerId: retryPayload.playerId,
+                    displayName: retryPayload.displayName,
+                    team: retryPayload.team,
+                    position: retryPayload.position,
+                  }).catch(e => console.error('[Airplane] Retry failed:', e));
+                }
+              }
+            }, 300);
+          }
+        }
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, engine.draftPlayer, engine.markManualPick]);
+  }, [isLiveMode, draftId, walletParam, engine.draftPlayer, engine.markManualPick]);
 
   const handleLiveQueueSync = useCallback((queue: typeof engine.queuedPlayers) => {
     if (!isLiveMode || !draftId || !walletParam) return;
@@ -741,10 +842,19 @@ function DraftRoomContent() {
   }, [isLiveMode, draftId, walletParam]);
 
   // WebSocket connection (only in live mode)
+  // WebSocket — normally DISABLED because Firebase RTDB handles real-time updates.
+  // Auto-enables as fallback if:
+  //   1. Firebase is not available (missing env vars)
+  //   2. Firebase had a connection/permission error
+  //   3. ?useWs=true URL param is set
+  const useWsParam = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('useWs') === 'true';
+  const firebaseConfigured = typeof window !== 'undefined' && isFirebaseAvailable();
+  const firebaseFailed = firebaseRtdb.hasError;
+  const wsEnabled = isLiveMode && (useWsParam || !firebaseConfigured || firebaseFailed);
   const ws = useDraftWebSocket({
     walletAddress: walletParam,
     draftName: draftId,
-    enabled: isLiveMode,  // Connect immediately — don't wait for REST fetch
+    enabled: wsEnabled,
     onCountdownUpdate: (payload) => {
       engine.handleCountdownUpdate(payload);
     },
@@ -863,9 +973,16 @@ function DraftRoomContent() {
       const pickId = engine.getAutoPickPlayer();
       if (!pickId) return;
       console.log('[Airplane] Auto-picking immediately:', pickId);
-      if (isLiveMode) {
+      if (isLiveMode && draftId) {
         const payload = engine.draftPlayer(pickId);
-        if (payload) ws.sendPick(payload);
+        if (payload) {
+          draftApi.submitPickREST(draftId, walletParam, {
+            playerId: payload.playerId,
+            displayName: payload.displayName,
+            team: payload.team,
+            position: payload.position,
+          }).catch(e => console.error('[Airplane] Auto-pick REST failed:', e));
+        }
       } else {
         engine.draftPlayer(pickId);
       }
@@ -876,8 +993,8 @@ function DraftRoomContent() {
   }, [engine.airplaneMode, engine.isUserTurn, phase, engine.draftStatus, engine.currentPickNumber]);
 
   // ==================== Cross-tab heartbeat: signal to other tabs that draft-room ====================
-  // has an active WS for this draft. The drafting page checks this to avoid opening
-  // a duplicate keepalive WS (dual connections confuse the Go server).
+  // has an active Firebase RTDB listener for this draft. The drafting page checks this
+  // to avoid opening a duplicate connection or running redundant REST polling.
   useEffect(() => {
     if (!isLiveMode || !draftId) return;
     const key = `draft-room-ws:${draftId}`;
@@ -962,7 +1079,7 @@ function DraftRoomContent() {
           roundNum: draftInfo.roundNum,
           pickInRound: draftInfo.pickInRound,
           draftOrder: draftInfo.draftOrder,
-          adp: draftInfo.adp.map(a => ({
+          adp: (draftInfo.adp || []).map(a => ({
             adp: a.adp,
             byeWeek: String(a.bye ?? a.byeWeek ?? ''),
             playerId: a.playerId,
@@ -1875,28 +1992,23 @@ function DraftRoomContent() {
     }
   }, [phase, engine.currentPickNumber]);
 
-  // ==================== FREEZE DETECTION (matches old system) ====================
-  // Increased threshold to 30s to avoid triggering unnecessary reconnects that cause
-  // state oscillation when Cloud Run has multiple instances.
-  // ==================== WS WATCHDOG: Detect stale connections & recover ====================
-  // Runs every 5 seconds during ANY live phase (filling, countdown, drafting).
-  // If no WS message received in 15s, force reconnect + re-fetch draft state.
-  // This catches: silent disconnects, half-open TCP, server crashes, network hiccups.
+  // ==================== FIREBASE WATCHDOG: Detect stale RTDB connections & recover ====================
+  // Runs every 10 seconds during live drafting phase.
+  // If no Firebase RTDB update in 30s, re-fetch draft state via REST to catch missed picks.
+  // Firebase automatically handles reconnection, so we only need to supplement with REST re-syncs.
   useEffect(() => {
     if (!isLiveMode || !draftId || engine.draftStatus === 'completed') return;
 
-    const STALE_THRESHOLD = 15_000; // 15 seconds without any WS message = stale
-    const CHECK_INTERVAL = 5_000;   // Check every 5 seconds
+    const STALE_THRESHOLD = 30_000; // 30 seconds without Firebase update = stale
+    const CHECK_INTERVAL = 10_000;  // Check every 10 seconds
 
     const interval = setInterval(() => {
-      const lastMsg = ws.lastMessageRef.current;
-      const elapsed = Date.now() - lastMsg;
+      const elapsed = Date.now() - lastFirebaseUpdateRef.current;
 
       if (elapsed > STALE_THRESHOLD) {
-        console.warn(`[Watchdog] No WS message in ${Math.round(elapsed / 1000)}s — forcing reconnect`);
-        ws.forceReconnect();
+        console.warn(`[Watchdog] No Firebase RTDB update in ${Math.round(elapsed / 1000)}s — re-syncing from REST`);
 
-        // Also re-fetch draft state via REST to catch any missed picks
+        // Re-fetch draft state via REST to catch any missed picks
         if (liveInitializedRef.current) {
           draftApi.getDraftSummary(draftId).then(summary => {
             const summaryArr = Array.isArray(summary) ? summary : (summary as any).summary || [];
@@ -1905,7 +2017,31 @@ function DraftRoomContent() {
               console.log(`[Watchdog] Re-synced ${summaryArr.filter((s: any) => s.playerInfo?.playerId).length} picks from REST`);
             }
           }).catch(() => {});
+
+          // Also re-fetch draft info for current drafter/pick state
+          draftApi.getDraftInfo(draftId).then(info => {
+            engine.handleDraftInfoUpdate({
+              draftId: info.draftId,
+              displayName: info.displayName,
+              draftStartTime: info.draftStartTime,
+              pickLength: info.pickLength,
+              currentDrafter: info.currentDrafter,
+              pickNumber: info.pickNumber,
+              roundNum: info.roundNum,
+              pickInRound: info.pickInRound,
+              draftOrder: info.draftOrder,
+              adp: info.adp.map(a => ({
+                adp: a.adp,
+                byeWeek: String(a.bye ?? a.byeWeek ?? ''),
+                playerId: a.playerId,
+              })),
+            });
+            console.log(`[Watchdog] Re-synced draft info: pick ${info.pickNumber}, drafter ${info.currentDrafter.slice(0, 8)}...`);
+          }).catch(() => {});
         }
+
+        // Reset the timer so we don't spam REST calls
+        lastFirebaseUpdateRef.current = Date.now();
       }
     }, CHECK_INTERVAL);
 
@@ -2153,11 +2289,11 @@ function DraftRoomContent() {
         </div>
       )}
 
-      {/* Live mode connection indicator */}
+      {/* Live mode connection indicator — shows Firebase RTDB listener status (or WS if fallback) */}
       {isLiveMode && (phase === 'drafting' || phase === 'loading' || phase === 'filling') && (
         <div className="absolute top-16 right-4 z-20 flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${ws.isConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
-          <span className="text-xs text-white/40">{ws.isConnected ? 'Connected' : 'Reconnecting...'}</span>
+          <span className={`w-2 h-2 rounded-full ${firebaseRtdb.isListening || ws.isConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+          <span className="text-xs text-white/40">{firebaseRtdb.isListening ? 'Live' : ws.isConnected ? 'WS' : 'Connecting...'}</span>
         </div>
       )}
 

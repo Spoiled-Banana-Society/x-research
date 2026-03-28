@@ -217,3 +217,66 @@ export async function leaveDraft(
     body: JSON.stringify({ ownerId, tokenId }),
   });
 }
+
+// ==================== DRAFT ACTIONS (Firebase RTDB + Cloud Tasks migration) ====================
+
+export interface DraftPreferences {
+  sortBy: string;
+  autoDraft: boolean;
+  numPicksMissedConsecutive: number;
+}
+
+/**
+ * Get user's draft preferences (auto-draft setting, sort order, missed picks count).
+ */
+export async function getDraftPreferences(
+  draftId: string,
+  walletAddress: string,
+): Promise<DraftPreferences> {
+  return apiFetch<DraftPreferences>(
+    `/draft-actions/${draftId}/owner/${walletAddress}/preferences`,
+  );
+}
+
+/**
+ * Update user's auto-draft preference.
+ */
+export async function patchDraftPreferences(
+  draftId: string,
+  walletAddress: string,
+  autoDraft: boolean,
+): Promise<DraftPreferences> {
+  return apiFetch<DraftPreferences>(
+    `/draft-actions/${draftId}/owner/${walletAddress}/preferences`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoDraft }),
+    },
+  );
+}
+
+/**
+ * Submit a pick via REST API (replaces WebSocket pick_received message).
+ * The backend processes the pick, updates Firebase RTDB, and schedules
+ * auto-draft via Cloud Tasks.
+ */
+export async function submitPickREST(
+  draftId: string,
+  walletAddress: string,
+  pick: {
+    playerId: string;
+    displayName: string;
+    team: string;
+    position: string;
+  },
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `/draft-actions/${draftId}/owner/${walletAddress}/actions/pick`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pick),
+    },
+  );
+}
