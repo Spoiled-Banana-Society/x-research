@@ -671,9 +671,23 @@ function DraftRoomContent() {
           console.log('[Draft Room] Special draft: league exists but no draft state yet. Triggering fill-bots and entering filling phase...');
           const stagingBase = getStagingApiUrl();
           if (stagingBase) {
-            // Fire fill-bots in background — don't block
+            // Fire fill-bots + sync Firestore queue in background
             fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' })
-              .then(() => console.log('[Draft Room] Fill-bots triggered for', draftId))
+              .then(() => {
+                console.log('[Draft Room] Fill-bots triggered for', draftId);
+                // Sync Firestore queue: add bot members + set status to drafting
+                const queueType = specialTypeParam || 'jackpot';
+                const qRoundId = searchParams?.get('queueRoundId') || '1';
+                fetch('/api/queues/update-status', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ queueType, roundId: parseInt(qRoundId), status: 'drafting' }),
+                }).catch(() => {});
+                // Add bot members to Firestore queue so other pages show 10/10
+                fetch('/api/queues/fill-bots', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ queueType, roundId: parseInt(qRoundId), botCount: 9 }),
+                }).catch(() => {});
+              })
               .catch(e => console.warn('[Draft Room] Fill-bots failed:', e));
           }
           // Show filling UI immediately at 1/10
