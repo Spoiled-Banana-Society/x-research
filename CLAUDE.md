@@ -984,6 +984,21 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 - `/draft-actions/` endpoints live and working
 - Cloud Tasks queue created, env vars set
 
+## ISSUE: /staging/ routes missing from new API (Boris 2026-03-27)
+
+The `playoff-scripts` branch doesn't have the `/staging/fill-bots` and `/staging/create-special-draft` routes. These were on the OLD main branch and are needed for testing.
+
+**What we need Boris to do:**
+1. Add the staging routes back to the `playoff-scripts` branch (or create a new branch that has both)
+2. OR: Tell us how to create a 10-player draft and trigger `CreateLeagueDraftStateUponFilling` with the new code
+3. The key routes we need:
+   - `POST /staging/fill-bots/{speed}?count=N&leagueId=X` — adds N bots to a draft
+   - `POST /staging/create-special-draft` — creates a jackpot/hof draft with specific wallets
+
+Without these, we can't test the full draft flow (filling → drafting → picks → completion).
+
+**Firebase RTDB credentials are now working** (no more PERMISSION_DENIED). Just need a way to create test drafts.
+
 ## ACTION NEEDED FROM BORIS (2026-03-27) — Firebase RTDB Credentials for Vercel
 
 ### What happened
