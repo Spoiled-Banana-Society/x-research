@@ -1104,9 +1104,25 @@ Also write the initial `realTimeDraftInfo` in `CreateLeagueDraftStateUponFilling
 
 **Item 4 — Vercel env vars: Done.** All 7 vars set for Production. Redeploy triggered. If still not working, check browser console on the deployed site.
 
-### Priority:
-- Item 3: Boris needs to set RTDB rules manually in Firebase Console
-- Items 1, 2: Code is already there — Richard should check Cloud Run logs to see what's actually failing
+### Richard's retest (2026-03-27): fill-bots STILL not creating state
+
+**Proof:**
+- Created `2024-fast-draft-30`: mint → join → fill-bots (9 bots added, confirmed `botsAdded: 9`)
+- Waited 10s → `GET /draft/2024-fast-draft-30/state/info` → **500 NotFound**
+- Old draft `2024-fast-draft-22` (from old API branch) works perfectly: 10 players, pick 150
+
+**Boris — please check Cloud Run logs for `2024-fast-draft-30`:**
+```bash
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=sbs-drafts-api-staging AND textPayload:2024-fast-draft-30" --project=sbs-staging-env --limit=50 --format="table(timestamp,textPayload)"
+```
+
+**Specifically look for:**
+1. Does `AddCardToLeague` get called for each bot?
+2. Does `NumPlayers` reach 10?
+3. Does `CreateLeagueDraftStateUponFilling` fire?
+4. Any errors/panics in that function?
+
+The `fill-bots` endpoint returns `botsAdded: 9` but the league's `state/info` document never gets created. Something is silently failing between "bot added" and "draft state initialized".
 
 ## RESOLVED: /staging/ routes model updates (2026-03-27) ✅
 Boris fixed staging.go compilation errors and redeployed. fill-bots and create-special-draft routes working.
