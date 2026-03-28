@@ -8,12 +8,9 @@ const STAGING_API_URL = 'https://sbs-drafts-api-staging-652484219017.us-central1
 /**
  * POST /api/queues/create-draft
  *
- * Creates a Go API draft for a special draft queue round that doesn't have one yet.
- * Steps:
- * 1. Mint a token for the user (idempotent)
- * 2. Call /staging/create-special-draft on the Go API
- * 3. Update the Firestore queue round with the returned draftId
- * 4. Return { draftId } to the client
+ * Creates a Go API draft for a special draft queue round.
+ * Uses JoinLeagues (which mints + joins properly) instead of create-special-draft.
+ * Then fills with bots and updates the queue.
  */
 export async function POST(req: Request) {
   try {
@@ -26,38 +23,44 @@ export async function POST(req: Request) {
       return jsonError('Invalid queue type', 400);
     }
 
-    // 1. Mint a token for the wallet (may already exist — ignore errors)
-    const mintId = 40000 + Math.floor(Math.random() * 10000);
+    // 1. Mint a token (may already exist — ignore errors)
+    const mintId = 100000 + Math.floor(Math.random() * 50000);
     await fetch(`${STAGING_API_URL}/owner/${userId}/draftToken/mint`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ minId: mintId, maxId: mintId }),
     }).catch(() => {});
 
-    // 2. Create the special draft via Go API
-    const typeForApi = queueType === 'hof' ? 'hof' : 'jackpot';
-    const createRes = await fetch(`${STAGING_API_URL}/staging/create-special-draft`, {
+    // 2. Join a slow league via JoinLeagues — this properly creates token + adds to league
+    const joinRes = await fetch(`${STAGING_API_URL}/league/slow/owner/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: typeForApi, wallets: [userId] }),
+      body: JSON.stringify({ numLeaguesToJoin: 1 }),
     });
 
-    if (!createRes.ok) {
-      const errText = await createRes.text().catch(() => '');
-      throw new ApiError(500, `Failed to create special draft: ${errText}`);
+    if (!joinRes.ok) {
+      const errText = await joinRes.text().catch(() => '');
+      throw new ApiError(500, `Failed to join league: ${errText}`);
     }
 
-    const createData = await createRes.json().catch(() => ({}));
-    const draftId = createData.draftId || createData.leagueId || '';
+    const joinData = await joinRes.json().catch(() => []);
+    const draftId = Array.isArray(joinData) && joinData.length > 0
+      ? joinData[0]._leagueId || joinData[0].leagueId || ''
+      : '';
 
     if (!draftId) {
-      throw new ApiError(500, 'No draftId returned from create-special-draft');
+      throw new ApiError(500, 'No draftId returned from JoinLeagues');
     }
 
     // 3. Update the queue round in Firestore with the draftId
     await updateQueueRoundDraftId(queueType, roundId, String(draftId));
 
-    // 4. Return the draftId to the client
+    // 4. Fill with 9 bots in background (don't block the response)
+    fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, {
+      method: 'POST',
+    }).catch(() => {});
+
+    // 5. Return the draftId to the client
     return json({ draftId: String(draftId) }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
