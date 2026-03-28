@@ -998,34 +998,61 @@ staging/staging.go:617  unknown field BatchJackpotHit
 staging/staging.go:618  unknown field BatchHofHitCount
 ```
 
-**Richard — the staging.go needs to be updated to use the new model API from playoff-scripts.** You know both codebases better. The source is at `~/sbs-drafts-api-deploy/staging/staging.go`. Key things to fix:
-1. `token.PassType` — what's the new field name?
-2. `token.UpdateInUseDraftTokenInDatabase()` — what's the replacement?
-3. `models.JoinLeagues` — signature changed (4 args → 3 args)
-4. `models.DraftLeagueTracker` — `BatchStart`, `BatchJackpotHit`, `BatchHofHitCount` fields removed/renamed
+**Richard's Claude analyzed both codebases. Here are the exact fixes for Boris:**
 
-Deploy once fixed: `gcloud run deploy sbs-drafts-api-staging --source ~/sbs-drafts-api-deploy --region us-central1 --project sbs-staging-env`
+In `~/sbs-drafts-api-deploy/staging/staging.go`:
 
-<<<<<<< HEAD
+### Fix 1: `token.PassType` → `token.DraftType`
+```go
+// OLD: token.PassType
+// NEW: token.DraftType
+```
+
+### Fix 2: `token.UpdateInUseDraftTokenInDatabase()` → lowercase + add draftId param
+```go
+// OLD: token.UpdateInUseDraftTokenInDatabase()
+// NEW: token.updateInUseDraftTokenInDatabase(draftId)
+// NOTE: lowercase 'u' — it's a private method now, must be called from within models package
+// If staging.go is in a SEPARATE package, you need to either:
+//   a) Move the staging code into the models package, OR
+//   b) Export the method by capitalizing it in draft-token.go (add: func (t *DraftToken) UpdateInUseDraftTokenInDatabase(draftId string) error { return t.updateInUseDraftTokenInDatabase(draftId) })
+```
+
+### Fix 3: `models.JoinLeagues` — remove speed param
+```go
+// OLD: models.JoinLeagues(ownerId, numLeaguesToJoin, speedType, draftType)
+// NEW: models.JoinLeagues(ownerId, numLeaguesToJoin, draftType)
+// Just remove the speedType argument
+```
+
+### Fix 4: `models.DraftLeagueTracker` — remove batch fields
+```go
+// OLD struct fields that no longer exist:
+//   BatchStart, BatchJackpotHit, BatchHofHitCount
+
+// NEW struct fields available:
+//   CurrentLiveDraftCount int
+//   CurrentSlowDraftCount int (json: currentScheduledDraftCount)
+//   FilledLeaguesCount int
+//   HofLeagueIds []int
+//   JackpotLeagueIds []int
+
+// If staging.go creates a DraftLeagueTracker, just remove the batch fields from the struct literal
+```
+
+**After fixing, deploy:**
+```bash
+cd ~/sbs-drafts-api-deploy
+gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
+```
+
+**Verify:**
+```bash
+curl -s -X POST "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/staging/fill-bots/fast?count=1&leagueId=test"
+# Should NOT return 404
+```
+
 ## DONE: Firebase RTDB Credentials for Vercel (Boris, 2026-03-27) ✅
-=======
-## ISSUE: /staging/ routes missing from new API (Boris 2026-03-27)
-
-The `playoff-scripts` branch doesn't have the `/staging/fill-bots` and `/staging/create-special-draft` routes. These were on the OLD main branch and are needed for testing.
-
-**What we need Boris to do:**
-1. Add the staging routes back to the `playoff-scripts` branch (or create a new branch that has both)
-2. OR: Tell us how to create a 10-player draft and trigger `CreateLeagueDraftStateUponFilling` with the new code
-3. The key routes we need:
-   - `POST /staging/fill-bots/{speed}?count=N&leagueId=X` — adds N bots to a draft
-   - `POST /staging/create-special-draft` — creates a jackpot/hof draft with specific wallets
-
-Without these, we can't test the full draft flow (filling → drafting → picks → completion).
-
-**Firebase RTDB credentials are now working** (no more PERMISSION_DENIED). Just need a way to create test drafts.
-
-## ACTION NEEDED FROM BORIS (2026-03-27) — Firebase RTDB Credentials for Vercel
->>>>>>> origin/richard
 
 ### What happened
 Richard's Claude completed the full Firebase RTDB migration — WebSocket replaced with Firebase Realtime DB for draft updates. Everything works, BUT the staging Vercel site (`banana-fantasy-sbs.vercel.app`) uses **prod Firebase credentials** while trying to read the **staging RTDB** (`sbs-staging-env-default-rtdb`). Different Firebase projects = `permission_denied`. The code auto-falls back to WebSocket, but we want Firebase RTDB to work properly.
