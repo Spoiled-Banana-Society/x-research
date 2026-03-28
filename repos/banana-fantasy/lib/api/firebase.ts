@@ -26,7 +26,7 @@ export interface FirebaseConfig {
   measurementId?: string;
 }
 
-function getFirebaseConfigFromEnv(): FirebaseConfig {
+function getFirebaseConfigFromEnv(): FirebaseConfig | null {
   const cfg: FirebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
     authDomain: process.env.NEXT_PUBLIC_AUTH_DOMAIN || '',
@@ -39,10 +39,13 @@ function getFirebaseConfigFromEnv(): FirebaseConfig {
   };
 
   if (!cfg.apiKey || !cfg.databaseURL || !cfg.projectId) {
-    // Avoid throwing at import time; only throw when used.
-    throw new Error(
-      'Missing Firebase env vars. Ensure NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_DATABASE_URL, NEXT_PUBLIC_PROJECT_ID are set.',
+    // Return null instead of throwing — callers must handle gracefully.
+    // This prevents the error boundary from crashing the entire draft room
+    // when Firebase env vars are missing.
+    console.warn(
+      '[firebase] Missing Firebase env vars (NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_DATABASE_URL, NEXT_PUBLIC_PROJECT_ID). Firebase RTDB disabled.',
     );
+    return null;
   }
 
   return cfg;
@@ -50,11 +53,28 @@ function getFirebaseConfigFromEnv(): FirebaseConfig {
 
 let _app: FirebaseApp | null = null;
 let _db: Database | null = null;
+let _disabled = false;
 
 /**
- * Get (or init) the Firebase app.
+ * Whether Firebase RTDB is available (env vars configured).
  */
-export function getFirebaseApp(): FirebaseApp {
+export function isFirebaseAvailable(): boolean {
+  if (_disabled) return false;
+  if (_app) return true;
+  // Check without initializing — just see if config is valid
+  const cfg = getFirebaseConfigFromEnv();
+  if (!cfg) {
+    _disabled = true;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Get (or init) the Firebase app. Returns null if Firebase is not configured.
+ */
+export function getFirebaseApp(): FirebaseApp | null {
+  if (_disabled) return null;
   if (_app) return _app;
 
   if (getApps().length) {
@@ -63,16 +83,21 @@ export function getFirebaseApp(): FirebaseApp {
   }
 
   const cfg = getFirebaseConfigFromEnv();
+  if (!cfg) {
+    _disabled = true;
+    return null;
+  }
   _app = initializeApp(cfg);
   return _app;
 }
 
 /**
- * Get (or init) the Firebase Realtime Database.
+ * Get (or init) the Firebase Realtime Database. Returns null if Firebase is not configured.
  */
-export function getFirebaseDatabase(): Database {
+export function getFirebaseDatabase(): Database | null {
   if (_db) return _db;
   const app = getFirebaseApp();
+  if (!app) return null;
   _db = getDatabase(app);
   return _db;
 }
@@ -80,10 +105,21 @@ export function getFirebaseDatabase(): Database {
 /**
  * Subscribe to a Firebase path.
  *
- * @returns an unsubscribe function.
+ * @param path - Firebase RTDB path to subscribe to
+ * @param cb - Callback invoked with the value (or null if path doesn't exist)
+ * @param onError - Optional error callback (e.g., permission_denied)
+ * @returns an unsubscribe function (no-op if Firebase is not configured).
  */
-export function subscribeValue<T = unknown>(path: string, cb: (value: T | null) => void): Unsubscribe {
+export function subscribeValue<T = unknown>(
+  path: string,
+  cb: (value: T | null) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
   const db = getFirebaseDatabase();
+  if (!db) {
+    console.warn('[firebase] subscribeValue skipped — Firebase not configured');
+    return () => {}; // no-op unsubscribe
+  }
   const r = ref(db, path);
 
   const unsub = onValue(
@@ -92,8 +128,8 @@ export function subscribeValue<T = unknown>(path: string, cb: (value: T | null) 
       cb(snapshot.exists() ? (snapshot.val() as T) : null);
     },
     (error) => {
-      // Consumers should handle errors via their own UI state.
       console.error('[firebase] subscribeValue error', error);
+      if (onError) onError(error);
     },
   );
 

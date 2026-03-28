@@ -34,6 +34,7 @@ import { useNotifOptIn } from '@/app/providers';
 import * as draftStore from '@/lib/draftStore';
 import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
 import { getDraftTokenLevel } from '@/lib/api/leagues';
+import { isFirebaseAvailable } from '@/lib/api/firebase';
 
 function DraftRoomContent() {
   const searchParams = useSearchParams();
@@ -841,14 +842,19 @@ function DraftRoomContent() {
   }, [isLiveMode, draftId, walletParam]);
 
   // WebSocket connection (only in live mode)
-  // WebSocket connection — DISABLED: Firebase RTDB + REST API now handle all real-time
-  // communication. WS hook is kept instantiated (enabled: false) for backward compatibility
-  // in case we need to fall back. Can be re-enabled with ?useWs=true URL param.
+  // WebSocket — normally DISABLED because Firebase RTDB handles real-time updates.
+  // Auto-enables as fallback if:
+  //   1. Firebase is not available (missing env vars)
+  //   2. Firebase had a connection/permission error
+  //   3. ?useWs=true URL param is set
   const useWsParam = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('useWs') === 'true';
+  const firebaseConfigured = typeof window !== 'undefined' && isFirebaseAvailable();
+  const firebaseFailed = firebaseRtdb.hasError;
+  const wsEnabled = isLiveMode && (useWsParam || !firebaseConfigured || firebaseFailed);
   const ws = useDraftWebSocket({
     walletAddress: walletParam,
     draftName: draftId,
-    enabled: isLiveMode && useWsParam,  // Disabled by default — Firebase RTDB replaces WS
+    enabled: wsEnabled,
     onCountdownUpdate: (payload) => {
       engine.handleCountdownUpdate(payload);
     },
@@ -1073,7 +1079,7 @@ function DraftRoomContent() {
           roundNum: draftInfo.roundNum,
           pickInRound: draftInfo.pickInRound,
           draftOrder: draftInfo.draftOrder,
-          adp: draftInfo.adp.map(a => ({
+          adp: (draftInfo.adp || []).map(a => ({
             adp: a.adp,
             byeWeek: String(a.bye ?? a.byeWeek ?? ''),
             playerId: a.playerId,

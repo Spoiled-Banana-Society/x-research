@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { subscribeValue } from '@/lib/api/firebase';
+import { subscribeValue, isFirebaseAvailable } from '@/lib/api/firebase';
 
 // ==================== TYPES ====================
 
@@ -39,6 +39,8 @@ export interface UseRealTimeDraftInfoReturn {
   clearNewPick: () => void;
   /** Whether the listener is active */
   isListening: boolean;
+  /** Whether Firebase had a connection/permission error (signals need for WS fallback) */
+  hasError: boolean;
 }
 
 /**
@@ -58,6 +60,7 @@ export function useRealTimeDraftInfo(
   const [newPickDetected, setNewPickDetected] = useState(false);
   const [detectedPick, setDetectedPick] = useState<LastPickInfo | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const lastPickNumberRef = useRef<number | null>(null);
 
@@ -73,47 +76,84 @@ export function useRealTimeDraftInfo(
       return;
     }
 
+    // Skip if Firebase is not configured (missing env vars)
+    if (!isFirebaseAvailable()) {
+      console.warn('[Firebase RTDB] Firebase not available — env vars missing. Skipping subscription.');
+      setIsListening(false);
+      setHasError(true); // Signal callers to use fallback
+      return;
+    }
+
     const path = `drafts/${draftId}/realTimeDraftInfo`;
     console.log('[Firebase RTDB] Subscribing to', path);
     setIsListening(true);
+    setHasError(false);
 
-    const unsub = subscribeValue<RealTimeDraftInfo>(path, (value) => {
-      if (!value) {
-        console.warn(`[Firebase RTDB] No data at ${path}`);
-        return;
+    // Set up a timeout: if we don't receive any data within 15s,
+    // mark as error so the page can fall back to WebSocket.
+    const timeoutId = setTimeout(() => {
+      if (!data) {
+        console.warn('[Firebase RTDB] No data received within 15s — marking as error for WS fallback');
+        setHasError(true);
       }
+    }, 15000);
 
-      setData(value);
+    const unsub = subscribeValue<RealTimeDraftInfo>(
+      path,
+      (value) => {
+        clearTimeout(timeoutId);
 
-      // Detect new picks by comparing pickNumber
-      if (value.pickNumber > 1 && value.lastPick) {
-        const currentPickNum = value.pickNumber;
-        if (
-          lastPickNumberRef.current === null ||
-          currentPickNum > lastPickNumberRef.current
-        ) {
-          console.log(
-            '[Firebase RTDB] New pick detected: pickNumber',
-            currentPickNum,
-            'player',
-            value.lastPick.playerId,
-          );
-          setNewPickDetected(true);
-          setDetectedPick(value.lastPick);
-          lastPickNumberRef.current = currentPickNum;
+        if (!value) {
+          console.warn(`[Firebase RTDB] No data at ${path}`);
+          // If we get a null value on first callback, this often means the path doesn't exist
+          // or we don't have permission. Signal error for WS fallback.
+          setHasError(true);
+          return;
         }
-      } else {
-        // Initialize tracking
-        lastPickNumberRef.current = value.pickNumber;
-      }
-    });
+
+        // Data received successfully — clear any error state
+        setHasError(false);
+        setData(value);
+
+        // Detect new picks by comparing pickNumber
+        if (value.pickNumber > 1 && value.lastPick) {
+          const currentPickNum = value.pickNumber;
+          if (
+            lastPickNumberRef.current === null ||
+            currentPickNum > lastPickNumberRef.current
+          ) {
+            console.log(
+              '[Firebase RTDB] New pick detected: pickNumber',
+              currentPickNum,
+              'player',
+              value.lastPick.playerId,
+            );
+            setNewPickDetected(true);
+            setDetectedPick(value.lastPick);
+            lastPickNumberRef.current = currentPickNum;
+          }
+        } else {
+          // Initialize tracking
+          lastPickNumberRef.current = value.pickNumber;
+        }
+      },
+      (error) => {
+        // Firebase permission_denied or other errors — signal WS fallback
+        clearTimeout(timeoutId);
+        console.error('[Firebase RTDB] Subscription error:', error.message);
+        setHasError(true);
+        setIsListening(false);
+      },
+    );
 
     return () => {
+      clearTimeout(timeoutId);
       console.log('[Firebase RTDB] Unsubscribing from', path);
       unsub();
       setIsListening(false);
       lastPickNumberRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, isActive]);
 
   return {
@@ -122,5 +162,6 @@ export function useRealTimeDraftInfo(
     detectedPick,
     clearNewPick,
     isListening,
+    hasError,
   };
 }
