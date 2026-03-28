@@ -984,13 +984,136 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 - `/draft-actions/` endpoints live and working
 - Cloud Tasks queue created, env vars set
 - Firebase RTDB staging credentials set on Vercel
+- `/staging/fill-bots` and `/staging/create-special-draft` routes restored ✅
 
-## DONE: /staging/ routes fixed and deployed (2026-03-27) ✅
+## BORIS RESPONSE TO 4 BACKEND ITEMS (2026-03-27)
 
-Applied Richard's fixes, added exported wrapper for `UpdateInUseDraftTokenInDatabase`, removed `PassType` refs and batch fields. Both `/draft-actions/` and `/staging/` endpoints verified working.
+Richard's Claude ran exhaustive headless Chrome testing. **Frontend code is solid — all issues are backend/infrastructure.** Cloud Tasks auto-pick IS working (bots advanced picks during testing), confirming the draft engine works. Here's what's needed:
+
+### Item 1: `fill-bots` doesn't trigger draft state creation (CRITICAL)
+**Problem:** `POST /staging/fill-bots/{speed}` adds bot entries but does NOT update `CurrentUsers` array or `NumPlayers` in the Firestore league document. So `CreateLeagueDraftStateUponFilling` never fires and `GET /draft/{id}/state/info` returns 500 "not found".
+
+**Fix:** In the `fill-bots` handler, after adding each bot, update the league document's `CurrentUsers` array and `NumPlayers` count. When `NumPlayers` reaches 10, call `CreateLeagueDraftStateUponFilling(draftId)`.
+
+**Verify:** After running fill-bots to 10/10:
+```bash
+curl -s "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft/{draftId}/state/info"
+# Should return JSON with draftOrder, pickNumber, etc. — NOT 500 error
+```
+
+### Item 2: Backend doesn't write `realTimeDraftInfo` to Firebase RTDB (CRITICAL)
+**Problem:** The Go API only writes `numPlayers` to Firebase RTDB at `drafts/{draftId}/numPlayers`. It does NOT write the full `realTimeDraftInfo` object that the new timer system reads from. The dev's `new-timer-changes` branch frontend expects data at `drafts/{draftId}/realTimeDraftInfo`.
+
+**What needs to be written to RTDB** (at `drafts/{draftId}/realTimeDraftInfo`):
+```json
+{
+  "currentDrafter": "0xwallet...",
+  "currentPickNumber": 1,
+  "currentRound": 1,
+  "pickInRound": 1,
+  "pickEndTime": 1711000000,        // Unix seconds — when this pick expires
+  "pickLength": 30,                  // 30 for fast, 28800 for slow
+  "draftStartTime": 1710999970,     // Unix seconds — when draft started
+  "lastPick": {                      // Most recent pick info
+    "playerId": "KC-RB1",
+    "displayName": "KC-RB1",
+    "team": "KC",
+    "position": "RB",
+    "ownerAddress": "0xwallet...",
+    "pickNum": 1,
+    "round": 1
+  },
+  "isDraftComplete": false,
+  "isDraftClosed": false
+}
+```
+
+**Where to add this:** In `models/draft-actions.go`, inside `ProcessNewPick()`, after updating Firestore state, also write to Firebase RTDB:
+```go
+// After updating DraftInfo in Firestore, write to RTDB
+rtdbRef := fmt.Sprintf("drafts/%s/realTimeDraftInfo", draftId)
+rtdbData := map[string]interface{}{
+    "currentDrafter":    nextDrafter,
+    "currentPickNumber": newPickNumber,
+    "currentRound":      newRound,
+    "pickInRound":       newPickInRound,
+    "pickEndTime":       newPickEndTime,
+    "pickLength":        pickLength,
+    "draftStartTime":    draftStartTime,
+    "lastPick": map[string]interface{}{
+        "playerId":     pickedPlayer.PlayerId,
+        "displayName":  pickedPlayer.DisplayName,
+        "team":         pickedPlayer.Team,
+        "position":     pickedPlayer.Position,
+        "ownerAddress": pickerWallet,
+        "pickNum":      pickNumber,
+        "round":        round,
+    },
+    "isDraftComplete": isDraftComplete,
+    "isDraftClosed":   false,
+}
+// Write to Firebase RTDB using the existing database helper
+```
+
+Also write the initial `realTimeDraftInfo` in `CreateLeagueDraftStateUponFilling()` when the draft first starts.
+
+### Item 3: Firebase RTDB security rules need updating
+**Problem:** Client reads at `drafts/{draftId}/realTimeDraftInfo` get `permission_denied`.
+
+**Fix:** In Firebase Console → sbs-staging-env → Realtime Database → Rules:
+```json
+{
+  "rules": {
+    "drafts": {
+      "$draftId": {
+        "realTimeDraftInfo": {
+          ".read": true,
+          ".write": false
+        },
+        "numPlayers": {
+          ".read": true,
+          ".write": false
+        }
+      }
+    }
+  }
+}
+```
+
+### Item 4: Firebase env vars not reaching Vercel build
+**Problem:** Boris set the env vars on Vercel but they're not showing up in the deployed build. The frontend logs "Firebase env vars not configured" and falls back to WS.
+
+**Possible causes:**
+- Vars were set for "Preview" but not "Production" (or vice versa)
+- Vars need `NEXT_PUBLIC_` prefix to be available in client-side code
+- Vercel needs a redeploy AFTER setting the vars
+
+**Fix:** In Vercel dashboard → banana-fantasy → Settings → Environment Variables:
+1. Confirm ALL 7 vars exist with `NEXT_PUBLIC_` prefix
+2. Confirm they're set for **Production** environment (not just Preview)
+3. Trigger redeploy: `curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH"`
+4. Wait 90s, then check browser console on the site for "Firebase env vars not configured" — should be gone
+
+### Boris's findings (2026-03-27):
+
+**Item 1 — fill-bots DOES update CurrentUsers/NumPlayers.** Checked `models/leagues.go`: `AddCardToLeague()` (line 229) appends to `CurrentUsers`, increments `NumPlayers`, and at line 259 calls `CreateLeagueDraftStateUponFilling` when `NumPlayers == 10`. If it's not working for you, the issue might be in how the league document is being read/written, not in the fill-bots logic itself. Check Cloud Run logs after running fill-bots to see if `CreateLeagueDraftStateUponFilling` errors.
+
+**Item 2 — RTDB writes ALREADY EXIST in playoff-scripts.** `models/draft-actions.go` line 31-42 reads/writes `realTimeDraftInfo` to RTDB. `ProcessNewPick()` at line 67 calls `GetRealTimeDraftInfoForDraft()` which reads from RTDB. The `playoff-scripts` branch already has RTDB integration — this might just need `CreateLeagueDraftStateUponFilling` to write the initial `realTimeDraftInfo` (check if it does).
+
+**Item 3 — RTDB rules: Boris needs to do this manually.** No programmatic access from CLI. Boris: go to Firebase Console → sbs-staging-env → Realtime Database → Rules and set the rules from Richard's instructions above.
+
+**Item 4 — Vercel env vars: Done.** All 7 vars set for Production. Redeploy triggered. If still not working, check browser console on the deployed site.
+
+### Priority:
+- Item 3: Boris needs to set RTDB rules manually in Firebase Console
+- Items 1, 2: Code is already there — Richard should check Cloud Run logs to see what's actually failing
+
+## RESOLVED: /staging/ routes model updates (2026-03-27) ✅
+Boris fixed staging.go compilation errors and redeployed. fill-bots and create-special-draft routes working.
+
+## DONE: Firebase RTDB Credentials for Vercel (Boris, 2026-03-27) ✅
 
 ## ARCHIVED: /staging/ routes model update details (2026-03-27)
-
 Boris cloned the actual repo (`playoff-scripts` branch) and tried adding the old `/staging/` package from the `main` branch. Build fails because `staging.go` references old model fields/methods that were refactored in `playoff-scripts`:
 
 ```
