@@ -1253,6 +1253,19 @@ All 7 staging Firebase env vars set on Vercel Production:
 - `NEXT_PUBLIC_APP_ID=1:652484219017:web:3763f82d12169f0e177658`
 Redeploy triggered. Richard — verify Firebase RTDB works on staging.
 
+## BUG: /staging/create-special-draft doesn't work (2026-03-28)
+
+**Problem:** `POST /staging/create-special-draft` returns `numPlayers: 0` even after minting tokens. It can't find available tokens for the wallet. Confirmed by testing — minting token 90001 succeeds, but create-special-draft immediately after returns 0 players.
+
+**Root cause (likely):** `create-special-draft` looks for tokens with `_leagueId: ""` (unused). But newly minted tokens may have a different initial state, or previously minted tokens already got used in other drafts.
+
+**Richard's workaround (deployed):** The frontend `create-draft` API now uses `POST /league/slow/owner/{wallet}` (`JoinLeagues`) instead. This properly mints a new token AND adds the user to a league. Then fills with bots via `fill-bots`.
+
+**Boris — please fix `create-special-draft` in the Go API** so it works reliably:
+1. Check `models/draft-token.go` — how does `create-special-draft` find available tokens?
+2. The `JoinLeagues` function works fine for the same wallet — what's different?
+3. Maybe `create-special-draft` needs to mint a token itself (like `JoinLeagues` does) instead of relying on pre-minted ones
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
