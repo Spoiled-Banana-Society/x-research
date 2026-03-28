@@ -26,12 +26,128 @@ import type { DraftQueue } from '@/types';
 
 type Draft = DraftState;
 
+function SpecialDraftRow({ item, walletAddress, userId }: {
+  item: { type: string; round: any; color: string; label: string };
+  walletAddress?: string | null;
+  userId?: string;
+}) {
+  const [creating, setCreating] = useState(false);
+  const r = item.round;
+  const canEnter = !!r.draftId;
+  const accentColor = item.color;
+  const isFilling = r.status === 'filling';
+  const isLive = r.status === 'ready' || r.status === 'drafting';
+
+  async function handleEnter(e?: React.MouseEvent) {
+    if (e) e.stopPropagation();
+
+    if (canEnter) {
+      window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}`;
+      return;
+    }
+
+    // No draftId yet — create the draft via API, then navigate
+    setCreating(true);
+    try {
+      const res = await fetchJson<{ draftId: string }>('/api/queues/create-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId || walletAddress || '',
+          queueType: item.type,
+          roundId: r.roundId,
+        }),
+      });
+
+      if (res.draftId) {
+        window.location.href = `/draft-room?draftId=${res.draftId}&id=${res.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}`;
+      } else {
+        // Fallback: navigate to draft room without draftId
+        window.location.href = `/draft-room?speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}&queueRoundId=${r.roundId}&queueType=${item.type}`;
+      }
+    } catch {
+      // Fallback: navigate to draft room without draftId
+      window.location.href = `/draft-room?speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}&queueRoundId=${r.roundId}&queueType=${item.type}`;
+    }
+  }
+
+  return (
+    <div
+      key={`${item.type}-${r.roundId}`}
+      className={`group cursor-pointer transition-all overflow-hidden rounded-lg hover:bg-white/[0.03] border-2 ${
+        isLive ? 'border-banana bg-banana/10' : 'border-transparent'
+      }`}
+      onClick={() => handleEnter()}
+    >
+      {/* Same row layout as regular drafts */}
+      <div className="flex items-center justify-between px-5 py-3">
+        {/* Name */}
+        <div className="w-20 flex-shrink-0">
+          <span className="text-white/80 font-medium">{item.label} #{r.roundId}</span>
+        </div>
+
+        {/* Speed — hidden on small screens */}
+        <div className="w-16 flex-shrink-0 text-center hidden sm:block">
+          <span className="text-white/50 text-sm">8 hour</span>
+        </div>
+
+        {/* Type — hidden on small screens */}
+        <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
+          <span className="text-sm font-semibold" style={{ color: accentColor }}>
+            {item.type === 'jackpot' ? 'JACKPOT' : 'HALL OF FAME'}
+          </span>
+        </div>
+
+        {/* Status — progress bar + count (matches regular filling drafts) */}
+        <div className="w-28 flex-shrink-0 flex items-center justify-center">
+          {isFilling ? (
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${(r.members.length / 10) * 100}%`,
+                    backgroundColor: accentColor
+                  }}
+                />
+              </div>
+              <span className="text-xs tabular-nums">
+                <span className="text-white font-semibold">{r.members.length}</span>
+                <span className="text-white/40">/10</span>
+              </span>
+            </div>
+          ) : isLive ? (
+            <span className="text-banana font-bold text-sm animate-pulse">
+              {r.status === 'ready' ? 'Starting!' : 'Live!'}
+            </span>
+          ) : (
+            <span className="text-white/50 text-sm">In progress</span>
+          )}
+        </div>
+
+        {/* Button */}
+        <div className="w-28 flex-shrink-0 flex items-center justify-end gap-2">
+          {creating ? (
+            <span className="w-20 py-2 rounded-lg font-semibold text-[11px] text-center bg-white/10 text-white/40 flex items-center justify-center gap-1">
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Entering
+            </span>
+          ) : (
+            <button
+              onClick={(e) => handleEnter(e)}
+              className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90 flex items-center justify-center"
+            >
+              Enter
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; walletAddress?: string | null }) {
   const [queues, setQueues] = useState<Record<string, DraftQueue> | null>(null);
-  // Poll faster (3s) when a round has no draftId yet (waiting for Cloud Function)
-  const hasPendingDraft = queues && Object.values(queues).some(q =>
-    (q as any).rounds?.some((r: any) => r.status === 'filling' && !r.draftId && r.members.some((m: any) => m.wallet?.toLowerCase() === userId?.toLowerCase()))
-  );
   useEffect(() => {
     if (!userId) return;
     fetchJson<Record<string, DraftQueue>>('/api/queues')
@@ -39,9 +155,9 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
     const interval = setInterval(() => {
       fetchJson<Record<string, DraftQueue>>('/api/queues')
         .then(setQueues).catch(() => {});
-    }, hasPendingDraft ? 3000 : 5000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [userId, hasPendingDraft]);
+  }, [userId]);
 
   if (!queues || !userId) return null;
 
@@ -64,95 +180,14 @@ function SpecialDraftsSection({ userId, walletAddress }: { userId?: string; wall
 
   return (
     <div className="space-y-1.5 mb-3">
-      {myRounds.map((item) => {
-        const r = item.round;
-        const canEnter = !!r.draftId;
-        const accentColor = item.color;
-        const isFilling = r.status === 'filling';
-        const isLive = r.status === 'ready' || r.status === 'drafting';
-        return (
-          <div
-            key={`${item.type}-${r.roundId}`}
-            className={`group cursor-pointer transition-all overflow-hidden rounded-lg hover:bg-white/[0.03] border-2 ${
-              isLive ? 'border-banana bg-banana/10' : 'border-transparent'
-            }`}
-            onClick={() => {
-              if (canEnter) {
-                window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}`;
-              } else {
-                window.location.href = '/special-drafts';
-              }
-            }}
-          >
-            {/* Same row layout as regular drafts */}
-            <div className="flex items-center justify-between px-5 py-3">
-              {/* Name */}
-              <div className="w-20 flex-shrink-0">
-                <span className="text-white/80 font-medium">{item.label} #{r.roundId}</span>
-              </div>
-
-              {/* Speed — hidden on small screens */}
-              <div className="w-16 flex-shrink-0 text-center hidden sm:block">
-                <span className="text-white/50 text-sm">8 hour</span>
-              </div>
-
-              {/* Type — hidden on small screens */}
-              <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
-                <span className="text-sm font-semibold" style={{ color: accentColor }}>
-                  {item.type === 'jackpot' ? 'JACKPOT' : 'HALL OF FAME'}
-                </span>
-              </div>
-
-              {/* Status — progress bar + count (matches regular filling drafts) */}
-              <div className="w-28 flex-shrink-0 flex items-center justify-center">
-                {isFilling ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${(r.members.length / 10) * 100}%`,
-                          backgroundColor: accentColor
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs tabular-nums">
-                      <span className="text-white font-semibold">{r.members.length}</span>
-                      <span className="text-white/40">/10</span>
-                    </span>
-                  </div>
-                ) : isLive ? (
-                  <span className="text-banana font-bold text-sm animate-pulse">
-                    {r.status === 'ready' ? 'Starting!' : 'Live!'}
-                  </span>
-                ) : (
-                  <span className="text-white/50 text-sm">In progress</span>
-                )}
-              </div>
-
-              {/* Button */}
-              <div className="w-28 flex-shrink-0 flex items-center justify-end gap-2">
-                {canEnter ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.location.href = `/draft-room?draftId=${r.draftId}&id=${r.draftId}&speed=slow&mode=live&wallet=${walletAddress || ''}&special=true&specialType=${item.type}`;
-                    }}
-                    className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90 flex items-center justify-center"
-                  >
-                    Enter
-                  </button>
-                ) : (
-                  <span className="w-20 py-2 rounded-lg font-semibold text-[11px] text-center bg-white/10 text-white/40 flex items-center justify-center gap-1">
-                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                    Creating
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {myRounds.map((item) => (
+        <SpecialDraftRow
+          key={`${item.type}-${item.round.roundId}`}
+          item={item}
+          walletAddress={walletAddress}
+          userId={userId}
+        />
+      ))}
     </div>
   );
 }

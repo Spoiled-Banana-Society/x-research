@@ -24,4 +24,5 @@ export const getExposure = db.getExposure;
 export const getDraftHistory = db.getDraftHistory;
 export const getQueueStatus = db.getQueueStatus;
 export const joinQueue = db.joinQueue;
+export const updateQueueRoundDraftId = db.updateQueueRoundDraftId;
 export const resetQueue = db.resetQueue;

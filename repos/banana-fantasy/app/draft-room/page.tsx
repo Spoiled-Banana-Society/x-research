@@ -376,8 +376,50 @@ function DraftRoomContent() {
   const loadingHandledRef = useRef(false);
   useEffect(() => {
     if (phase !== 'loading' || loadingHandledRef.current) return;
-    // If not in live mode or no draftId, fall back to filling immediately
-    if (!isLiveMode || !draftId) {
+    // If not in live mode, fall back to filling immediately
+    if (!isLiveMode) {
+      setPhase('filling');
+      return;
+    }
+    // Special draft without draftId: create the draft first via our API, then continue loading
+    if (!draftId && isSpecialDraft && walletParam) {
+      loadingHandledRef.current = true;
+      const queueRoundId = searchParams.get('queueRoundId');
+      const queueTypeParam = searchParams.get('queueType') || specialTypeParam || 'jackpot';
+
+      const createAndEnter = async () => {
+        try {
+          console.log('[Draft Room] Special draft without draftId — creating via API...');
+          const res = await fetch('/api/queues/create-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: walletParam,
+              queueType: queueTypeParam,
+              roundId: queueRoundId ? parseInt(queueRoundId) : 1,
+            }),
+          });
+          const data = await res.json();
+          if (data.draftId) {
+            console.log('[Draft Room] Created special draft:', data.draftId);
+            setDraftId(data.draftId);
+            // Reset loadingHandledRef so the loading phase re-runs with the new draftId
+            loadingHandledRef.current = false;
+            setPhase('loading');
+          } else {
+            console.warn('[Draft Room] No draftId from create-draft API, falling back to filling');
+            setPhase('filling');
+          }
+        } catch (err) {
+          console.warn('[Draft Room] Failed to create special draft:', err);
+          setPhase('filling');
+        }
+      }
+      createAndEnter();
+      return;
+    }
+    // Regular case: no draftId means fall back to filling
+    if (!draftId) {
       setPhase('filling');
       return;
     }
@@ -612,64 +654,23 @@ function DraftRoomContent() {
       } catch (err) {
         console.warn('[Draft Room] Loading phase server check failed:', err);
 
-        // Special drafts (staging): Go API draft doesn't exist yet — create it + fill with bots
-        if (isSpecialDraft && isStagingMode()) {
-          console.log('[Draft Room] Special draft: auto-creating + filling draft in staging...');
-          try {
-            const stagingBase = getStagingApiUrl();
-            if (stagingBase && walletParam) {
-              // Mint a token for the wallet (may already exist — ignore errors)
-              const mintId = 40000 + Math.floor(Math.random() * 10000);
-              await fetch(`${stagingBase}/owner/${walletParam}/draftToken/mint`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ minId: mintId, maxId: mintId }),
-              }).catch(() => {});
-
-              // Create the special draft
-              const typeForApi = specialTypeParam === 'hof' ? 'hof' : 'jackpot';
-              await fetch(`${stagingBase}/staging/create-special-draft`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: typeForApi, wallets: [walletParam] }),
-              });
-
-              // Wait for draft state to be created
-              await new Promise(r => setTimeout(r, 3000));
-
-              // Fill with 9 bots
-              await fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' });
-
-              // Wait for draft to start
-              await new Promise(r => setTimeout(r, 3000));
-
-              // Retry inline — draft should exist now
-              console.log('[Draft Room] Retrying server check after auto-fill...');
-              const retryInfo = await draftApi.getDraftInfo(draftId);
-              if (cancelled) return;
-              if (retryInfo.draftOrder?.length >= 10) {
-                console.log('[Draft Room] Auto-fill worked! Starting countdown...');
-                const ro = retryInfo.draftOrder.map((u: { ownerId: string }, idx: number) => ({
-                  id: String(idx + 1), name: u.ownerId,
-                  displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase() ? 'You' : u.ownerId.slice(0,6)+'...'+u.ownerId.slice(-4),
-                  isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(), avatar: '🍌',
-                }));
-                setDraftOrder(ro);
-                const up = ro.findIndex((p: { isYou: boolean }) => p.isYou);
-                if (up >= 0) setUserDraftPosition(up);
-                setPlayerCount(10);
-                if (specialTypeParam) setDraftType(specialTypeParam);
-                const cs = Date.now();
-                preSpinStartedAtRef.current = cs;
-                setPhase('pre-spin');
-                setPreSpinCountdown(60);
-                setMainCountdown(60);
-                setLiveDataReady(true);
-                draftStore.updateDraft(draftId, { phase: 'pre-spin', preSpinStartedAt: cs, players: 10, draftOrder: ro, userDraftPosition: up, type: specialTypeParam || draftType, draftType: specialTypeParam || draftType, isSpecial: true });
-                return;
-              }
-            }
-          } catch (fillErr) {
-            console.warn('[Draft Room] Auto-fill failed:', fillErr);
+        // Special drafts (staging): Draft state not created yet (getDraftInfo returns 500).
+        // The league exists (created by the special-drafts page) but needs bots to fill to 10/10
+        // before draft state is created. Fire fill-bots in background and go to filling phase.
+        // The poll will detect when draft state appears.
+        if (isSpecialDraft && isStagingMode() && draftId) {
+          console.log('[Draft Room] Special draft: league exists but no draft state yet. Triggering fill-bots and entering filling phase...');
+          const stagingBase = getStagingApiUrl();
+          if (stagingBase) {
+            // Fire fill-bots in background — don't block
+            fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' })
+              .then(() => console.log('[Draft Room] Fill-bots triggered for', draftId))
+              .catch(e => console.warn('[Draft Room] Fill-bots failed:', e));
           }
+          // Show filling UI immediately at 1/10
+          setPlayerCount(1);
+          setPhase('filling');
+          return;
         }
 
         // Fall back to stored phase or filling
@@ -1557,9 +1558,6 @@ function DraftRoomContent() {
 
     const poll = async () => {
       try {
-        // Special drafts skip filling poll — Cloud Function auto-fills, loading phase handles it
-        if (isSpecialDraft) return;
-
         console.log('[Draft Room] Polling getDraftInfo for', draftId);
         const info = await draftApi.getDraftInfo(draftId);
         if (cancelled) return;
@@ -1568,10 +1566,13 @@ function DraftRoomContent() {
 
         if (info.draftOrder && info.draftOrder.length > 0) {
           if (phase === 'filling') {
-            // Regular drafts: filling animation (800ms interval) handles visual count-up.
-            // Jumping playerCount to server value skips the animation when bots fill instantly.
+            // Special drafts: server is source of truth for player count during filling.
+            // Regular drafts use client-side animation timer instead.
+            if (isSpecialDraft) {
+              setPlayerCount(prev => Math.max(prev, info.draftOrder.length));
+            }
             if (info.draftOrder.length >= 10) {
-              console.log('[Draft Room] Poll detected 10/10 — letting filling animation finish');
+              console.log('[Draft Room] Poll detected 10/10 — letting at-10 effect handle transition');
             }
           } else {
             // After filling (pre-spin/spinning/result), update draftOrder normally
