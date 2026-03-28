@@ -56,7 +56,7 @@ function DraftRoomContent() {
   const isLiveMode = modeParam === 'live' && !!walletParam;
 
   const { user } = useAuth();
-  const { playSpinningSound, playReelStop, playCountdownTick, playWinSound, playYourTurnSound, playNewPickSound, cleanup: cleanupAudio } = useDraftAudio();
+  const { playSpinningSound, playReelStop, playCountdownTick, playWinSound, cleanup: cleanupAudio } = useDraftAudio();
   const { triggerOptIn } = useNotifOptIn();
 
   // Cleanup audio on unmount — stops all scheduled sounds when leaving the page
@@ -344,16 +344,6 @@ function DraftRoomContent() {
     return 0;
   });
 
-  // ==================== AUTO-DRAFT & SORT PREFERENCES (REST-synced) ====================
-  const [autoDraft, setAutoDraft] = useState(false);
-  const [autoDraftLoading, setAutoDraftLoading] = useState(false);
-  const [sortPreference, setSortPreference] = useState<'adp' | 'rank'>('adp');
-  const [missedPicksCount, setMissedPicksCount] = useState(0);
-  const [showAutoDraftNotification, setShowAutoDraftNotification] = useState(false);
-  const [generatedCardUrl, setGeneratedCardUrl] = useState<string | null>(null);
-  // Track previous currentDrafter for "your turn" sound
-  const prevDrafterRef = useRef<string>('');
-
   // ==================== DRAFTING UI STATE ====================
   const [activeTab, setActiveTab] = useState<DraftTab>('draft');
   // Mute — restore from localStorage immediately
@@ -376,50 +366,8 @@ function DraftRoomContent() {
   const loadingHandledRef = useRef(false);
   useEffect(() => {
     if (phase !== 'loading' || loadingHandledRef.current) return;
-    // If not in live mode, fall back to filling immediately
-    if (!isLiveMode) {
-      setPhase('filling');
-      return;
-    }
-    // Special draft without draftId: create the draft first via our API, then continue loading
-    if (!draftId && isSpecialDraft && walletParam) {
-      loadingHandledRef.current = true;
-      const queueRoundId = searchParams.get('queueRoundId');
-      const queueTypeParam = searchParams.get('queueType') || specialTypeParam || 'jackpot';
-
-      const createAndEnter = async () => {
-        try {
-          console.log('[Draft Room] Special draft without draftId — creating via API...');
-          const res = await fetch('/api/queues/create-draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: walletParam,
-              queueType: queueTypeParam,
-              roundId: queueRoundId ? parseInt(queueRoundId) : 1,
-            }),
-          });
-          const data = await res.json();
-          if (data.draftId) {
-            console.log('[Draft Room] Created special draft:', data.draftId);
-            setDraftId(data.draftId);
-            // Reset loadingHandledRef so the loading phase re-runs with the new draftId
-            loadingHandledRef.current = false;
-            setPhase('loading');
-          } else {
-            console.warn('[Draft Room] No draftId from create-draft API, falling back to filling');
-            setPhase('filling');
-          }
-        } catch (err) {
-          console.warn('[Draft Room] Failed to create special draft:', err);
-          setPhase('filling');
-        }
-      }
-      createAndEnter();
-      return;
-    }
-    // Regular case: no draftId means fall back to filling
-    if (!draftId) {
+    // If not in live mode or no draftId, fall back to filling immediately
+    if (!isLiveMode || !draftId) {
       setPhase('filling');
       return;
     }
@@ -506,15 +454,6 @@ function DraftRoomContent() {
             type: specialTypeParam || draftType, draftType: specialTypeParam || draftType,
             isSpecial: true,
           });
-          // Update queue round status so special-drafts & drafting pages show "Live!"
-          const queueType = specialTypeParam || 'jackpot';
-          const qRoundId = searchParams?.get('queueRoundId');
-          if (qRoundId || queueType) {
-            fetch('/api/queues/update-status', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ queueType, roundId: qRoundId ? parseInt(qRoundId) : 1, status: 'drafting' }),
-            }).catch(() => {});
-          }
         } else if (playerCount >= 10 && info.draftStartTime) {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
@@ -663,23 +602,64 @@ function DraftRoomContent() {
       } catch (err) {
         console.warn('[Draft Room] Loading phase server check failed:', err);
 
-        // Special drafts (staging): Draft state not created yet (getDraftInfo returns 500).
-        // The league exists (created by the special-drafts page) but needs bots to fill to 10/10
-        // before draft state is created. Fire fill-bots in background and go to filling phase.
-        // The poll will detect when draft state appears.
-        if (isSpecialDraft && isStagingMode() && draftId) {
-          console.log('[Draft Room] Special draft: league exists but no draft state yet. Triggering fill-bots and entering filling phase...');
-          const stagingBase = getStagingApiUrl();
-          if (stagingBase) {
-            // Fire fill-bots in background — don't block
-            fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' })
-              .then(() => console.log('[Draft Room] Fill-bots triggered for', draftId))
-              .catch(e => console.warn('[Draft Room] Fill-bots failed:', e));
+        // Special drafts (staging): Go API draft doesn't exist yet — create it + fill with bots
+        if (isSpecialDraft && isStagingMode()) {
+          console.log('[Draft Room] Special draft: auto-creating + filling draft in staging...');
+          try {
+            const stagingBase = getStagingApiUrl();
+            if (stagingBase && walletParam) {
+              // Mint a token for the wallet (may already exist — ignore errors)
+              const mintId = 40000 + Math.floor(Math.random() * 10000);
+              await fetch(`${stagingBase}/owner/${walletParam}/draftToken/mint`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minId: mintId, maxId: mintId }),
+              }).catch(() => {});
+
+              // Create the special draft
+              const typeForApi = specialTypeParam === 'hof' ? 'hof' : 'jackpot';
+              await fetch(`${stagingBase}/staging/create-special-draft`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: typeForApi, wallets: [walletParam] }),
+              });
+
+              // Wait for draft state to be created
+              await new Promise(r => setTimeout(r, 3000));
+
+              // Fill with 9 bots
+              await fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' });
+
+              // Wait for draft to start
+              await new Promise(r => setTimeout(r, 3000));
+
+              // Retry inline — draft should exist now
+              console.log('[Draft Room] Retrying server check after auto-fill...');
+              const retryInfo = await draftApi.getDraftInfo(draftId);
+              if (cancelled) return;
+              if (retryInfo.draftOrder?.length >= 10) {
+                console.log('[Draft Room] Auto-fill worked! Starting countdown...');
+                const ro = retryInfo.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+                  id: String(idx + 1), name: u.ownerId,
+                  displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase() ? 'You' : u.ownerId.slice(0,6)+'...'+u.ownerId.slice(-4),
+                  isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(), avatar: '🍌',
+                }));
+                setDraftOrder(ro);
+                const up = ro.findIndex((p: { isYou: boolean }) => p.isYou);
+                if (up >= 0) setUserDraftPosition(up);
+                setPlayerCount(10);
+                if (specialTypeParam) setDraftType(specialTypeParam);
+                const cs = Date.now();
+                preSpinStartedAtRef.current = cs;
+                setPhase('pre-spin');
+                setPreSpinCountdown(60);
+                setMainCountdown(60);
+                setLiveDataReady(true);
+                draftStore.updateDraft(draftId, { phase: 'pre-spin', preSpinStartedAt: cs, players: 10, draftOrder: ro, userDraftPosition: up, type: specialTypeParam || draftType, draftType: specialTypeParam || draftType, isSpecial: true });
+                return;
+              }
+            }
+          } catch (fillErr) {
+            console.warn('[Draft Room] Auto-fill failed:', fillErr);
           }
-          // Show filling UI immediately at 1/10
-          setPlayerCount(1);
-          setPhase('filling');
-          return;
         }
 
         // Fall back to stored phase or filling
@@ -1353,168 +1333,6 @@ function DraftRoomContent() {
     }
   }, [engine.draftStatus, triggerOptIn]);
 
-  // ==================== DRAFT PREFERENCES: Load + sync from REST API ====================
-  // Load auto-draft, sort preference, and missed picks count on init and after each pick
-  useEffect(() => {
-    if (!isLiveMode || !draftId || !walletParam || phase !== 'drafting') return;
-    let cancelled = false;
-
-    draftApi.getDraftPreferences(draftId, walletParam)
-      .then((prefs) => {
-        if (cancelled) return;
-        setAutoDraft(prefs.autoDraft);
-        const sortOrder = (prefs.sortBy || 'ADP').toUpperCase();
-        const newSort = sortOrder === 'RANK' ? 'rank' as const : 'adp' as const;
-        setSortPreference(newSort);
-        engine.setAutoPickSortPreference(newSort);
-        setMissedPicksCount(prefs.numPicksMissedConsecutive || 0);
-
-        // If server says auto-draft is on, sync to local airplane mode
-        if (prefs.autoDraft && !engine.airplaneMode) {
-          engine.setAirplaneMode(true);
-        }
-        // If server-side missed picks >= 2 and auto-draft not yet on, enable it
-        if (prefs.numPicksMissedConsecutive >= 2 && !prefs.autoDraft) {
-          // Auto-enable — server will do this too, but sync the UI immediately
-          setAutoDraft(true);
-          engine.setAirplaneMode(true);
-          setShowAutoDraftNotification(true);
-          setTimeout(() => setShowAutoDraftNotification(false), 5000);
-        }
-      })
-      .catch((e) => {
-        console.warn('[Preferences] Failed to load draft preferences:', e);
-      });
-
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, walletParam, phase, engine.currentPickNumber]);
-
-  // Auto-draft toggle handler
-  const handleToggleAutoDraft = useCallback(async () => {
-    if (!isLiveMode || !draftId || !walletParam || autoDraftLoading) return;
-    const newValue = !autoDraft;
-    setAutoDraftLoading(true);
-    try {
-      const prefs = await draftApi.patchDraftPreferences(draftId, walletParam, newValue);
-      setAutoDraft(prefs.autoDraft);
-      // Sync airplane mode with auto-draft
-      engine.setAirplaneMode(prefs.autoDraft);
-      if (prefs.autoDraft) {
-        const id = getPersistId();
-        if (id) localStorage.setItem(`airplane:${id}`, '1');
-      } else {
-        const id = getPersistId();
-        if (id) localStorage.setItem(`airplane:${id}`, '0');
-      }
-    } catch (e) {
-      console.error('[AutoDraft] Toggle failed:', e);
-    } finally {
-      setAutoDraftLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, walletParam, autoDraft, autoDraftLoading]);
-
-  // Sort preference persistence via REST API
-  const handleSortChange = useCallback((sort: 'adp' | 'rank') => {
-    setSortPreference(sort);
-    engine.setAutoPickSortPreference(sort);
-    // Persist to server in background
-    if (isLiveMode && draftId && walletParam) {
-      draftApi.updateSortPreference(walletParam, draftId, sort.toUpperCase())
-        .catch(e => console.warn('[Sort] Failed to persist sort preference:', e));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, walletParam]);
-
-  // ==================== SOUND EFFECTS: Wire to Firebase events ====================
-  // Play "your turn" sound when currentDrafter changes to user's wallet
-  useEffect(() => {
-    if (!isLiveMode || isMuted || phase !== 'drafting' || engine.draftStatus !== 'active') return;
-    const currentDrafter = engine.currentDrafterAddress;
-    const prevDrafter = prevDrafterRef.current;
-    prevDrafterRef.current = currentDrafter;
-
-    if (!prevDrafter || !currentDrafter) return;
-    if (prevDrafter === currentDrafter) return;
-
-    if (currentDrafter.toLowerCase() === walletParam.toLowerCase()) {
-      playYourTurnSound();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.currentDrafterAddress, isMuted, phase, engine.draftStatus]);
-
-  // Play "new pick" sound when a new pick is detected
-  useEffect(() => {
-    if (!isLiveMode || isMuted || phase !== 'drafting') return;
-    if (!engine.mostRecentPick) return;
-    // Only play if the pick is not from the user (to avoid double sound with "your turn")
-    if (engine.mostRecentPick.ownerName.toLowerCase() !== walletParam.toLowerCase()) {
-      playNewPickSound();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.mostRecentPick?.pickNumber]);
-
-  // ==================== PLAYER RANKINGS: Refresh after new picks ====================
-  // Re-fetch player rankings after every pick to get updated available players list.
-  // This matches the dev's PlayerComponent.tsx behavior (lines 171-182).
-  useEffect(() => {
-    if (!isLiveMode || !draftId || !walletParam || phase !== 'drafting') return;
-    if (!engine.mostRecentPick) return;
-
-    draftApi.getPlayerRankings(draftId, walletParam)
-      .then((rankings) => {
-        // Update available players from fresh rankings
-        const available = rankings
-          .filter((p: draftApi.PlayerDataResponse) => p.playerStateInfo.ownerAddress === '')
-          .map((p: draftApi.PlayerDataResponse) => ({
-            playerId: p.playerStateInfo.playerId,
-            team: p.playerStateInfo.team,
-            position: p.playerStateInfo.position,
-            adp: p.stats.adp,
-            rank: p.ranking.rank,
-            byeWeek: p.stats.byeWeek,
-            playersFromTeam: p.stats.playersFromTeam || [],
-          }));
-        engine.refreshAvailablePlayers(available);
-      })
-      .catch((err) => {
-        console.warn('[Rankings] Failed to refresh player rankings:', err);
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, walletParam, phase, engine.mostRecentPick?.pickNumber]);
-
-  // ==================== isDraftClosed: Fetch generated card ====================
-  useEffect(() => {
-    if (!firebaseActive || !firebaseRtdb.data) return;
-    if (!firebaseRtdb.data.isDraftClosed) return;
-    if (generatedCardUrl) return; // Already fetched
-
-    // Draft is closed — card should be generated, fetch it
-    if (walletParam && draftId) {
-      console.log('[DraftComplete] isDraftClosed=true, fetching generated card...');
-      const fetchUrl = async () => {
-        const { getDraftsApiUrl } = await import('@/lib/staging');
-        const FALLBACK_URL = process.env.NEXT_PUBLIC_DRAFTS_API_URL || 'https://sbs-drafts-api-w5wydprnbq-uc.a.run.app';
-        const baseUrl = getDraftsApiUrl() || FALLBACK_URL;
-        try {
-          const res = await fetch(`${baseUrl}/owner/${walletParam}/drafts/${draftId}`);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          const imageUrl = data?.card?._imageUrl || data?.card?.imageUrl || data?.imageUrl;
-          if (imageUrl) {
-            setGeneratedCardUrl(imageUrl);
-            console.log('[DraftComplete] Generated card URL:', imageUrl);
-          }
-        } catch (err) {
-          console.error('[DraftComplete] Failed to fetch card:', err);
-        }
-      };
-      fetchUrl();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseActive, firebaseRtdb.data?.isDraftClosed, draftId, walletParam, generatedCardUrl]);
-
   // ==================== FILLING PHASE ====================
   // Client-side visual animation for filling phase (all modes).
   // In live mode, server polling also updates draftOrder + playerCount via Math.max.
@@ -1567,6 +1385,9 @@ function DraftRoomContent() {
 
     const poll = async () => {
       try {
+        // Special drafts skip filling poll — Cloud Function auto-fills, loading phase handles it
+        if (isSpecialDraft) return;
+
         console.log('[Draft Room] Polling getDraftInfo for', draftId);
         const info = await draftApi.getDraftInfo(draftId);
         if (cancelled) return;
@@ -1575,13 +1396,10 @@ function DraftRoomContent() {
 
         if (info.draftOrder && info.draftOrder.length > 0) {
           if (phase === 'filling') {
-            // Special drafts: server is source of truth for player count during filling.
-            // Regular drafts use client-side animation timer instead.
-            if (isSpecialDraft) {
-              setPlayerCount(prev => Math.max(prev, info.draftOrder.length));
-            }
+            // Regular drafts: filling animation (800ms interval) handles visual count-up.
+            // Jumping playerCount to server value skips the animation when bots fill instantly.
             if (info.draftOrder.length >= 10) {
-              console.log('[Draft Room] Poll detected 10/10 — letting at-10 effect handle transition');
+              console.log('[Draft Room] Poll detected 10/10 — letting filling animation finish');
             }
           } else {
             // After filling (pre-spin/spinning/result), update draftOrder normally
@@ -2239,12 +2057,6 @@ function DraftRoomContent() {
     return `${m < 10 ? `0${m}` : m}:${s < 10 ? `0${s}` : s}`;
   };
 
-  // Best available time remaining — prefer Firebase RTDB timestamp for accuracy,
-  // fall back to engine time (which may come from WS or be slightly stale)
-  const bestTimeRemaining = (firebaseActive && firebaseTimeRemaining !== null)
-    ? firebaseTimeRemaining
-    : engine.timeRemaining;
-
   // All phases share the same layout — no separate filling page
 
   // ==================== TIMESTAMP-DERIVED RANDOMIZING STATE ====================
@@ -2317,16 +2129,6 @@ function DraftRoomContent() {
 
   return (
     <div className={`min-h-screen text-white overflow-hidden flex flex-col transition-colors duration-1000 ${getBgColor()} ${screenShake ? 'animate-shake' : ''}`}>
-      {/* Auto-draft notification — shown when auto-draft is enabled due to inactivity */}
-      {showAutoDraftNotification && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl bg-emerald-900/95 border border-emerald-500/50 shadow-2xl backdrop-blur-sm animate-fade-in-down">
-          <div className="flex items-center gap-3">
-            <span className="text-emerald-400 font-bold text-sm">Auto-draft enabled</span>
-            <span className="text-white/60 text-xs">You missed {missedPicksCount}+ picks in a row</span>
-          </div>
-        </div>
-      )}
-
       {/* Flash overlay */}
       {showFlash && <div className="fixed inset-0 z-50 bg-white/30 pointer-events-none animate-flash" />}
 
@@ -2437,9 +2239,9 @@ function DraftRoomContent() {
               <>
                 {engine.isUserTurn && (
                   <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                    bestTimeRemaining <= 10 ? 'bg-red-500 animate-pulse' : 'bg-yellow-500 text-black'
+                    engine.timeRemaining <= 10 ? 'bg-red-500 animate-pulse' : 'bg-yellow-500 text-black'
                   }`}>
-                    {formatTime(bestTimeRemaining)}
+                    {formatTime(engine.timeRemaining)}
                   </div>
                 )}
                 <span className="text-white/50 text-sm">Pick {engine.currentPickNumber}/{TOTAL_PICKS}</span>
@@ -2591,9 +2393,9 @@ function DraftRoomContent() {
                           fontSize: '18px',
                           margin: '5px auto 0px auto',
                           textAlign: 'center',
-                          color: (phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? bestTimeRemaining : mainCountdown) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
+                          color: (phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? engine.timeRemaining : mainCountdown) > 10 ? '#fff' : (visibleDraftType === 'jackpot' ? 'yellow' : 'red'),
                         }}>
-                          {formatTime(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? bestTimeRemaining : mainCountdown)}
+                          {formatTime(phase === 'drafting' || (phase === 'loading' && stored?.phase === 'drafting') ? engine.timeRemaining : mainCountdown)}
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15, marginTop: 5, paddingBottom: 3 }}>
@@ -2793,16 +2595,15 @@ function DraftRoomContent() {
                 </span>
               ) : (phase === 'spinning' || phase === 'result') ? (
                 <span className="text-white/70">Draft starting in {formatTime(mainCountdown)}</span>
-              ) : phase === 'drafting' && engine.isUserTurn && (engine.airplaneMode || autoDraft) ? (
-                <span className="flex items-center justify-center gap-2 text-emerald-400">
-                  Auto-drafting...
+              ) : phase === 'drafting' && engine.isUserTurn && engine.airplaneMode ? (
+                <span className="flex items-center justify-center gap-2">
+                  ✈️ Auto-picking...
                 </span>
               ) : phase === 'drafting' && engine.isUserTurn ? (
                 'Your turn to draft!'
-              ) : phase === 'drafting' && (engine.airplaneMode || autoDraft) && engine.turnsUntilUserPick > 0 ? (
+              ) : phase === 'drafting' && engine.airplaneMode && engine.turnsUntilUserPick > 0 ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="text-emerald-400">Auto-draft ON</span>
-                  <span className="text-white/60">· {engine.turnsUntilUserPick} turn(s) away</span>
+                  ✈️ Auto-pick ON · {engine.turnsUntilUserPick} turn(s) away
                 </span>
               ) : phase === 'drafting' && engine.turnsUntilUserPick > 0 ? (
                 `${engine.turnsUntilUserPick} turn(s) until your pick!`
@@ -2831,52 +2632,22 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Auto-draft toggle (REST-synced for live mode, local for local mode) */}
-              {isLiveMode ? (
-                <div className="flex items-center gap-1.5 border border-gray-500 px-2 py-0.5">
-                  <span className="text-[11px] uppercase font-bold whitespace-nowrap font-primary">
-                    Auto-draft
-                  </span>
-                  <button
-                    onClick={handleToggleAutoDraft}
-                    disabled={autoDraftLoading}
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      autoDraft ? 'bg-emerald-600' : 'bg-slate-500'
-                    } ${autoDraftLoading ? 'opacity-50 cursor-wait' : ''}`}
-                    title={autoDraft ? 'Auto-draft ON — server picks for you' : 'Auto-draft OFF'}
-                  >
-                    <span className="sr-only">Toggle auto-draft</span>
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${
-                        autoDraft ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-              ) : (
-                <button
+              {/* Airplane mode toggle — always visible */}
+              <button
                   onClick={handleToggleAirplane}
                   title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
-                  className="cursor-pointer flex items-center gap-1.5 border border-gray-500 px-2 py-0.5 transition-all"
+                  className="cursor-pointer flex items-center justify-center transition-all"
+                  style={{
+                    fontSize: '18px',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    border: engine.airplaneMode ? '1px solid #fbbf24' : '1px solid #6b7280',
+                    background: engine.airplaneMode ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
+                    boxShadow: engine.airplaneMode ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none',
+                  }}
                 >
-                  <span className="text-[11px] uppercase font-bold whitespace-nowrap font-primary">
-                    Auto-draft
-                  </span>
-                  <div
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                      engine.airplaneMode ? 'bg-emerald-600' : 'bg-slate-500'
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${
-                        engine.airplaneMode ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </div>
+                  <span style={{ filter: engine.airplaneMode ? 'none' : 'grayscale(100%) opacity(0.5)' }}>✈️</span>
                 </button>
-              )}
             </div>
           </div>
 
@@ -2893,11 +2664,7 @@ function DraftRoomContent() {
 
         {/* Tab content area */}
         {phase === 'drafting' && engine.draftStatus === 'completed' ? (
-          <DraftComplete
-            draftId={draftId || urlDraftId}
-            generatedCardUrl={generatedCardUrl}
-            walletAddress={walletParam}
-          />
+          <DraftComplete draftId={draftId || urlDraftId} />
         ) : (
           <>
             {activeTab === 'draft' && (
@@ -2923,7 +2690,7 @@ function DraftRoomContent() {
                   }
                 }}
                 isInQueue={(playerId) => engine.isInQueue(playerId)}
-                onSortChange={handleSortChange}
+                onSortChange={(sort) => engine.setAutoPickSortPreference(sort)}
               />
             )}
             {activeTab === 'queue' && (
@@ -3039,11 +2806,6 @@ function DraftRoomContent() {
           50% { opacity: 0.6; }
         }
         .animate-pulse-glow { animation: pulse-glow 1s ease-in-out infinite; }
-        @keyframes fade-in-down {
-          0% { transform: translate(-50%, -20px); opacity: 0; }
-          100% { transform: translate(-50%, 0); opacity: 1; }
-        }
-        .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
         .banner-no-scrollbar::-webkit-scrollbar {
           display: none;
         }

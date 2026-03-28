@@ -1,103 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
-import * as draftApi from '@/lib/draftApi';
 import type { DraftQueue, QueueRound } from '@/types';
 
-/** Snake draft: get drafter index for a given pick number (10 players) */
-function getSnakeDrafterIndex(pickNumber: number): number {
-  const round = Math.ceil(pickNumber / 10);
-  const posInRound = ((pickNumber - 1) % 10);
-  return round % 2 === 1 ? posInRound : 9 - posInRound;
-}
-
-function RoundRow({ round, userId, walletAddress, typeLabel, queueType }: { round: QueueRound; userId?: string; walletAddress?: string | null; typeLabel: string; queueType: string }) {
-  const router = useRouter();
-  const isMember = round.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase() || m.wallet?.toLowerCase() === walletAddress?.toLowerCase());
-  const [creating, setCreating] = useState(false);
-  const [draftState, setDraftState] = useState<{
-    turnsAway: number;
-    isYourTurn: boolean;
-    pickEndTime: number;
-    playerCount: number;
-  } | null>(null);
-
-  const isLive = round.status === 'ready' || round.status === 'drafting';
-
-  // Poll Go API for draft progress when live
-  useEffect(() => {
-    if (!isLive || !round.draftId || !userId) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const info = await draftApi.getDraftInfo(round.draftId!);
-        if (cancelled) return;
-        const wallet = userId.toLowerCase();
-        const currentDrafter = (info.currentDrafter || '').toLowerCase();
-        const isYourTurn = wallet === currentDrafter;
-        const playerCount = info.draftOrder?.length || 10;
-
-        const userIndex = info.draftOrder.findIndex(
-          (e: { ownerId: string }) => e.ownerId.toLowerCase() === wallet
-        );
-        let turnsAway = 0;
-        if (!isYourTurn && userIndex >= 0) {
-          const totalPicks = (info.draftOrder.length || 10) * 15;
-          for (let i = 1; i <= totalPicks - info.pickNumber + 1; i++) {
-            if (getSnakeDrafterIndex(info.pickNumber + i) === userIndex) {
-              turnsAway = i;
-              break;
-            }
-          }
-        }
-        setDraftState({ turnsAway, isYourTurn, pickEndTime: info.currentPickEndTime || 0, playerCount });
-      } catch {
-        // draft state not ready yet — ignore
-      }
-    };
-    poll();
-    const interval = setInterval(poll, 10000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [isLive, round.draftId, userId]);
-
-  async function handleEnterDraft() {
-    // If draftId already exists, navigate directly
-    if (round.draftId) {
-      router.push(`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true&specialType=${queueType}`);
-      return;
-    }
-
-    // No draftId yet — create the draft via our API
-    setCreating(true);
-    try {
-      const res = await fetchJson<{ draftId: string }>('/api/queues/create-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userId || '',
-          queueType,
-          roundId: round.roundId,
-        }),
-      });
-
-      if (res.draftId) {
-        router.push(`/draft-room?draftId=${res.draftId}&id=${res.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true&specialType=${queueType}`);
-      } else {
-        console.error('No draftId returned from create-draft');
-        setCreating(false);
-      }
-    } catch (err) {
-      console.error('Failed to create special draft:', err);
-      // Fall back: navigate to draft room without draftId — it will create the draft itself
-      router.push(`/draft-room?speed=slow&mode=live&wallet=${userId || ''}&special=true&specialType=${queueType}&queueRoundId=${round.roundId}&queueType=${queueType}`);
-    }
-  }
-
-  // Use Go API player count when available, otherwise fall back to queue members
-  const displayPlayerCount = (isLive && draftState?.playerCount) ? draftState.playerCount : round.members.length;
+function RoundRow({ round, userId, typeLabel, queueType }: { round: QueueRound; userId?: string; typeLabel: string; queueType: string }) {
+  const isMember = round.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase());
 
   return (
     <div className={`rounded-lg border ${isMember ? 'border-banana/30 bg-banana/5' : 'border-white/[0.06] bg-white/[0.01]'} p-3`}>
@@ -110,25 +19,17 @@ function RoundRow({ round, userId, walletAddress, typeLabel, queueType }: { roun
           {round.status === 'ready' && (
             <span className="text-green-400 text-xs font-semibold animate-pulse">Starting!</span>
           )}
-          {round.status === 'drafting' && draftState?.isYourTurn && (
-            <span className="text-banana text-xs font-semibold animate-pulse">Your turn!</span>
-          )}
-          {round.status === 'drafting' && draftState && !draftState.isYourTurn && draftState.turnsAway > 0 && (
-            <span className="text-white/60 text-xs font-semibold">
-              {draftState.turnsAway} pick{draftState.turnsAway !== 1 ? 's' : ''} away
-            </span>
-          )}
-          {round.status === 'drafting' && !draftState && (
+          {round.status === 'drafting' && (
             <span className="text-banana text-xs font-semibold animate-pulse">Live!</span>
           )}
-          <span className="text-white font-bold text-xs">{displayPlayerCount}/10</span>
+          <span className="text-white font-bold text-xs">{round.members.length}/10</span>
         </div>
       </div>
       <div className="h-1 bg-white/10 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
-            width: `${(displayPlayerCount / 10) * 100}%`,
+            width: `${(round.members.length / 10) * 100}%`,
             backgroundColor: round.status === 'ready' ? '#4ade80' : round.status === 'drafting' ? '#fbbf24' : '#6b7280',
           }}
         />
@@ -136,29 +37,23 @@ function RoundRow({ round, userId, walletAddress, typeLabel, queueType }: { roun
       <div className="flex items-center justify-between mt-1">
         <p className="text-white/30 text-[10px]">
           {round.status === 'filling' && round.draftId && `Enter now — waiting for ${10 - round.members.length} more winner${10 - round.members.length !== 1 ? 's' : ''}`}
-          {round.status === 'filling' && !round.draftId && `Enter to watch the draft fill up`}
+          {round.status === 'filling' && !round.draftId && `Creating draft room... Enter in a moment`}
           {round.status === 'ready' && '10 winners in — draft is starting!'}
-          {round.status === 'drafting' && draftState?.isYourTurn && 'It\'s your turn to pick!'}
-          {round.status === 'drafting' && draftState && !draftState.isYourTurn && `Draft is live — ${draftState.turnsAway} pick${draftState.turnsAway !== 1 ? 's' : ''} until your turn`}
-          {round.status === 'drafting' && !draftState && 'Draft is live!'}
+          {round.status === 'drafting' && 'Draft is live!'}
         </p>
         {isMember && (
-          creating ? (
+          round.draftId ? (
+            <a
+              href={`/draft-room?draftId=${round.draftId}&id=${round.draftId}&speed=slow&mode=live&wallet=${userId || ''}&special=true&specialType=${queueType}`}
+              className="w-20 py-2 rounded-lg font-semibold text-sm text-center transition-all hover:scale-105 bg-white text-black hover:bg-white/90"
+            >
+              Enter Draft
+            </a>
+          ) : (
             <span className="px-3 py-1.5 bg-white/5 text-white/40 text-xs font-bold rounded-lg flex items-center gap-1.5">
               <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Entering...
+              Creating...
             </span>
-          ) : (
-            <button
-              onClick={handleEnterDraft}
-              className={`w-20 py-2 rounded-lg font-semibold text-sm text-center transition-all hover:scale-105 ${
-                draftState?.isYourTurn
-                  ? 'bg-banana text-black hover:bg-banana/90 animate-pulse'
-                  : 'bg-white text-black hover:bg-white/90'
-              }`}
-            >
-              {draftState?.isYourTurn ? 'Pick Now' : 'Enter Draft'}
-            </button>
           )
         )}
       </div>
@@ -166,12 +61,12 @@ function RoundRow({ round, userId, walletAddress, typeLabel, queueType }: { roun
   );
 }
 
-function QueueSection({ queue, userId, walletAddress }: { queue: DraftQueue; userId?: string; walletAddress?: string | null }) {
+function QueueSection({ queue, userId }: { queue: DraftQueue; userId?: string }) {
   const isJackpot = queue.type === 'jackpot';
   const color = isJackpot ? '#ef4444' : '#D4AF37';
   const label = isJackpot ? 'Jackpot' : 'HOF';
   const activeRounds = (queue.rounds || []).filter(r =>
-    r.status !== 'completed' && r.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase() || m.wallet?.toLowerCase() === walletAddress?.toLowerCase())
+    r.status !== 'completed' && r.members.some(m => m.wallet?.toLowerCase() === userId?.toLowerCase())
   );
 
   if (activeRounds.length === 0) return null;
@@ -182,10 +77,10 @@ function QueueSection({ queue, userId, walletAddress }: { queue: DraftQueue; use
         <span>{isJackpot ? '🔥' : '🏆'}</span>
         <span className="font-bold text-sm" style={{ color }}>{label}</span>
         <span className="text-white/30 text-xs">·</span>
-        <span className="text-white/50 text-xs">8-hour picks</span>
+        <span className="text-white/50 text-xs">🕐 8-hour picks</span>
       </div>
       {activeRounds.map(round => (
-        <RoundRow key={round.roundId} round={round} userId={userId} walletAddress={walletAddress} typeLabel={label} queueType={queue.type} />
+        <RoundRow key={round.roundId} round={round} userId={userId} typeLabel={label} queueType={queue.type} />
       ))}
     </div>
   );
@@ -204,17 +99,18 @@ export default function SpecialDraftsPage() {
     setLoading(false);
   }, []);
 
-  // Poll every 5s
+  // Poll faster (3s) when a round has no draftId yet (waiting for Cloud Function to create it)
+  const hasPendingDraft = queues && Object.values(queues).some(q =>
+    q.rounds?.some(r => r.status === 'filling' && !r.draftId && r.members.some(m => m.wallet === user?.id))
+  );
   useEffect(() => {
     fetchQueues();
-    const interval = setInterval(fetchQueues, 5000);
+    const interval = setInterval(fetchQueues, hasPendingDraft ? 3000 : 5000);
     return () => clearInterval(interval);
-  }, [fetchQueues]);
+  }, [fetchQueues, hasPendingDraft]);
 
   const hasActiveRounds = queues && Object.values(queues).some(q =>
-    q.rounds?.some(r => r.status !== 'completed' && r.members.some(m =>
-      m.wallet?.toLowerCase() === user?.id?.toLowerCase() || m.wallet?.toLowerCase() === user?.walletAddress?.toLowerCase()
-    ))
+    q.rounds?.some(r => r.status !== 'completed' && r.members.some(m => m.wallet === user?.id))
   );
 
   return (
@@ -222,8 +118,8 @@ export default function SpecialDraftsPage() {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-2">Special Drafts</h1>
         <p className="text-white/50 mb-8">
-          Win Jackpot or HOF on the Banana Wheel and enter your exclusive 8-hour draft.
-          Watch it fill up, then draft when 10 winners are in.
+          Win Jackpot or HOF on the Banana Wheel → auto-queued for an exclusive 8-hour draft.
+          Once 10 winners fill the queue, the draft starts immediately.
         </p>
 
         {loading ? (
@@ -233,7 +129,7 @@ export default function SpecialDraftsPage() {
         ) : hasActiveRounds ? (
           <div className="space-y-6">
             {queues && ['jackpot', 'hof'].map(type =>
-              queues[type] && <QueueSection key={type} queue={queues[type]} userId={user?.id} walletAddress={user?.walletAddress} />
+              queues[type] && <QueueSection key={type} queue={queues[type]} userId={user?.id} />
             )}
           </div>
         ) : (
@@ -249,8 +145,8 @@ export default function SpecialDraftsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               { step: '1', title: 'Win on the Wheel', desc: 'Land on Jackpot or HOF' },
-              { step: '2', title: 'Enter Draft Room', desc: 'Watch it fill as winners join' },
-              { step: '3', title: 'Draft Starts', desc: '10 winners fill, bots auto-fill in staging' },
+              { step: '2', title: 'Auto-Queued', desc: 'Placed in the next available draft' },
+              { step: '3', title: 'Draft Starts', desc: '10 winners fill → draft begins immediately' },
             ].map(s => (
               <div key={s.step} className="text-center">
                 <div className="w-8 h-8 rounded-full bg-banana/20 text-banana font-bold text-sm flex items-center justify-center mx-auto mb-2">

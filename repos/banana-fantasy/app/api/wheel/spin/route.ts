@@ -200,18 +200,6 @@ export async function POST(req: Request) {
 
     await batch.commit();
 
-    // Auto-queue for Jackpot/HOF — happens server-side so it can't be interrupted
-    if (segment.prizeType === 'custom' && (segment.prizeValue === 'jackpot' || segment.prizeValue === 'hof')) {
-      try {
-        const { joinQueue } = await import('@/lib/db');
-        await joinQueue(userId, segment.prizeValue as 'jackpot' | 'hof');
-        console.log(`[wheel/spin] Auto-queued ${userId} for ${segment.prizeValue}`);
-      } catch (qErr) {
-        // Don't fail the spin if queue join fails — entry is already awarded
-        console.warn(`[wheel/spin] Auto-queue failed (entry still awarded):`, qErr);
-      }
-    }
-
     return json({ spinId, result: segment.id, prize, angle }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);

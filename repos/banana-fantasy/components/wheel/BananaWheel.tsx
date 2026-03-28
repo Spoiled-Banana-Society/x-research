@@ -79,16 +79,6 @@ function getPrizeMessage(segment: WheelSegment): string {
   return 'Added to your balance';
 }
 
-const PENDING_SPIN_KEY = 'banana-wheel-pending-spin';
-const SPIN_DURATION_MS = 5000;
-
-interface PendingSpin {
-  outcome: WheelSpinOutcome;
-  segmentId: string | null;
-  startedAt: number;
-  rotation: number;
-}
-
 export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialDraftWin }: BananaWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -96,56 +86,12 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
   const [showResult, setShowResult] = useState(false);
   const [spinError, setSpinError] = useState<string | null>(null);
   const wheelRef = useRef<HTMLDivElement>(null);
-  const resumedRef = useRef(false);
 
   const segmentAngle = WHEEL_SEGMENT_ANGLE;
-
-  // On mount: check for a pending/completed spin that was interrupted
-  React.useEffect(() => {
-    if (resumedRef.current) return;
-    resumedRef.current = true;
-    try {
-      const raw = localStorage.getItem(PENDING_SPIN_KEY);
-      if (!raw) return;
-      const pending: PendingSpin = JSON.parse(raw);
-      const elapsed = Date.now() - pending.startedAt;
-      const segment = pending.segmentId ? wheelSegments.find(s => s.id === pending.segmentId) ?? null : null;
-
-      if (elapsed < SPIN_DURATION_MS) {
-        // Spin still in progress — resume animation
-        setRotation(pending.rotation);
-        setIsSpinning(true);
-        const remaining = SPIN_DURATION_MS - elapsed;
-        setTimeout(() => {
-          setIsSpinning(false);
-          setWonSegment(segment);
-          setShowResult(true);
-          localStorage.removeItem(PENDING_SPIN_KEY);
-          if (segment) {
-            fireCelebration(segment);
-            playWinSound(getWinTier(segment));
-          }
-          if (onSpinComplete) onSpinComplete(pending.outcome, segment);
-        }, remaining);
-      } else {
-        // Spin already finished — show result immediately
-        setRotation(pending.rotation);
-        setWonSegment(segment);
-        setShowResult(true);
-        localStorage.removeItem(PENDING_SPIN_KEY);
-        if (segment) {
-          fireCelebration(segment);
-        }
-        if (onSpinComplete) onSpinComplete(pending.outcome, segment);
-      }
-    } catch { /* ignore corrupt localStorage */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const dismissResult = useCallback(() => {
     setWonSegment(null);
     setShowResult(false);
-    localStorage.removeItem(PENDING_SPIN_KEY);
   }, []);
 
   const spin = async () => {
@@ -183,17 +129,6 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
 
     const segment = wheelSegments.find((seg) => seg.id === outcome?.result) ?? null;
 
-    // Persist spin state so it survives navigation
-    try {
-      const pending: PendingSpin = {
-        outcome,
-        segmentId: segment?.id ?? null,
-        startedAt: Date.now(),
-        rotation: newRotation,
-      };
-      localStorage.setItem(PENDING_SPIN_KEY, JSON.stringify(pending));
-    } catch { /* ignore */ }
-
     // Start spinning tick sounds
     const stopSpinSound = startSpinSound();
 
@@ -202,13 +137,12 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
       setIsSpinning(false);
       setWonSegment(segment);
       setShowResult(true);
-      localStorage.removeItem(PENDING_SPIN_KEY);
       if (segment) {
         fireCelebration(segment);
         playWinSound(getWinTier(segment));
       }
       if (onSpinComplete) onSpinComplete(outcome, segment);
-    }, SPIN_DURATION_MS);
+    }, 5000);
   };
 
   return (
