@@ -984,7 +984,7 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 - `/draft-actions/` endpoints live and working
 - Cloud Tasks queue created, env vars set
 
-## ACTION NEEDED FROM BORIS (2026-03-27) — Firebase RTDB Credentials for Vercel
+## DONE: Firebase RTDB Credentials for Vercel (Boris, 2026-03-27) ✅
 
 ### What happened
 Richard's Claude completed the full Firebase RTDB migration — WebSocket replaced with Firebase Realtime DB for draft updates. Everything works, BUT the staging Vercel site (`banana-fantasy-sbs.vercel.app`) uses **prod Firebase credentials** while trying to read the **staging RTDB** (`sbs-staging-env-default-rtdb`). Different Firebase projects = `permission_denied`. The code auto-falls back to WebSocket, but we want Firebase RTDB to work properly.
@@ -1021,11 +1021,16 @@ NEXT_PUBLIC_APP_ID=<staging app ID>
 ```
 This allows any authenticated Firebase client to read draft data (staging only, not prod).
 
-### How to verify it worked:
-After setting vars and redeploying, open browser console on `banana-fantasy-sbs.vercel.app/draft-room?draftId=test&id=test&speed=fast&mode=live&wallet=test` and look for:
-- `[useRealTimeDraftInfo] Subscribing to drafts/test/realTimeDraftInfo` — Firebase connected
-- NO `PERMISSION_DENIED` errors
-- Connection indicator shows "Live" (not "WS")
+### Boris completed (2026-03-27):
+All 7 staging Firebase env vars set on Vercel Production:
+- `NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyDqT3xD6T-5iUWlf688NZsuFu6CDZFR5cg`
+- `NEXT_PUBLIC_AUTH_DOMAIN=sbs-staging-env.firebaseapp.com`
+- `NEXT_PUBLIC_DATABASE_URL=https://sbs-staging-env-default-rtdb.firebaseio.com`
+- `NEXT_PUBLIC_PROJECT_ID=sbs-staging-env`
+- `NEXT_PUBLIC_STORAGE_BUCKET=sbs-staging-env.firebasestorage.app`
+- `NEXT_PUBLIC_MESSAGING_SENDER_ID=652484219017`
+- `NEXT_PUBLIC_APP_ID=1:652484219017:web:3763f82d12169f0e177658`
+Redeploy triggered. Richard — verify Firebase RTDB works on staging.
 
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
