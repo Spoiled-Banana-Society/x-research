@@ -135,12 +135,39 @@ export function useDraftAudio() {
     } catch {}
   }, [initAudio]);
 
+  // ==================== FILE-BASED AUDIO (your turn, new pick) ====================
+  // Uses HTML Audio elements for .wav file playback (matches dev's useAudioYourTurn / useAudioNewTurn)
+  const yourTurnAudioRef = useRef<HTMLAudioElement | null>(null);
+  const newPickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playYourTurnSound = useCallback(() => {
+    try {
+      if (!yourTurnAudioRef.current) {
+        yourTurnAudioRef.current = new Audio('/your-turn.wav');
+      }
+      yourTurnAudioRef.current.currentTime = 0;
+      yourTurnAudioRef.current.play().catch(() => {});
+    } catch {}
+  }, []);
+
+  const playNewPickSound = useCallback(() => {
+    try {
+      if (!newPickAudioRef.current) {
+        newPickAudioRef.current = new Audio('/new-turn.wav');
+      }
+      newPickAudioRef.current.currentTime = 0;
+      newPickAudioRef.current.play().catch(() => {});
+    } catch {}
+  }, []);
+
   const cleanup = useCallback(() => {
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
+    yourTurnAudioRef.current = null;
+    newPickAudioRef.current = null;
   }, []);
 
-  return { playSpinningSound, playReelStop, playCountdownTick, playWinSound, cleanup };
+  return { playSpinningSound, playReelStop, playCountdownTick, playWinSound, playYourTurnSound, playNewPickSound, cleanup };
 }
