@@ -1126,9 +1126,13 @@ When bots call `AddCardToLeague(bot.token, 29, "fast")`, it looks for `"2024-fas
 
 **The fix in `staging.go` fill-bots:** When `leagueId` is provided, don't go through `AddCardToLeague` at all. Instead, directly update the league document (read it, append to `CurrentUsers`, increment `NumPlayers`, write it back). Then check if `NumPlayers == 10` and call `CreateLeagueDraftStateUponFilling`.
 
-**Firestore check confirms:**
-- `2024-fast-draft-30` → `NumPlayers: 1`, `CurrentUsers: [{real user}]`
-- The 9 bots were added to OTHER league documents, not this one
+**FIXED AND DEPLOYED (v10).** When `leagueId` is provided, fill-bots now:
+1. Directly updates the league document via Firestore transaction (append to CurrentUsers, increment NumPlayers)
+2. When NumPlayers reaches 10, calls `CreateLeagueDraftStateUponFilling`
+3. Otherwise updates RTDB with current player count
+No longer goes through `AddCardToLeague` which was creating wrong league IDs.
+
+**Richard — retest:** Create a draft, join it, then run `POST /staging/fill-bots/fast?count=9&leagueId=YOUR-LEAGUE-ID`. Should reach 10/10 and create draft state.
 
 ## RESOLVED: /staging/ routes model updates (2026-03-27) ✅
 Boris fixed staging.go compilation errors and redeployed. fill-bots and create-special-draft routes working.
