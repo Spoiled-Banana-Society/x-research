@@ -1116,13 +1116,19 @@ Also write the initial `realTimeDraftInfo` in `CreateLeagueDraftStateUponFilling
 gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=sbs-drafts-api-staging AND textPayload:2024-fast-draft-30" --project=sbs-staging-env --limit=50 --format="table(timestamp,textPayload)"
 ```
 
-**Specifically look for:**
-1. Does `AddCardToLeague` get called for each bot?
-2. Does `NumPlayers` reach 10?
-3. Does `CreateLeagueDraftStateUponFilling` fire?
-4. Any errors/panics in that function?
+**Boris's Claude checked logs and Firestore (2026-03-27):**
 
-The `fill-bots` endpoint returns `botsAdded: 9` but the league's `state/info` document never gets created. Something is silently failing between "bot added" and "draft state initialized".
+Cloud Run logs show all 9 bots logged "joined league 2024-fast-draft-30" but the Firestore document `2024-fast-draft-30` only has 1 player (the real user). The bots were NOT actually added to the league.
+
+**Root cause found:** The `fill-bots` handler passes `speed` ("fast") as `draftType` to `AddCardToLeague`. But `AddCardToLeague` uses `draftType` to construct the league ID: `fmt.Sprintf("2024-%s-draft-%d", draftType, currentDraftNum)`. The actual league might have been created as `"2024-paid-draft-30"` (via `JoinLeagues` which uses "paid"), not `"2024-fast-draft-30"`.
+
+When bots call `AddCardToLeague(bot.token, 29, "fast")`, it looks for `"2024-fast-draft-29"` first. If that doesn't exist, it CREATES a new empty league with that ID, adds the bot there, then moves on. The bots end up in newly created empty leagues, NOT in the user's actual league.
+
+**The fix in `staging.go` fill-bots:** When `leagueId` is provided, don't go through `AddCardToLeague` at all. Instead, directly update the league document (read it, append to `CurrentUsers`, increment `NumPlayers`, write it back). Then check if `NumPlayers == 10` and call `CreateLeagueDraftStateUponFilling`.
+
+**Firestore check confirms:**
+- `2024-fast-draft-30` → `NumPlayers: 1`, `CurrentUsers: [{real user}]`
+- The 9 bots were added to OTHER league documents, not this one
 
 ## RESOLVED: /staging/ routes model updates (2026-03-27) ✅
 Boris fixed staging.go compilation errors and redeployed. fill-bots and create-special-draft routes working.
