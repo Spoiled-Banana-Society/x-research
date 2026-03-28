@@ -983,8 +983,49 @@ gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Foot
 ## DONE: Staging API deployed with playoff-scripts ✅
 - `/draft-actions/` endpoints live and working
 - Cloud Tasks queue created, env vars set
+- Firebase RTDB staging credentials set on Vercel
 
+## ISSUE: /staging/ routes need model updates (2026-03-27)
+
+Boris cloned the actual repo (`playoff-scripts` branch) and tried adding the old `/staging/` package from the `main` branch. Build fails because `staging.go` references old model fields/methods that were refactored in `playoff-scripts`:
+
+```
+staging/staging.go:117  token.PassType undefined
+staging/staging.go:127  token.UpdateInUseDraftTokenInDatabase undefined
+staging/staging.go:426  too many arguments in call to models.JoinLeagues
+staging/staging.go:616  unknown field BatchStart in struct literal of type models.DraftLeagueTracker
+staging/staging.go:617  unknown field BatchJackpotHit
+staging/staging.go:618  unknown field BatchHofHitCount
+```
+
+**Richard — the staging.go needs to be updated to use the new model API from playoff-scripts.** You know both codebases better. The source is at `~/sbs-drafts-api-deploy/staging/staging.go`. Key things to fix:
+1. `token.PassType` — what's the new field name?
+2. `token.UpdateInUseDraftTokenInDatabase()` — what's the replacement?
+3. `models.JoinLeagues` — signature changed (4 args → 3 args)
+4. `models.DraftLeagueTracker` — `BatchStart`, `BatchJackpotHit`, `BatchHofHitCount` fields removed/renamed
+
+Deploy once fixed: `gcloud run deploy sbs-drafts-api-staging --source ~/sbs-drafts-api-deploy --region us-central1 --project sbs-staging-env`
+
+<<<<<<< HEAD
 ## DONE: Firebase RTDB Credentials for Vercel (Boris, 2026-03-27) ✅
+=======
+## ISSUE: /staging/ routes missing from new API (Boris 2026-03-27)
+
+The `playoff-scripts` branch doesn't have the `/staging/fill-bots` and `/staging/create-special-draft` routes. These were on the OLD main branch and are needed for testing.
+
+**What we need Boris to do:**
+1. Add the staging routes back to the `playoff-scripts` branch (or create a new branch that has both)
+2. OR: Tell us how to create a 10-player draft and trigger `CreateLeagueDraftStateUponFilling` with the new code
+3. The key routes we need:
+   - `POST /staging/fill-bots/{speed}?count=N&leagueId=X` — adds N bots to a draft
+   - `POST /staging/create-special-draft` — creates a jackpot/hof draft with specific wallets
+
+Without these, we can't test the full draft flow (filling → drafting → picks → completion).
+
+**Firebase RTDB credentials are now working** (no more PERMISSION_DENIED). Just need a way to create test drafts.
+
+## ACTION NEEDED FROM BORIS (2026-03-27) — Firebase RTDB Credentials for Vercel
+>>>>>>> origin/richard
 
 ### What happened
 Richard's Claude completed the full Firebase RTDB migration — WebSocket replaced with Firebase Realtime DB for draft updates. Everything works, BUT the staging Vercel site (`banana-fantasy-sbs.vercel.app`) uses **prod Firebase credentials** while trying to read the **staging RTDB** (`sbs-staging-env-default-rtdb`). Different Firebase projects = `permission_denied`. The code auto-falls back to WebSocket, but we want Firebase RTDB to work properly.
