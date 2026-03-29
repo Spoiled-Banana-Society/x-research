@@ -46,8 +46,7 @@ function DraftRoomContent() {
   const speedParam = searchParams.get('speed') as 'fast' | 'slow' | null;
   const passTypeParam = searchParams.get('passType') as 'paid' | 'free' | null;
   const isPaidDraft = passTypeParam !== 'free'; // Default to paid if not specified
-  const isSpecialDraft = searchParams.get('special') === 'true'; // JP/HOF special draft — skip slot machine reveal
-  const specialTypeParam = searchParams.get('specialType') as 'jackpot' | 'hof' | null; // Known type for special drafts
+  const specialTypeParam = searchParams.get('specialType') as 'jackpot' | 'hof' | null; // Forces slot machine result for special drafts
 
   // draftId is stateful — starts empty when navigating before joinDraft completes
   const [draftId, setDraftId] = useState(urlDraftId);
@@ -85,7 +84,7 @@ function DraftRoomContent() {
   // Track whether we're waiting for server to create draft documents after filling
   // Initialize from stored state so re-entry renders correctly on first frame (no flash)
   const _isResumingRandomize = !!(storedForInit?.randomizingStartedAt && !storedForInit?.preSpinStartedAt);
-  const _resumeProgressDuration = isSpecialDraft ? 15000 : 3000;
+  const _resumeProgressDuration = 3000;
   const _resumeProgress = _isResumingRandomize
     ? (() => { const e = Date.now() - storedForInit!.randomizingStartedAt!; const t = Math.min(1, e / _resumeProgressDuration); return 0.99 * Math.pow(t, 0.6); })()
     : 0;
@@ -266,8 +265,6 @@ function DraftRoomContent() {
 
   // ==================== PHASE STATE ====================
   const [phase, setPhase] = useState<RoomPhase>(() => {
-    // Special drafts always start in loading to check server state first
-    if (isSpecialDraft) return 'loading';
     // In live mode, if stored state shows draft is past filling, start in 'loading'
     if (isLiveMode && stored && (
       (stored.phase && stored.phase !== 'filling') ||
@@ -278,8 +275,6 @@ function DraftRoomContent() {
     return 'filling';
   });
   const [playerCount, setPlayerCount] = useState(() => {
-    // Special drafts: always start from URL param — queue polling is source of truth
-    if (isSpecialDraft) return Math.min(Math.max(initialPlayers, 1), 10);
     if (stored?.phase === 'filling' && stored.fillingStartedAt) {
       const initPlayers = stored.fillingInitialPlayers ?? Math.max(initialPlayers, 1);
       const elapsed = (Date.now() - stored.fillingStartedAt) / 800;
@@ -381,44 +376,7 @@ function DraftRoomContent() {
       setPhase('filling');
       return;
     }
-    // Special draft without draftId: create the draft first via our API, then continue loading
-    if (!draftId && isSpecialDraft && walletParam) {
-      loadingHandledRef.current = true;
-      const queueRoundId = searchParams.get('queueRoundId');
-      const queueTypeParam = searchParams.get('queueType') || specialTypeParam || 'jackpot';
-
-      const createAndEnter = async () => {
-        try {
-          console.log('[Draft Room] Special draft without draftId — creating via API...');
-          const res = await fetch('/api/queues/create-draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: walletParam,
-              queueType: queueTypeParam,
-              roundId: queueRoundId ? parseInt(queueRoundId) : 1,
-            }),
-          });
-          const data = await res.json();
-          if (data.draftId) {
-            console.log('[Draft Room] Created special draft:', data.draftId);
-            setDraftId(data.draftId);
-            // Reset loadingHandledRef so the loading phase re-runs with the new draftId
-            loadingHandledRef.current = false;
-            setPhase('loading');
-          } else {
-            console.warn('[Draft Room] No draftId from create-draft API, falling back to filling');
-            setPhase('filling');
-          }
-        } catch (err) {
-          console.warn('[Draft Room] Failed to create special draft:', err);
-          setPhase('filling');
-        }
-      }
-      createAndEnter();
-      return;
-    }
-    // Regular case: no draftId means fall back to filling
+    // No draftId means fall back to filling
     if (!draftId) {
       setPhase('filling');
       return;
@@ -440,11 +398,8 @@ function DraftRoomContent() {
         const playerCount = info.draftOrder?.length || 0;
         const draftAlreadyStarted = info.pickNumber > 1 ||
           (info.draftStartTime && info.draftStartTime * 1000 < Date.now());
-        // Special drafts: if Go API has 10 players and a draftStartTime, treat as started
-        // (slow drafts may have draftStartTime in the future during countdown)
-        const specialDraftReady = isSpecialDraft && playerCount >= 10 && info.draftStartTime;
 
-        if (draftAlreadyStarted || specialDraftReady) {
+        if (draftAlreadyStarted) {
           // Draft is actively picking — jump straight to drafting
           console.log(`[Draft Room] Server shows draft at pick ${info.pickNumber} — jumping to drafting`);
 
@@ -468,53 +423,12 @@ function DraftRoomContent() {
           setShowSlotMachine(false);
           setLiveDataReady(true);
 
-          // Restore draft type — URL param takes priority for special drafts
           if (specialTypeParam) setDraftType(specialTypeParam);
           else if (stored?.draftType) setDraftType(stored.draftType);
 
           draftStore.updateDraft(draftId, {
             phase: 'drafting', status: 'drafting', players: 10,
           });
-        } else if (isSpecialDraft && playerCount >= 10) {
-          // Special draft at 10/10 — Cloud Function auto-filled it.
-          // Go straight to pre-spin countdown (60s), skip filling phase entirely.
-          console.log('[Draft Room] Special draft auto-filled to 10/10 — starting countdown');
-          const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
-            id: String(idx + 1),
-            name: u.ownerId,
-            displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase()
-              ? 'You'
-              : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
-            isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(),
-            avatar: '🍌',
-          }));
-          setDraftOrder(realOrder);
-          const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
-          if (userPos >= 0) setUserDraftPosition(userPos);
-          setPlayerCount(10);
-          if (specialTypeParam) setDraftType(specialTypeParam);
-          // Start 60s countdown
-          const countdownStart = Date.now();
-          preSpinStartedAtRef.current = countdownStart;
-          setPhase('pre-spin');
-          setPreSpinCountdown(60);
-          setMainCountdown(60);
-          setLiveDataReady(true);
-          draftStore.updateDraft(draftId, {
-            phase: 'pre-spin', preSpinStartedAt: countdownStart, players: 10,
-            draftOrder: realOrder, userDraftPosition: userPos,
-            type: specialTypeParam || draftType, draftType: specialTypeParam || draftType,
-            isSpecial: true,
-          });
-          // Update queue round status so special-drafts & drafting pages show "Live!"
-          const queueType = specialTypeParam || 'jackpot';
-          const qRoundId = searchParams?.get('queueRoundId');
-          if (qRoundId || queueType) {
-            fetch('/api/queues/update-status', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ queueType, roundId: qRoundId ? parseInt(qRoundId) : 1, status: 'drafting' }),
-            }).catch(() => {});
-          }
         } else if (playerCount >= 10 && info.draftStartTime) {
           // Draft is full but not started yet — in pre-spin/countdown phase
           console.log('[Draft Room] Server shows draft full, starting countdown');
@@ -662,39 +576,6 @@ function DraftRoomContent() {
         }
       } catch (err) {
         console.warn('[Draft Room] Loading phase server check failed:', err);
-
-        // Special drafts (staging): Draft state not created yet (getDraftInfo returns 500).
-        // The league exists (created by the special-drafts page) but needs bots to fill to 10/10
-        // before draft state is created. Fire fill-bots in background and go to filling phase.
-        // The poll will detect when draft state appears.
-        if (isSpecialDraft && isStagingMode() && draftId) {
-          console.log('[Draft Room] Special draft: league exists but no draft state yet. Triggering fill-bots and entering filling phase...');
-          const stagingBase = getStagingApiUrl();
-          if (stagingBase) {
-            // Fire fill-bots + sync Firestore queue in background
-            fetch(`${stagingBase}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, { method: 'POST' })
-              .then(() => {
-                console.log('[Draft Room] Fill-bots triggered for', draftId);
-                // Sync Firestore queue: add bot members + set status to drafting
-                const queueType = specialTypeParam || 'jackpot';
-                const qRoundId = searchParams?.get('queueRoundId') || '1';
-                fetch('/api/queues/update-status', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ queueType, roundId: parseInt(qRoundId), status: 'drafting' }),
-                }).catch(() => {});
-                // Add bot members to Firestore queue so other pages show 10/10
-                fetch('/api/queues/fill-bots', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ queueType, roundId: parseInt(qRoundId), botCount: 9 }),
-                }).catch(() => {});
-              })
-              .catch(e => console.warn('[Draft Room] Fill-bots failed:', e));
-          }
-          // Show filling UI immediately at 1/10
-          setPlayerCount(1);
-          setPhase('filling');
-          return;
-        }
 
         // Fall back to stored phase or filling
         if (stored?.status === 'drafting') {
@@ -1245,7 +1126,7 @@ function DraftRoomContent() {
       fillingStartedAt: Date.now(),
       fillingInitialPlayers: Math.max(initialPlayers, 1),
       liveWalletAddress: walletParam,
-      ...(isSpecialDraft ? { isSpecial: true } : {}),
+      ...(specialTypeParam ? { specialType: specialTypeParam } : {}),
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
@@ -1532,7 +1413,6 @@ function DraftRoomContent() {
   // ==================== FILLING PHASE ====================
   // Client-side visual animation for filling phase (all modes).
   // In live mode, server polling also updates draftOrder + playerCount via Math.max.
-  // Special drafts skip client animation — server polling drives playerCount.
   useEffect(() => {
     if (phase !== 'filling') return;
 
@@ -1543,9 +1423,6 @@ function DraftRoomContent() {
         draftStore.updateDraft(draftId, { phase: 'filling', fillingStartedAt: fillingStartedAtRef.current, fillingInitialPlayers: Math.max(initialPlayers, 1) });
       }
     }
-
-    // Special drafts: server polling drives playerCount, no client-side animation
-    if (isSpecialDraft) return;
 
     // If already at 10, skip directly
     if (playerCount >= 10) return;
@@ -1589,11 +1466,6 @@ function DraftRoomContent() {
 
         if (info.draftOrder && info.draftOrder.length > 0) {
           if (phase === 'filling') {
-            // Special drafts: server is source of truth for player count during filling.
-            // Regular drafts use client-side animation timer instead.
-            if (isSpecialDraft) {
-              setPlayerCount(prev => Math.max(prev, info.draftOrder.length));
-            }
             if (info.draftOrder.length >= 10) {
               console.log('[Draft Room] Poll detected 10/10 — letting at-10 effect handle transition');
             }
@@ -1655,7 +1527,7 @@ function DraftRoomContent() {
     const randomizingStartedAt = existingTimestamp || Date.now();
 
     // Compute initial progress from elapsed time so the bar doesn't flash to 0%
-    const progressDuration = isSpecialDraft ? 15000 : 3000;
+    const progressDuration = 3000;
     const initialElapsed = Date.now() - randomizingStartedAt;
     const initialT = Math.min(1, initialElapsed / progressDuration);
     const initialProgress = 0.99 * (1 - Math.pow(1 - initialT, 3));
@@ -1669,13 +1541,9 @@ function DraftRoomContent() {
     const MIN_RANDOMIZING_MS = 2000;
     const pollDraftId = draftId; // Capture for async closure
 
-    // Special drafts: longer progress duration (server may need more time to create draft)
-    // Regular drafts: 3s cubic ease-out to 99%
-    // Special drafts: 15s cubic ease-out to 99% — gives server plenty of time
-    const PROGRESS_DURATION_MS = isSpecialDraft ? 15000 : 3000;
-    // Special drafts: poll faster (800ms) since server may be ready sooner
-    const RETRY_DELAY_MS = isSpecialDraft ? 800 : 2000;
-    const MAX_RETRIES = isSpecialDraft ? 60 : 30; // more retries with shorter delay
+    const PROGRESS_DURATION_MS = 3000;
+    const RETRY_DELAY_MS = 2000;
+    const MAX_RETRIES = 30;
 
     // Smooth progress animation — ticks every 50ms, reaches ~99% over PROGRESS_DURATION_MS
     // Independent of API attempts so the bar moves smoothly
@@ -1697,23 +1565,10 @@ function DraftRoomContent() {
         try {
           console.log(`[Draft Room] Waiting for server (attempt ${attempts})...`);
 
-          // Special drafts: skip queue status check — Go API is the source of truth
-          // for whether the draft is ready. The queue status may lag behind.
-
           const info = await draftApi.getDraftInfo(pollDraftId);
 
           if (!info.draftOrder || info.draftOrder.length < 10) {
             throw new Error(`Draft order incomplete: ${info.draftOrder?.length || 0}/10`);
-          }
-
-          // Special drafts: verify user is in the draft order (skip stale data)
-          if (isSpecialDraft) {
-            const hasUser = info.draftOrder.some((u: { ownerId: string }) =>
-              u.ownerId.toLowerCase() === walletParam.toLowerCase()
-            );
-            if (!hasUser) {
-              throw new Error('Special draft: user not in draft order yet — retrying');
-            }
           }
 
           const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
@@ -1791,38 +1646,14 @@ function DraftRoomContent() {
     setUserDraftPosition(userPos);
     setWaitingForServer(false);
 
-    // Special drafts: go to pre-spin countdown (60s) but skip the slot machine
-    if (isSpecialDraft) {
-      if (specialTypeParam && !draftType) setDraftType(specialTypeParam);
-      setPlayerCount(10);
-      preSpinStartedAtRef.current = countdownStart;
-      setPhase('pre-spin');
-      setPreSpinCountdown(60); // Full 60s countdown, no 15s slot trigger
-      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
-      setMainCountdown(remaining);
-      if (isLiveMode) setLiveDataReady(true);
-      if (draftId) {
-        draftStore.updateDraft(draftId, {
-          phase: 'pre-spin',
-          preSpinStartedAt: countdownStart,
-          randomizingStartedAt: undefined,
-          draftOrder: order,
-          userDraftPosition: userPos,
-          type: specialTypeParam || draftType,
-          draftType: specialTypeParam || draftType,
-          isSpecial: true,
-        });
-      }
-      console.log('[Draft Room] Special draft — 60s countdown, no slot machine');
-      // Still track promos below
-    } else {
-      // Regular draft: go to pre-spin → slot machine → drafting
-      preSpinStartedAtRef.current = countdownStart;
-      setPhase('pre-spin');
-      setPreSpinCountdown(15);
-      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
-      setMainCountdown(remaining);
-    }
+    // Go to pre-spin → slot machine → drafting (same for all drafts)
+    if (specialTypeParam && !draftType) setDraftType(specialTypeParam);
+    preSpinStartedAtRef.current = countdownStart;
+    setPhase('pre-spin');
+    setPreSpinCountdown(15);
+    const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
+    setMainCountdown(remaining);
+    if (isLiveMode) setLiveDataReady(true);
 
     // Track promos — only paid drafts count (free drafts don't earn promo progress)
     const id = draftId || urlDraftId;
@@ -1878,23 +1709,18 @@ function DraftRoomContent() {
       }).catch(() => {});
     }
 
-    // Regular drafts: set liveDataReady and update store for pre-spin
-    // (Special drafts already did this in the isSpecialDraft branch above)
-    if (!isSpecialDraft) {
-      if (isLiveMode) setLiveDataReady(true);
-      if (draftId) {
-        draftStore.updateDraft(draftId, {
-          phase: 'pre-spin',
-          preSpinStartedAt: countdownStart,
-          randomizingStartedAt: undefined,
-          draftOrder: order,
-          userDraftPosition: userPos,
-          type: draftType,
-          draftType: draftType,
-        });
-      }
-      console.log('[Draft Room] Transitioned to pre-spin phase');
+    if (draftId) {
+      draftStore.updateDraft(draftId, {
+        phase: 'pre-spin',
+        preSpinStartedAt: countdownStart,
+        randomizingStartedAt: undefined,
+        draftOrder: order,
+        userDraftPosition: userPos,
+        type: specialTypeParam || draftType,
+        draftType: specialTypeParam || draftType,
+      });
     }
+    console.log('[Draft Room] Transitioned to pre-spin phase');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverPollResult]);
 
@@ -1918,10 +1744,8 @@ function DraftRoomContent() {
   }, [phase]);
 
   // Transition from pre-spin to spinning when preSpinCountdown hits 0
-  // Special drafts: skip slot machine entirely — stay in pre-spin until mainCountdown hits 0
   useEffect(() => {
     if (phase !== 'pre-spin') return;
-    if (isSpecialDraft) return; // Special drafts don't trigger slot machine
     if (preSpinCountdown > 0) return;
 
     const selectedResult: DraftType = draftType || 'pro';
@@ -2312,22 +2136,6 @@ function DraftRoomContent() {
   };
 
   // ==================== RENDER ====================
-  // Special drafts in loading phase: show a clean loading screen while checking server state
-  if (phase === 'loading' && isSpecialDraft) {
-    return (
-      <div className="min-h-screen text-white bg-black flex flex-col items-center justify-center gap-4">
-        <div className="flex items-center gap-3">
-          <svg className="animate-spin h-6 w-6 text-banana" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-          <span className="text-lg font-semibold">Loading draft room...</span>
-        </div>
-        {specialTypeParam && (
-          <span className={`px-3 py-1 rounded text-sm font-bold ${
-            specialTypeParam === 'jackpot' ? 'bg-red-500/30 text-red-400' : 'bg-yellow-500/30 text-yellow-400'
-          }`}>{specialTypeParam === 'jackpot' ? 'JACKPOT' : 'HALL OF FAME'}</span>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className={`min-h-screen text-white overflow-hidden flex flex-col transition-colors duration-1000 ${getBgColor()} ${screenShake ? 'animate-shake' : ''}`}>
@@ -2424,7 +2232,7 @@ function DraftRoomContent() {
         <div className="h-14 bg-black/30 border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-4">
             <span className="font-bold">{contestName}</span>
-            {visibleDraftType && (phase !== 'filling' || isSpecialDraft) && (
+            {visibleDraftType && phase !== 'filling' && (
               <>
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                   visibleDraftType === 'jackpot' ? 'bg-red-500/30 text-red-400' :
@@ -2434,7 +2242,7 @@ function DraftRoomContent() {
                 <VerifiedBadge type="draft-type" draftType={visibleDraftType} />
               </>
             )}
-            {phase === 'filling' && !isSpecialDraft && (
+            {phase === 'filling' && (
               <span className="px-2 py-0.5 rounded text-xs font-bold bg-white/10 text-white/50">UNREVEALED</span>
             )}
           </div>
@@ -2660,9 +2468,9 @@ function DraftRoomContent() {
                 const isUser = player?.isYou ?? false;
                 // User's card is always "filled" even if playerCount hasn't caught up yet
                 const isFilled = isRandomizing ? true : isFilling ? (isUser || i < playerCount) : true;
-                // Match drafting card style: user = yellow border (or type-specific for special drafts), filled = #444, unfilled = #333
+                // Match drafting card style: user = yellow border, filled = #444, unfilled = #333
                 const borderColor = isUser
-                  ? (isSpecialDraft && visibleDraftType === 'jackpot' ? '#ef4444' : isSpecialDraft && visibleDraftType === 'hof' ? '#D4AF37' : '#F3E216')
+                  ? '#F3E216'
                   : isFilled ? '#444' : '#333';
                 // Show wallet addresses when available, placeholder names otherwise
                 const hasWalletData = player && !player.isYou && player.name && player.name.length > 10;
@@ -2800,9 +2608,7 @@ function DraftRoomContent() {
               ) : phase === 'pre-spin' ? (
                 <span className="text-yellow-400 flex items-center justify-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                  {isSpecialDraft
-                    ? `Draft starting in ${formatTime(mainCountdown)}`
-                    : <>Draft type reveal in {preSpinCountdown}s<span className="text-white/50 ml-2">· Starting in {formatTime(mainCountdown)}</span></>
+                  {<>Draft type reveal in {preSpinCountdown}s<span className="text-white/50 ml-2">· Starting in {formatTime(mainCountdown)}</span></>
                   }
                 </span>
               ) : (phase === 'spinning' || phase === 'result') ? (
