@@ -79,6 +79,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
               theme: 'dark',
               accentColor: '#f59e0b',
               logo: '/sbs-logo.png',
+              walletList: ['detected_wallets', 'metamask', 'coinbase_wallet', 'rainbow', 'wallet_connect'],
             },
             loginMethods: ['wallet', 'google', 'twitter', 'email'],
             embeddedWallets: {
@@ -86,6 +87,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
                 createOnLogin: 'users-without-wallets',
               },
             },
+            walletConnectCloudProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
             fundingMethodConfig: {
               moonpay: { useSandbox: false },
             },
