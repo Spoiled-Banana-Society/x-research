@@ -526,6 +526,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated.jackpotEntries = firestoreBalance.jackpotEntries ?? updated.jackpotEntries;
         updated.hofEntries = firestoreBalance.hofEntries ?? updated.hofEntries;
         updated.cardPurchaseCount = firestoreBalance.cardPurchaseCount ?? updated.cardPurchaseCount;
+        // If Go API token fetch failed, use Firestore draftPasses as fallback
+        if (!tokens && typeof firestoreBalance.draftPasses === 'number') {
+          updated.draftPasses = firestoreBalance.draftPasses;
+        }
       }
       return updated;
     });

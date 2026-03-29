@@ -15,14 +15,23 @@ export async function POST(req: Request) {
       return jsonError('quantity must be a positive integer', 400);
     }
 
-    // 1. Mint tokens via Go API
+    // 1. Mint tokens via Go API using the real mint endpoint (numeric IDs).
+    //    The /staging/mint-tokens/ endpoint creates string-based IDs that crash
+    //    the /draftToken/all endpoint (strconv.Atoi fails), so we use the real
+    //    /owner/{wallet}/draftToken/mint endpoint with high numeric IDs instead.
     const goApiUrl = getStagingApiUrl();
-    const mintRes = await fetch(`${goApiUrl}/staging/mint-tokens/${userId}?count=${quantity}`, {
-      method: 'POST',
-    });
-    if (!mintRes.ok) {
-      const mintErr = await mintRes.text().catch(() => 'Unknown error');
-      return jsonError(`Go API mint failed: ${mintErr}`, 502);
+    const baseId = Date.now();
+    for (let i = 0; i < quantity; i++) {
+      const tokenId = baseId + i;
+      const mintRes = await fetch(`${goApiUrl}/owner/${userId}/draftToken/mint`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minId: tokenId, maxId: tokenId }),
+      });
+      if (!mintRes.ok) {
+        const mintErr = await mintRes.text().catch(() => 'Unknown error');
+        return jsonError(`Go API mint failed (token ${i + 1}/${quantity}): ${mintErr}`, 502);
+      }
     }
 
     // 2. Create purchase record

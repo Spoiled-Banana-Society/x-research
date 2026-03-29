@@ -36,6 +36,8 @@ export async function GET(req: Request) {
       freeDrafts: data.freeDrafts ?? 0,
       jackpotEntries: data.jackpotEntries ?? 0,
       hofEntries: data.hofEntries ?? 0,
+      draftPasses: data.draftPasses ?? 0,
+      cardPurchaseCount: data.cardPurchaseCount ?? 0,
     });
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
