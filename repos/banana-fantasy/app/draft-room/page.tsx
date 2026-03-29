@@ -572,6 +572,25 @@ function DraftRoomContent() {
               setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
             }
             setLiveDataReady(true);
+          } else if (specialTypeParam && playerCount >= 10 && info.draftOrder?.length >= 10) {
+            // Special draft at 10/10 with draft order ready — go straight to countdown
+            console.log('[Draft Room] Special draft 10/10 with order — starting countdown');
+            const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+              id: String(idx + 1), name: u.ownerId,
+              displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase() ? 'You' : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+              isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(), avatar: '🍌',
+            }));
+            setDraftOrder(realOrder);
+            const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+            if (userPos >= 0) setUserDraftPosition(userPos);
+            setPlayerCount(10);
+            setDraftType(specialTypeParam);
+            const countdownStart = Date.now();
+            preSpinStartedAtRef.current = countdownStart;
+            setPhase('countdown');
+            setMainCountdown(60);
+            setLiveDataReady(true);
+            if (draftId) draftStore.updateDraft(draftId, { phase: 'countdown', preSpinStartedAt: countdownStart, draftOrder: realOrder, userDraftPosition: userPos, type: specialTypeParam, draftType: specialTypeParam });
           } else {
             // Still randomizing or just reached 10/10 — let "at 10" effect handle it
             setPlayerCount(10);
