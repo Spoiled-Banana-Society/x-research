@@ -17,7 +17,7 @@ async function sendNotification(wallet: string, type: string, title: string, mes
       type,
       title,
       message,
-      link: link || '/special-drafts',
+      link: link || '/drafting',
       read: false,
       createdAt: FieldValue.serverTimestamp(),
     });

@@ -22,7 +22,7 @@ export interface DraftState {
   lastUpdated: number;
 
   // Phase & timing for resuming draft room state
-  phase?: 'filling' | 'pre-spin' | 'spinning' | 'result' | 'drafting';
+  phase?: 'filling' | 'pre-spin' | 'spinning' | 'result' | 'countdown' | 'drafting';
   fillingStartedAt?: number;
   fillingInitialPlayers?: number; // player count when filling began (for deriving live count)
   preSpinStartedAt?: number;

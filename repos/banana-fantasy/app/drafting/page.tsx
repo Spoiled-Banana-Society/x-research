@@ -143,7 +143,7 @@ export default function DraftingPage() {
                 id: r.draftId || `queue-${q.type}-${r.roundId}`,
                 contestName: `${q.type === 'jackpot' ? 'Jackpot' : 'HOF'} #${r.roundId}`,
                 status: r.draftId ? 'filling' : 'filling',
-                type: null, // Don't spoil — show as unrevealed
+                type: q.type as 'jackpot' | 'hof', // User already knows the type
                 draftSpeed: 'slow' as const,
                 players: r.members?.length || 1,
                 maxPlayers: 10,
@@ -226,7 +226,7 @@ export default function DraftingPage() {
       }
       return;
     }
-    handleDraftClick(draft);
+    router.push(buildDraftRoomUrl(draft));
   };
 
   const handleEnterDraft = () => {
@@ -710,6 +710,10 @@ export default function DraftingPage() {
     return (a.joinedAt || 0) - (b.joinedAt || 0);
   });
 
+  // Partition into special and regular drafts
+  const specialDrafts = sortedDrafts.filter(d => d.specialType);
+  const regularDrafts = sortedDrafts.filter(d => !d.specialType);
+
   // Initialize timers
   useEffect(() => {
     const initial: Record<string, number> = {};
@@ -1065,10 +1069,70 @@ export default function DraftingPage() {
         {/* Left: Drafts */}
         <div className="flex-1 min-w-0">
 
+      {/* Special Drafts Section */}
+      {specialDrafts.length > 0 && (
+        <div className="mb-4">
+          <h2 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 px-2">Special Drafts</h2>
+          <div className="space-y-1.5">
+            {specialDrafts.map((draft) => {
+              const live = getLiveState(draft);
+              const resolvedType = draft.type || draft.draftType || draft.specialType || null;
+              const isRevealed = resolvedType !== null;
+              const accentColor = isRevealed ? getDraftTypeColor(resolvedType!) : '#888';
+              const isYourTurn = draft.isYourTurn;
+              return (
+                <div
+                  key={draft.id}
+                  onClick={() => handleDraftClick(draft)}
+                  className={`group cursor-pointer transition-all overflow-hidden rounded-lg hover:bg-white/[0.03] border-2 ${
+                    isYourTurn ? 'border-banana bg-banana/10' : creatingQueueDraft === draft.id ? 'border-banana/50 bg-banana/5' : 'border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center justify-between px-5 py-3">
+                    <div className="w-20 flex-shrink-0">
+                      <span className="text-white/80 font-medium">{draft.contestName}</span>
+                    </div>
+                    <div className="w-16 flex-shrink-0 text-center hidden sm:block">
+                      <span className="text-white/50 text-sm">8 hour</span>
+                    </div>
+                    <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
+                      {isRevealed && (
+                        <span className="text-sm font-semibold" style={{ color: accentColor }}>
+                          {resolvedType === 'jackpot' ? 'JACKPOT' : resolvedType === 'hof' ? 'HALL OF FAME' : resolvedType!.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-28 flex-shrink-0 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${((draft.players || 1) / 10) * 100}%`, backgroundColor: accentColor }} />
+                        </div>
+                        <span className="text-xs tabular-nums">
+                          <span className="text-white font-semibold">{draft.players || 1}</span>
+                          <span className="text-white/40">/10</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-28 flex-shrink-0 flex items-center justify-end">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDraftClick(draft); }}
+                        className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90"
+                      >
+                        {creatingQueueDraft === draft.id ? 'Joining...' : 'Enter'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Active Drafts */}
-      {sortedDrafts.length > 0 && (
+      {regularDrafts.length > 0 && (
         <div className="space-y-1.5">
-          {sortedDrafts.map((draft) => {
+          {regularDrafts.map((draft) => {
             const live = getLiveState(draft);
             const resolvedType = draft.type || draft.draftType || null;
             const isRevealed = resolvedType !== null;

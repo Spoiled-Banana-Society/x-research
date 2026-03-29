@@ -467,8 +467,8 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
                   <p className="text-white/40 text-xs">
                     8-hour picks · Draft starts as soon as 10 winners fill the queue · We'll notify you!
                   </p>
-                  <a href="/special-drafts" className="inline-block mt-2 text-banana text-xs font-semibold hover:underline">
-                    View Queue Status →
+                  <a href="/drafting" className="inline-block mt-2 text-banana text-xs font-semibold hover:underline">
+                    View My Drafts →
                   </a>
                 </div>
               )}

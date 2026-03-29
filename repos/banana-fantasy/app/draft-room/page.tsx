@@ -458,8 +458,16 @@ function DraftRoomContent() {
             setPhase('drafting');
             setMainCountdown(0);
             setLiveDataReady(true);
-            if (stored?.draftType) setDraftType(stored.draftType);
+            if (specialTypeParam) setDraftType(specialTypeParam);
+            else if (stored?.draftType) setDraftType(stored.draftType);
             draftStore.updateDraft(draftId, { phase: 'drafting', status: 'drafting', players: 10 });
+          } else if (specialTypeParam) {
+            // Special draft: skip slot machine, resume countdown
+            setDraftType(specialTypeParam);
+            setPhase('countdown');
+            setMainCountdown(Math.max(0, Math.floor(60 - elapsed)));
+            setLiveDataReady(true);
+            draftStore.updateDraft(draftId, { phase: 'countdown', preSpinStartedAt: countdownStart, type: specialTypeParam, draftType: specialTypeParam });
           } else if (elapsed >= 15) {
             // Past slot machine start — play animation (or show result if animation done)
             const selectedResult = (stored?.draftType || 'pro') as DraftType;
@@ -1646,14 +1654,29 @@ function DraftRoomContent() {
     setUserDraftPosition(userPos);
     setWaitingForServer(false);
 
-    // Go to pre-spin → slot machine → drafting (same for all drafts)
-    if (specialTypeParam && !draftType) setDraftType(specialTypeParam);
     preSpinStartedAtRef.current = countdownStart;
-    setPhase('pre-spin');
-    setPreSpinCountdown(15);
-    const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
-    setMainCountdown(remaining);
     if (isLiveMode) setLiveDataReady(true);
+
+    if (specialTypeParam) {
+      // Special drafts: skip slot machine, go straight to 1-minute countdown
+      setDraftType(specialTypeParam);
+      setPhase('countdown');
+      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
+      setMainCountdown(remaining);
+      if (draftId) {
+        draftStore.updateDraft(draftId, {
+          phase: 'countdown', preSpinStartedAt: countdownStart,
+          randomizingStartedAt: undefined, draftOrder: order, userDraftPosition: userPos,
+          type: specialTypeParam, draftType: specialTypeParam,
+        });
+      }
+    } else {
+      // Regular drafts: pre-spin → slot machine → drafting
+      setPhase('pre-spin');
+      setPreSpinCountdown(15);
+      const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
+      setMainCountdown(remaining);
+    }
 
     // Track promos — only paid drafts count (free drafts don't earn promo progress)
     const id = draftId || urlDraftId;
@@ -1771,9 +1794,9 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, preSpinCountdown]);
 
-  // Main countdown (timestamp-based, for spinning/result phases)
+  // Main countdown (timestamp-based, for spinning/result/countdown phases)
   useEffect(() => {
-    if (phase !== 'spinning' && phase !== 'result') return;
+    if (phase !== 'spinning' && phase !== 'result' && phase !== 'countdown') return;
     const startedAt = preSpinStartedAtRef.current;
     if (!startedAt) return;
 
@@ -1794,7 +1817,7 @@ function DraftRoomContent() {
   // ==================== DRAFT START ====================
   // ==================== COUNTDOWN END: Transition to active drafting ====================
   useEffect(() => {
-    if (phase !== 'pre-spin' && phase !== 'spinning' && phase !== 'result') return;
+    if (phase !== 'pre-spin' && phase !== 'spinning' && phase !== 'result' && phase !== 'countdown') return;
     if (mainCountdown > 0) return;
 
     // Clean up visual effects
@@ -2109,7 +2132,7 @@ function DraftRoomContent() {
   }, [isRandomizingFromStore, waitingForServer]);
 
   // Draft type that's only visible AFTER slot animation finishes — prevents spoiling the result
-  const visibleDraftType = slotAnimationDone || phase === 'drafting' || phase === 'filling' || !showSlotMachine ? draftType : null;
+  const visibleDraftType = specialTypeParam || slotAnimationDone || phase === 'drafting' || phase === 'filling' || phase === 'countdown' || !showSlotMachine ? draftType : null;
 
   const getBgColor = () => {
     return 'bg-black';
@@ -2228,11 +2251,11 @@ function DraftRoomContent() {
       )}
 
       {/* Top Bar — during filling, loading, or when draft completed */}
-      {(phase === 'filling' || phase === 'loading' || engine.draftStatus === 'completed') && (
+      {(phase === 'filling' || phase === 'countdown' || phase === 'loading' || engine.draftStatus === 'completed') && (
         <div className="h-14 bg-black/30 border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-4">
             <span className="font-bold">{contestName}</span>
-            {visibleDraftType && phase !== 'filling' && (
+            {visibleDraftType && (phase !== 'filling' || specialTypeParam) && (
               <>
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                   visibleDraftType === 'jackpot' ? 'bg-red-500/30 text-red-400' :
@@ -2242,7 +2265,7 @@ function DraftRoomContent() {
                 <VerifiedBadge type="draft-type" draftType={visibleDraftType} />
               </>
             )}
-            {phase === 'filling' && (
+            {phase === 'filling' && !specialTypeParam && (
               <span className="px-2 py-0.5 rounded text-xs font-bold bg-white/10 text-white/50">UNREVEALED</span>
             )}
           </div>
@@ -2611,6 +2634,8 @@ function DraftRoomContent() {
                   {<>Draft type reveal in {preSpinCountdown}s<span className="text-white/50 ml-2">· Starting in {formatTime(mainCountdown)}</span></>
                   }
                 </span>
+              ) : phase === 'countdown' ? (
+                <span className="text-white/70">Draft starting in {formatTime(mainCountdown)}</span>
               ) : (phase === 'spinning' || phase === 'result') ? (
                 <span className="text-white/70">Draft starting in {formatTime(mainCountdown)}</span>
               ) : phase === 'drafting' && engine.isUserTurn && (engine.airplaneMode || autoDraft) ? (

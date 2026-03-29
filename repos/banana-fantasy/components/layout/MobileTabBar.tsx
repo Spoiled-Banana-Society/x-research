@@ -20,7 +20,7 @@ export function MobileTabBar() {
     {
       href: '/drafting',
       label: 'Draft',
-      matchPaths: ['/drafting', '/draft-room', '/buy-drafts', '/special-drafts'],
+      matchPaths: ['/drafting', '/draft-room', '/buy-drafts'],
       badge: 0,
       icon: (active: boolean) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#fbbf24' : 'none'} stroke={active ? '#fbbf24' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

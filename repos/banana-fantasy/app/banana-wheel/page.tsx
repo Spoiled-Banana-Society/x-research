@@ -90,7 +90,7 @@ export default function BananaWheelPage() {
           type: 'jackpot_queue',
           title: '🔥 Jackpot Draft Queued!',
           message: 'You\'re in the Jackpot queue (8-hour picks). Draft starts as soon as 10 winners join!',
-          link: '/special-drafts',
+          link: '/drafting',
         });
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
         updateUser({ hofEntries: (user.hofEntries || 0) + 1 });
@@ -102,7 +102,7 @@ export default function BananaWheelPage() {
           type: 'hof_queue',
           title: '🏆 HOF Draft Queued!',
           message: 'You\'re in the HOF queue (8-hour picks). Draft starts as soon as 10 winners join!',
-          link: '/special-drafts',
+          link: '/drafting',
         });
       }
     },

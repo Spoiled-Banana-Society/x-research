@@ -43,7 +43,7 @@ export function SpecialDraftBanner() {
 
   return (
     <Link
-      href="/special-drafts"
+      href="/drafting"
       className="block w-full max-w-3xl mx-auto mb-6 group"
     >
       <div className="relative overflow-hidden rounded-2xl border border-banana/30 bg-gradient-to-r from-banana/10 via-banana/5 to-transparent p-4 sm:p-5 transition-all hover:border-banana/50 hover:shadow-[0_0_20px_rgba(251,191,36,0.15)]">
