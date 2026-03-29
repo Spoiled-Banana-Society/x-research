@@ -213,14 +213,9 @@ export default function DraftingPage() {
   // Handle entering a draft — for queue drafts without a draftId, create it first
   const [creatingQueueDraft, setCreatingQueueDraft] = useState<string | null>(null);
   const handleDraftClick = async (draft: Draft) => {
-    // Queue draft — if it already has a Go API draftId, navigate directly.
-    // If not, create via API first.
+    // Queue draft — always call create-draft API to ensure fresh state.
+    // The API is idempotent (returns existing league if already created).
     if (draft.specialType && draft.id.startsWith('queue-')) {
-      if (draft.queueDraftId) {
-        // Already has a real draftId — go straight to draft room
-        router.push(buildDraftRoomUrl(draft));
-        return;
-      }
       setCreatingQueueDraft(draft.id);
       try {
         const parts = draft.id.split('-'); // queue-jackpot-1
