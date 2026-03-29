@@ -1113,7 +1113,7 @@ export default function DraftingPage() {
       {specialDrafts.length > 0 && (
         <div className="mb-4">
           <h2 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 px-2">Special Drafts</h2>
-          <div className="space-y-1.5">
+          <div className="divide-y divide-white/[0.06]">
             {specialDrafts.map((draft) => {
               const live = getLiveState(draft);
               const resolvedType = draft.type || draft.draftType || draft.specialType || null;
@@ -1212,7 +1212,7 @@ export default function DraftingPage() {
 
       {/* Active Drafts */}
       {regularDrafts.length > 0 && (
-        <div className="space-y-1.5">
+        <div className="divide-y divide-white/[0.06]">
           {regularDrafts.map((draft) => {
             const live = getLiveState(draft);
             const resolvedType = draft.type || draft.draftType || null;
