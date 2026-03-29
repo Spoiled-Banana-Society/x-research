@@ -825,7 +825,8 @@ export default function DraftingPage() {
 
         // REVEAL: 15s after pre-spin starts = slot machine reveal moment
         // Set type here so it shows on drafting page even if user isn't in draft room
-        if (d.preSpinStartedAt && !d.type && !d.draftType) {
+        // Skip for special drafts — type is already known from specialType
+        if (d.preSpinStartedAt && !d.type && !d.draftType && !d.specialType) {
           const preSpinElapsed = (now - d.preSpinStartedAt) / 1000;
           if (preSpinElapsed >= 15) {
             // Determine type (same logic as draft room slot machine)
@@ -838,8 +839,8 @@ export default function DraftingPage() {
           }
         }
 
-        // PRE-SPIN / SPINNING / RESULT → DRAFTING when 60s expires
-        if (['pre-spin', 'spinning', 'result'].includes(d.phase || '') && d.preSpinStartedAt) {
+        // PRE-SPIN / SPINNING / RESULT / COUNTDOWN → DRAFTING when 60s expires
+        if (['pre-spin', 'spinning', 'result', 'countdown'].includes(d.phase || '') && d.preSpinStartedAt) {
           if ((now - d.preSpinStartedAt) / 1000 >= 60) {
             draftStore.updateDraft(d.id, {
               phase: 'drafting', status: 'drafting',
