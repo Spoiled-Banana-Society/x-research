@@ -385,6 +385,62 @@ function DraftRoomContent() {
 
     let cancelled = false;
 
+    // SPECIAL DRAFT FAST PATH: check server, if 10 players go straight to countdown
+    if (specialTypeParam && draftId) {
+      (async () => {
+        try {
+          const info = await draftApi.getDraftInfo(draftId);
+          if (cancelled) return;
+          if (info.draftOrder?.length >= 10) {
+            // Check if picks already started
+            if (info.pickNumber > 1) {
+              console.log('[Draft Room] Special draft already picking — jumping to drafting');
+              const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+                id: String(idx + 1), name: u.ownerId,
+                displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase() ? 'You' : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+                isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(), avatar: '🍌',
+              }));
+              setDraftOrder(realOrder);
+              const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+              if (userPos >= 0) setUserDraftPosition(userPos);
+              setPlayerCount(10);
+              setDraftType(specialTypeParam);
+              setPhase('drafting');
+              setMainCountdown(0);
+              setLiveDataReady(true);
+              return;
+            }
+            // 10 players, not started — go to countdown
+            console.log('[Draft Room] Special draft 10/10 — starting countdown');
+            const realOrder = info.draftOrder.map((u: { ownerId: string }, idx: number) => ({
+              id: String(idx + 1), name: u.ownerId,
+              displayName: u.ownerId.toLowerCase() === walletParam.toLowerCase() ? 'You' : u.ownerId.slice(0, 6) + '...' + u.ownerId.slice(-4),
+              isYou: u.ownerId.toLowerCase() === walletParam.toLowerCase(), avatar: '🍌',
+            }));
+            setDraftOrder(realOrder);
+            const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
+            if (userPos >= 0) setUserDraftPosition(userPos);
+            setPlayerCount(10);
+            setDraftType(specialTypeParam);
+            const countdownStart = stored?.preSpinStartedAt || Date.now();
+            preSpinStartedAtRef.current = countdownStart;
+            setPhase('countdown');
+            setMainCountdown(Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000)));
+            setLiveDataReady(true);
+            if (draftId) draftStore.updateDraft(draftId, { phase: 'countdown', preSpinStartedAt: countdownStart, draftOrder: realOrder, userDraftPosition: userPos, type: specialTypeParam, draftType: specialTypeParam });
+            return;
+          }
+        } catch {
+          // Server not ready — fall to filling
+        }
+        if (!cancelled) {
+          setPlayerCount(1);
+          setPhase('filling');
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+
     async function checkServerState() {
       try {
         console.log('[Draft Room] Loading phase — checking server state for', draftId);
