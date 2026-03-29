@@ -683,10 +683,20 @@ export default function DraftingPage() {
       const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
       base = [...localDrafts, ...apiOnly];
     }
-    // Merge queue drafts (Jackpot/HOF) — avoid duplicates by ID
-    const existingIds = new Set(base.map(d => d.id));
-    const newQueueDrafts = queueDrafts.filter(d => !existingIds.has(d.id));
-    const all = [...base, ...newQueueDrafts];
+    // Merge queue drafts (Jackpot/HOF) — enrich existing entries with specialType,
+    // or add new ones if they don't exist in the base list
+    const queueById = new Map(queueDrafts.map(d => [d.id, d]));
+    // Enrich existing base drafts with queue data (specialType, type, players)
+    base = base.map(d => {
+      const qd = queueById.get(d.id);
+      if (qd) {
+        queueById.delete(d.id); // consumed
+        return { ...d, specialType: qd.specialType, type: qd.type || d.type, players: Math.max(d.players || 0, qd.players || 0) };
+      }
+      return d;
+    });
+    // Add any remaining queue drafts not already in base
+    const all = [...base, ...Array.from(queueById.values())];
     return all.filter(d => !hiddenDraftIds.has(d.id) && d.status !== 'completed');
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds, queueDrafts]);
 
