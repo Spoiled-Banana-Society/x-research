@@ -890,7 +890,13 @@ export default function DraftingPage() {
     // ── COUNTDOWN ──
     if (draft.preSpinStartedAt) {
       const elapsed = (now - draft.preSpinStartedAt) / 1000;
-      if (elapsed < 15) {
+      // Special drafts (countdown phase): no pre-spin-countdown, go straight to draft-starting
+      if (draft.specialType || draft.phase === 'countdown') {
+        if (elapsed < 60) {
+          const startIn = Math.max(0, Math.ceil(60 - elapsed));
+          return { displayPhase: 'draft-starting', playerCount: 10, countdown: startIn > 0 ? startIn : null, randomizingProgress: null, isFilling: false };
+        }
+      } else if (elapsed < 15) {
         return { displayPhase: 'pre-spin-countdown', playerCount: 10, countdown: Math.max(0, Math.ceil(15 - elapsed)), randomizingProgress: null, isFilling: false };
       } else if (elapsed < 60) {
         const startIn = Math.max(0, Math.ceil(60 - elapsed));
@@ -1069,7 +1075,7 @@ export default function DraftingPage() {
         {/* Left: Drafts */}
         <div className="flex-1 min-w-0">
 
-      {/* Special Drafts Section */}
+      {/* Special Drafts Section — uses same row rendering as regular drafts */}
       {specialDrafts.length > 0 && (
         <div className="mb-4">
           <h2 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 px-2">Special Drafts</h2>
@@ -1080,6 +1086,12 @@ export default function DraftingPage() {
               const isRevealed = resolvedType !== null;
               const accentColor = isRevealed ? getDraftTypeColor(resolvedType!) : '#888';
               const isYourTurn = draft.isYourTurn;
+              // For special drafts: skip "Revealing..." — type is already known
+              // Map pre-spin-countdown to draft-starting (no reveal step)
+              const effectiveLive = draft.specialType && live.displayPhase === 'pre-spin-countdown'
+                ? { ...live, displayPhase: 'draft-starting' as const, countdown: live.countdown != null ? live.countdown + 45 : null }
+                : live;
+
               return (
                 <div
                   key={draft.id}
@@ -1089,37 +1101,72 @@ export default function DraftingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between px-5 py-3">
-                    <div className="w-20 flex-shrink-0">
-                      <span className="text-white/80 font-medium">{draft.contestName}</span>
+                    <div className="w-20 flex-shrink-0 flex items-center gap-1">
+                      {draft.joinedAt ? (
+                        <Tooltip content={`Joined ${formatRelativeTime(draft.joinedAt)}`}>
+                          <span className="text-white/80 font-medium cursor-default">{draft.contestName}</span>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-white/80 font-medium">{draft.contestName}</span>
+                      )}
+                      {draft.airplaneMode && (
+                        <Tooltip content="Auto-pick enabled"><span className="text-sm">✈️</span></Tooltip>
+                      )}
                     </div>
                     <div className="w-16 flex-shrink-0 text-center hidden sm:block">
-                      <span className="text-white/50 text-sm">8 hour</span>
+                      <span className="text-white/50 text-sm">{draft.draftSpeed === 'fast' ? '30 sec' : '8 hour'}</span>
                     </div>
                     <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
-                      {isRevealed && (
-                        <span className="text-sm font-semibold" style={{ color: accentColor }}>
-                          {resolvedType === 'jackpot' ? 'JACKPOT' : resolvedType === 'hof' ? 'HALL OF FAME' : resolvedType!.toUpperCase()}
-                        </span>
+                      {isRevealed ? (
+                        <>
+                          <span className="text-sm font-semibold" style={{ color: accentColor }}>
+                            {resolvedType === 'jackpot' ? 'JACKPOT' : resolvedType === 'hof' ? 'HALL OF FAME' : 'PRO'}
+                          </span>
+                          <VerifiedBadge type="draft-type" draftType={resolvedType!} size="sm" />
+                        </>
+                      ) : (
+                        <span className="text-white/30 text-sm italic">Unrevealed</span>
                       )}
                     </div>
                     <div className="w-28 flex-shrink-0 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${((draft.players || 1) / 10) * 100}%`, backgroundColor: accentColor }} />
+                      {effectiveLive.displayPhase === 'filling' ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(effectiveLive.playerCount / 10) * 100}%`, backgroundColor: accentColor }} />
+                          </div>
+                          <span className="text-xs tabular-nums"><span className="text-white font-semibold">{effectiveLive.playerCount}</span><span className="text-white/40">/10</span></span>
                         </div>
-                        <span className="text-xs tabular-nums">
-                          <span className="text-white font-semibold">{draft.players || 1}</span>
-                          <span className="text-white/40">/10</span>
-                        </span>
-                      </div>
+                      ) : effectiveLive.displayPhase === 'randomizing' ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${Math.round((effectiveLive.randomizingProgress ?? 0) * 100)}%`, background: (effectiveLive.randomizingProgress ?? 0) >= 0.99 ? '#4ade80' : 'linear-gradient(90deg, #fbbf24, #f59e0b)' }} />
+                          </div>
+                          <span className="text-white/40 text-[10px]">Randomizing...</span>
+                        </div>
+                      ) : effectiveLive.displayPhase === 'draft-starting' ? (
+                        <span className="text-white/50 text-sm">{effectiveLive.countdown != null ? `Starts in ${effectiveLive.countdown}s` : 'Starting...'}</span>
+                      ) : isYourTurn ? (
+                        <span className="text-banana font-bold">{draft.pickEndTimestamp ? Math.max(0, Math.ceil(draft.pickEndTimestamp - Date.now() / 1000)) : (draft.timeRemaining ?? 30)}s</span>
+                      ) : draft.currentPick != null ? (
+                        <span className="text-white/50 text-sm">{draft.currentPick === 0 ? 'Next up' : `${draft.currentPick} pick${draft.currentPick !== 1 ? 's' : ''} away`}</span>
+                      ) : (
+                        <span className="text-white/50 text-sm">In progress</span>
+                      )}
                     </div>
-                    <div className="w-28 flex-shrink-0 flex items-center justify-end">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDraftClick(draft); }}
-                        className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90"
-                      >
-                        {creatingQueueDraft === draft.id ? 'Joining...' : 'Enter'}
-                      </button>
+                    <div className="w-28 flex-shrink-0 flex items-center justify-end gap-2">
+                      {['filling', 'randomizing', 'draft-starting'].includes(effectiveLive.displayPhase) ? (
+                        <>
+                          <Tooltip content="Enter draft room">
+                            <button onClick={(e) => { e.stopPropagation(); handleDraftClick(draft); }} className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 bg-white text-black hover:bg-white/90 flex items-center justify-center">
+                              {creatingQueueDraft === draft.id ? 'Joining...' : 'Enter'}
+                            </button>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <button onClick={(e) => { e.stopPropagation(); handleDraftClick(draft); }} className="w-20 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 flex items-center justify-center" style={{ backgroundColor: isYourTurn ? '#fbbf24' : accentColor, color: isYourTurn ? '#000' : '#fff' }}>
+                          {isYourTurn ? 'Pick Now' : 'Enter'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
