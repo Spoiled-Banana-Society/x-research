@@ -45,6 +45,8 @@ export interface DraftState {
 
   // Special draft type (Jackpot/HOF from wheel) — forces slot machine result
   specialType?: 'jackpot' | 'hof';
+  // Real Go API draftId for queue drafts (id field uses queue-type-roundId for uniqueness)
+  queueDraftId?: string;
 
   // Engine state for resuming mid-draft
   enginePicks?: Array<{

@@ -149,10 +149,12 @@ export default function DraftingPage() {
               console.log('[Queue]', q.type, 'round', r.roundId, ':', isMember ? 'MATCH' : 'no match', 'wallets:', memberWallets.join(','));
               if (!isMember) continue;
               drafts.push({
-                id: r.draftId || `queue-${q.type}-${r.roundId}`,
+                // Always use queue-type-roundId as unique key (draftIds can overlap between queue types)
+                id: `queue-${q.type}-${r.roundId}`,
+                queueDraftId: r.draftId || undefined, // Real Go API draftId for navigation
                 contestName: `${q.type === 'jackpot' ? 'Jackpot' : 'HOF'} #${r.roundId}`,
                 status: r.draftId ? 'filling' : 'filling',
-                type: q.type as 'jackpot' | 'hof', // User already knows the type
+                type: q.type as 'jackpot' | 'hof',
                 draftSpeed: 'slow' as const,
                 players: r.members?.length || 1,
                 maxPlayers: 10,
@@ -192,7 +194,7 @@ export default function DraftingPage() {
   // Build draft room URL with live mode params when applicable
   const buildDraftRoomUrl = (draft: Draft) => {
     const params = new URLSearchParams({
-      id: draft.id,
+      id: draft.queueDraftId || draft.id,
       name: draft.contestName,
       speed: draft.draftSpeed,
       players: String(draft.players),
@@ -211,8 +213,14 @@ export default function DraftingPage() {
   // Handle entering a draft — for queue drafts without a draftId, create it first
   const [creatingQueueDraft, setCreatingQueueDraft] = useState<string | null>(null);
   const handleDraftClick = async (draft: Draft) => {
-    // Queue draft without real draftId — need to create via API first
+    // Queue draft — if it already has a Go API draftId, navigate directly.
+    // If not, create via API first.
     if (draft.specialType && draft.id.startsWith('queue-')) {
+      if (draft.queueDraftId) {
+        // Already has a real draftId — go straight to draft room
+        router.push(buildDraftRoomUrl(draft));
+        return;
+      }
       setCreatingQueueDraft(draft.id);
       try {
         const parts = draft.id.split('-'); // queue-jackpot-1
@@ -228,7 +236,7 @@ export default function DraftingPage() {
           }),
         });
         if (res.draftId) {
-          const updatedDraft = { ...draft, id: res.draftId };
+          const updatedDraft = { ...draft, queueDraftId: res.draftId };
           router.push(buildDraftRoomUrl(updatedDraft));
         }
       } catch (err) {
