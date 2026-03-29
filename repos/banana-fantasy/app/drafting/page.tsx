@@ -703,23 +703,38 @@ export default function DraftingPage() {
       const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
       base = [...localDrafts, ...apiOnly];
     }
-    // Merge queue drafts (Jackpot/HOF) — enrich existing entries with specialType,
-    // or add new ones if they don't exist in the base list.
-    // Also remove draftStore entries that duplicate a queue draft's Go API draftId.
-    const queueDraftIds = new Set(queueDrafts.map(d => d.queueDraftId).filter(Boolean));
-    base = base.filter(d => !queueDraftIds.has(d.id)); // Remove draftStore dupes
-    const queueById = new Map(queueDrafts.map(d => [d.id, d]));
-    // Enrich existing base drafts with queue data (specialType, type, players)
-    base = base.map(d => {
-      const qd = queueById.get(d.id);
-      if (qd) {
-        queueById.delete(d.id); // consumed
-        return { ...d, specialType: qd.specialType, type: qd.type || d.type, players: Math.max(d.players || 0, qd.players || 0), airplaneMode: undefined };
+    // Merge queue drafts with draftStore entries.
+    // Queue drafts use queue-{type}-{roundId} as ID. DraftStore entries use Go API draftId.
+    // When a queue draft has a queueDraftId matching a draftStore entry, merge the draftStore's
+    // live state (filling timestamps, phase, etc.) INTO the queue draft — keeping the queue's
+    // unique ID and specialType. This ensures:
+    // 1. No duplicate rows (queue + draftStore showing the same draft)
+    // 2. Live state (filling animation, randomizing, countdown) shows on the queue row
+    const storeByDraftId = new Map(base.map(d => [d.id, d]));
+    const mergedQueueDrafts = queueDrafts.map(qd => {
+      if (qd.queueDraftId) {
+        const storeEntry = storeByDraftId.get(qd.queueDraftId);
+        if (storeEntry) {
+          storeByDraftId.delete(qd.queueDraftId); // consumed — won't show as separate row
+          // Merge: queue identity + draftStore live state
+          return {
+            ...storeEntry,
+            id: qd.id, // Keep queue-{type}-{roundId} as unique key
+            queueDraftId: qd.queueDraftId,
+            contestName: qd.contestName,
+            specialType: qd.specialType,
+            type: qd.type,
+            draftSpeed: qd.draftSpeed,
+            players: Math.max(storeEntry.players || 0, qd.players || 0),
+            airplaneMode: undefined,
+          };
+        }
       }
-      return d;
+      return qd;
     });
-    // Add any remaining queue drafts not already in base
-    const all = [...base, ...Array.from(queueById.values())];
+    // Remaining base entries (not consumed by queue merge)
+    const remainingBase = base.filter(d => storeByDraftId.has(d.id));
+    const all = [...remainingBase, ...mergedQueueDrafts];
     return all.filter(d => (d.specialType || !hiddenDraftIds.has(d.id)) && d.status !== 'completed');
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds, queueDrafts]);
 
