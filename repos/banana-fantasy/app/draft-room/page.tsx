@@ -396,8 +396,11 @@ function DraftRoomContent() {
         if (cancelled) return;
 
         const playerCount = info.draftOrder?.length || 0;
-        const draftAlreadyStarted = info.pickNumber > 1 ||
-          (info.draftStartTime && info.draftStartTime * 1000 < Date.now());
+        // For special drafts: only skip to drafting if actual picks have been made (pickNumber > 1).
+        // The Go backend sets draftStartTime immediately, but the frontend should still show its countdown.
+        const draftAlreadyStarted = specialTypeParam
+          ? info.pickNumber > 1
+          : (info.pickNumber > 1 || (info.draftStartTime && info.draftStartTime * 1000 < Date.now()));
 
         if (draftAlreadyStarted) {
           // Draft is actively picking — jump straight to drafting
