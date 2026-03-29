@@ -1695,6 +1695,14 @@ function DraftRoomContent() {
       setPreSpinCountdown(15);
       const remaining = Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000));
       setMainCountdown(remaining);
+      if (draftId) {
+        draftStore.updateDraft(draftId, {
+          phase: 'pre-spin', preSpinStartedAt: countdownStart,
+          randomizingStartedAt: undefined, draftOrder: order, userDraftPosition: userPos,
+          type: specialTypeParam || draftType, draftType: specialTypeParam || draftType,
+        });
+      }
+      console.log('[Draft Room] Transitioned to pre-spin phase');
     }
 
     // Track promos — only paid drafts count (free drafts don't earn promo progress)
@@ -1752,18 +1760,6 @@ function DraftRoomContent() {
       }).catch(() => {});
     }
 
-    if (draftId) {
-      draftStore.updateDraft(draftId, {
-        phase: 'pre-spin',
-        preSpinStartedAt: countdownStart,
-        randomizingStartedAt: undefined,
-        draftOrder: order,
-        userDraftPosition: userPos,
-        type: specialTypeParam || draftType,
-        draftType: specialTypeParam || draftType,
-      });
-    }
-    console.log('[Draft Room] Transitioned to pre-spin phase');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverPollResult]);
 
