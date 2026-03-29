@@ -213,9 +213,13 @@ export default function DraftingPage() {
   // Handle entering a draft — for queue drafts without a draftId, create it first
   const [creatingQueueDraft, setCreatingQueueDraft] = useState<string | null>(null);
   const handleDraftClick = async (draft: Draft) => {
-    // Queue draft — always call create-draft API to ensure fresh state.
-    // The API is idempotent (returns existing league if already created).
+    // Queue draft — only call create-draft if no draftId exists yet.
+    // If draftId exists, go directly to draft room.
     if (draft.specialType && draft.id.startsWith('queue-')) {
+      if (draft.queueDraftId) {
+        router.push(buildDraftRoomUrl(draft));
+        return;
+      }
       setCreatingQueueDraft(draft.id);
       try {
         const parts = draft.id.split('-'); // queue-jackpot-1
@@ -727,8 +731,18 @@ export default function DraftingPage() {
       }
       return qd;
     });
-    // Remaining base entries (not consumed by queue merge)
-    const remainingBase = base.filter(d => storeByDraftId.has(d.id));
+    // Remaining base entries (not consumed by queue merge).
+    // Also filter out stale special draft entries from draftStore — these are
+    // leftovers from previous create-draft calls with different draftIds.
+    const queueDraftIdSet = new Set(queueDrafts.map(qd => qd.queueDraftId).filter(Boolean));
+    const remainingBase = base.filter(d => {
+      if (!storeByDraftId.has(d.id)) return false;
+      // Remove any draftStore entry whose draftId could be from a special draft
+      // (slow speed + specialType, or id matches any queue draftId)
+      if (d.specialType) return false;
+      if (queueDraftIdSet.has(d.id)) return false;
+      return true;
+    });
     const all = [...remainingBase, ...mergedQueueDrafts];
     return all.filter(d => (d.specialType || !hiddenDraftIds.has(d.id)) && d.status !== 'completed');
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds, queueDrafts]);
