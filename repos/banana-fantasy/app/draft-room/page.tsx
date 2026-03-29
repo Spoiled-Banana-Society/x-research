@@ -1276,13 +1276,11 @@ function DraftRoomContent() {
         if (prefs.autoDraft && !engine.airplaneMode) {
           engine.setAirplaneMode(true);
         }
-        // If server-side missed picks >= 2 and auto-draft not yet on, enable it
-        if (prefs.numPicksMissedConsecutive >= 2 && !prefs.autoDraft) {
-          // Auto-enable — server will do this too, but sync the UI immediately
-          setAutoDraft(true);
-          engine.setAirplaneMode(true);
-          setShowAutoDraftNotification(true);
-          setTimeout(() => setShowAutoDraftNotification(false), 5000);
+        // If server says auto-draft is off but local is on, sync local off
+        if (!prefs.autoDraft && engine.airplaneMode) {
+          engine.setAirplaneMode(false);
+          const id = getPersistId();
+          if (id) draftStore.updateDraft(id, { airplaneMode: false });
         }
       })
       .catch((e) => {
@@ -1722,7 +1720,8 @@ function DraftRoomContent() {
 
     // Draft type is assigned by the backend when draft fills (league.Level).
     // Fetch it now; fall back to stored type or 'pro' if unavailable.
-    if (id && walletParam) {
+    // Skip for special drafts — specialTypeParam is the source of truth.
+    if (id && walletParam && !specialTypeParam) {
       getDraftTokenLevel(walletParam, id).then(level => {
         if (!level) return;
         const typeMap: Record<string, DraftType> = { 'Jackpot': 'jackpot', 'Hall of Fame': 'hof', 'Pro': 'pro' };
