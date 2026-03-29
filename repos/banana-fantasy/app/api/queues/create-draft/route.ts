@@ -56,14 +56,36 @@ export async function POST(req: Request) {
     await updateQueueRoundDraftId(queueType, roundId, String(draftId));
 
     // 4. Fill with 9 bots on Go API
-    await fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, {
+    const fillRes = await fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, {
       method: 'POST',
-    }).catch(() => {});
+    }).catch(() => null);
+    console.log('[create-draft] fill-bots result:', fillRes?.status, fillRes?.ok);
 
-    // 5. Sync Firestore queue: add bot members + set status to 'drafting'
+    // 5. Wait for draft state to be created (fill-bots triggers CreateLeagueDraftStateUponFilling)
+    // Poll getDraftInfo up to 10 times with 1s delay
+    let stateReady = false;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        const infoRes = await fetch(`${STAGING_API_URL}/draft/${draftId}/state/info`);
+        if (infoRes.ok) {
+          const info = await infoRes.json();
+          if (info.draftOrder && info.draftOrder.length >= 10) {
+            stateReady = true;
+            console.log('[create-draft] Draft state ready after', attempt + 1, 'attempts');
+            break;
+          }
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    if (!stateReady) {
+      console.warn('[create-draft] Draft state not ready after 10 attempts for', draftId);
+    }
+
+    // 6. Sync Firestore queue: add bot members + set status to 'drafting'
     await fillQueueRoundWithBots(queueType, roundId, 9).catch(() => {});
 
-    // 6. Return the draftId to the client
+    // 7. Return the draftId to the client
     return json({ draftId: String(draftId) }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
