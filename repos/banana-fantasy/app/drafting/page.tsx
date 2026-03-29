@@ -704,7 +704,10 @@ export default function DraftingPage() {
       base = [...localDrafts, ...apiOnly];
     }
     // Merge queue drafts (Jackpot/HOF) — enrich existing entries with specialType,
-    // or add new ones if they don't exist in the base list
+    // or add new ones if they don't exist in the base list.
+    // Also remove draftStore entries that duplicate a queue draft's Go API draftId.
+    const queueDraftIds = new Set(queueDrafts.map(d => d.queueDraftId).filter(Boolean));
+    base = base.filter(d => !queueDraftIds.has(d.id)); // Remove draftStore dupes
     const queueById = new Map(queueDrafts.map(d => [d.id, d]));
     // Enrich existing base drafts with queue data (specialType, type, players)
     base = base.map(d => {
