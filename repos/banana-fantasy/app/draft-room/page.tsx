@@ -1546,7 +1546,7 @@ function DraftRoomContent() {
 
     const PROGRESS_DURATION_MS = 3000;
     const RETRY_DELAY_MS = 2000;
-    const MAX_RETRIES = 30;
+    const MAX_RETRIES = 10; // 10 retries × 2s = 20s max wait before fallback
 
     // Smooth progress animation — ticks every 50ms, reaches ~99% over PROGRESS_DURATION_MS
     // Independent of API attempts so the bar moves smoothly
