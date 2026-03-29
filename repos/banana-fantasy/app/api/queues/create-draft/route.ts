@@ -23,6 +23,25 @@ export async function POST(req: Request) {
       return jsonError('Invalid queue type', 400);
     }
 
+    // Check if queue round already has a draftId with valid Go API state
+    const { getQueueStatus } = await import('@/lib/db');
+    const queues = await getQueueStatus();
+    const existingRound = queues[queueType]?.rounds?.find((r: { roundId: number }) => r.roundId === roundId);
+    if (existingRound?.draftId) {
+      // Verify Go API has state for this draft
+      try {
+        const checkRes = await fetch(`${STAGING_API_URL}/draft/${existingRound.draftId}/state/info`);
+        if (checkRes.ok) {
+          const info = await checkRes.json();
+          if (info.draftOrder?.length >= 10) {
+            console.log('[create-draft] Reusing existing draftId:', existingRound.draftId);
+            return json({ draftId: String(existingRound.draftId) }, 200);
+          }
+        }
+      } catch {}
+      // State doesn't exist — fall through to create new
+    }
+
     // 1. Mint a token (may already exist — ignore errors)
     const mintId = 100000 + Math.floor(Math.random() * 50000);
     await fetch(`${STAGING_API_URL}/owner/${userId}/draftToken/mint`, {
