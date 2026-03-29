@@ -707,7 +707,7 @@ export default function DraftingPage() {
     });
     // Add any remaining queue drafts not already in base
     const all = [...base, ...Array.from(queueById.values())];
-    return all.filter(d => !hiddenDraftIds.has(d.id) && d.status !== 'completed');
+    return all.filter(d => (d.specialType || !hiddenDraftIds.has(d.id)) && d.status !== 'completed');
   }, [isLive, localDrafts, liveDrafts, hiddenDraftIds, queueDrafts]);
 
   // Sort drafts: Your turn > In progress (by picks away) > Filling (oldest first, newest at bottom)
