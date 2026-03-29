@@ -213,9 +213,14 @@ export default function DraftingPage() {
   // Handle entering a draft — for queue drafts without a draftId, create it first
   const [creatingQueueDraft, setCreatingQueueDraft] = useState<string | null>(null);
   const handleDraftClick = async (draft: Draft) => {
-    // Queue draft — always call create-draft to ensure Go API state exists.
-    // The API reuses existing state if available, creates new if not.
+    // Queue draft — if still filling (<10 players), go directly to draft room.
+    // Only call create-draft when at 10/10 (to trigger fill-bots for staging).
     if (draft.specialType && draft.id.startsWith('queue-')) {
+      if ((draft.players || 0) < 10) {
+        // Still filling — navigate directly, no create-draft needed
+        router.push(buildDraftRoomUrl(draft));
+        return;
+      }
       setCreatingQueueDraft(draft.id);
       try {
         const parts = draft.id.split('-'); // queue-jackpot-1
