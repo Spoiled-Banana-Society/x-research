@@ -62,7 +62,9 @@ export async function POST(req: Request) {
     console.log('[create-draft] fill-bots result:', fillRes?.status, fillRes?.ok);
 
     // 5. Wait for draft state to be created (fill-bots triggers CreateLeagueDraftStateUponFilling)
-    // Poll getDraftInfo up to 10 times with 1s delay
+    // Give the Go backend time to process before polling
+    await new Promise(r => setTimeout(r, 3000));
+    // Poll getDraftInfo up to 10 times with 2s delay
     let stateReady = false;
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
@@ -76,7 +78,7 @@ export async function POST(req: Request) {
           }
         }
       } catch {}
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 2000));
     }
     if (!stateReady) {
       console.warn('[create-draft] Draft state not ready after 10 attempts for', draftId);
