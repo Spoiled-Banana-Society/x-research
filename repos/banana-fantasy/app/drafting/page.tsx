@@ -1133,7 +1133,7 @@ export default function DraftingPage() {
                       ) : (
                         <span className="text-white/80 font-medium">{draft.contestName}</span>
                       )}
-                      {draft.airplaneMode && (
+                      {draft.airplaneMode && draft.status === 'drafting' && (
                         <Tooltip content="Auto-pick enabled"><span className="text-sm">✈️</span></Tooltip>
                       )}
                     </div>
