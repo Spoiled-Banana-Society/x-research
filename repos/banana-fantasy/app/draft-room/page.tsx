@@ -1169,12 +1169,17 @@ function DraftRoomContent() {
   // Helper: get the draft localStorage key prefix
   const getPersistId = () => draftId || urlDraftId;
 
-  // Restore airplane mode on mount — engine state can only be set via setter
+  // Restore airplane mode on mount — only if this is a re-entry (draftStore has an entry).
+  // Fresh entries always start with airplane off.
   useEffect(() => {
     const id = getPersistId();
     if (!id) return;
-    if (localStorage.getItem(`airplane:${id}`) === '1') {
+    const existing = draftStore.getDraft(id);
+    if (existing && localStorage.getItem(`airplane:${id}`) === '1') {
       engine.setAirplaneMode(true);
+    } else {
+      // Fresh draft — clear any stale airplane state from previous drafts with same ID
+      localStorage.removeItem(`airplane:${id}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
