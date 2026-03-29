@@ -703,7 +703,7 @@ export default function DraftingPage() {
       const qd = queueById.get(d.id);
       if (qd) {
         queueById.delete(d.id); // consumed
-        return { ...d, specialType: qd.specialType, type: qd.type || d.type, players: Math.max(d.players || 0, qd.players || 0) };
+        return { ...d, specialType: qd.specialType, type: qd.type || d.type, players: Math.max(d.players || 0, qd.players || 0), airplaneMode: undefined };
       }
       return d;
     });
