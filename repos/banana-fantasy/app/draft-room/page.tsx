@@ -2292,8 +2292,8 @@ function DraftRoomContent() {
         </div>
       )}
 
-      {/* Pulsing glow */}
-      {pulseGlow && visibleDraftType && (visibleDraftType === 'jackpot' || visibleDraftType === 'hof') && (
+      {/* Pulsing glow — for special drafts, always show during countdown/drafting */}
+      {((pulseGlow || (specialTypeParam && (phase === 'countdown' || phase === 'drafting'))) && visibleDraftType && (visibleDraftType === 'jackpot' || visibleDraftType === 'hof')) && (
         <div
           className="fixed inset-0 z-30 pointer-events-none animate-pulse-glow"
           style={{
