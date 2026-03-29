@@ -1276,12 +1276,9 @@ function DraftRoomContent() {
         if (prefs.autoDraft && !engine.airplaneMode) {
           engine.setAirplaneMode(true);
         }
-        // If server says auto-draft is off but local is on, sync local off
-        if (!prefs.autoDraft && engine.airplaneMode) {
-          engine.setAirplaneMode(false);
-          const id = getPersistId();
-          if (id) draftStore.updateDraft(id, { airplaneMode: false });
-        }
+        // Don't override local airplane mode from server — localStorage is the
+        // user's explicit choice. The old airplane toggle doesn't call the server
+        // API, so server will say autoDraft=false even when user enabled it locally.
       })
       .catch((e) => {
         console.warn('[Preferences] Failed to load draft preferences:', e);
@@ -2675,52 +2672,19 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Auto-draft toggle (REST-synced for live mode, local for local mode) */}
-              {isLiveMode ? (
-                <div className="flex items-center gap-1.5 border border-gray-500 px-2 py-0.5">
-                  <span className="text-[11px] uppercase font-bold whitespace-nowrap font-primary">
-                    Auto-draft
-                  </span>
-                  <button
-                    onClick={handleToggleAutoDraft}
-                    disabled={autoDraftLoading}
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      autoDraft ? 'bg-emerald-600' : 'bg-slate-500'
-                    } ${autoDraftLoading ? 'opacity-50 cursor-wait' : ''}`}
-                    title={autoDraft ? 'Auto-draft ON — server picks for you' : 'Auto-draft OFF'}
-                  >
-                    <span className="sr-only">Toggle auto-draft</span>
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${
-                        autoDraft ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleToggleAirplane}
-                  title={engine.airplaneMode ? 'Auto-pick ON — click to disable' : 'Auto-pick OFF — click to enable'}
-                  className="cursor-pointer flex items-center gap-1.5 border border-gray-500 px-2 py-0.5 transition-all"
-                >
-                  <span className="text-[11px] uppercase font-bold whitespace-nowrap font-primary">
-                    Auto-draft
-                  </span>
-                  <div
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                      engine.airplaneMode ? 'bg-emerald-600' : 'bg-slate-500'
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${
-                        engine.airplaneMode ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </div>
-                </button>
-              )}
+              {/* Airplane mode toggle */}
+              <button
+                onClick={isLiveMode ? handleToggleAutoDraft : handleToggleAirplane}
+                disabled={isLiveMode && autoDraftLoading}
+                title={(isLiveMode ? autoDraft : engine.airplaneMode) ? 'Auto-draft ON — click to disable' : 'Auto-draft OFF — click to enable'}
+                className={`cursor-pointer text-[12px] flex items-center justify-center border px-1 font-primary transition-all ${
+                  (isLiveMode ? autoDraft : engine.airplaneMode)
+                    ? 'border-emerald-500 text-emerald-400'
+                    : 'border-gray-500 text-white/60'
+                } ${isLiveMode && autoDraftLoading ? 'opacity-50 cursor-wait' : ''}`}
+              >
+                ✈️ {(isLiveMode ? autoDraft : engine.airplaneMode) ? 'ON' : 'OFF'}
+              </button>
             </div>
           </div>
 
