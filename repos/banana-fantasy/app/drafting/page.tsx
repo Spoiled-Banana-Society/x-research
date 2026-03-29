@@ -125,20 +125,28 @@ export default function DraftingPage() {
   // Polls Firestore queue (not Go API), so doesn't require isLive/walletAddress
   const [queueDrafts, setQueueDrafts] = useState<Draft[]>([]);
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log('[Queue] No user.id, skipping queue poll');
+      return;
+    }
     const userId = user.id;
     const walletAddr = user.walletAddress;
+    console.log('[Queue] Starting poll, userId:', userId, 'walletAddr:', walletAddr);
     const poll = () => {
       fetchJson<Record<string, DraftQueue>>('/api/queues')
         .then(queues => {
           const drafts: Draft[] = [];
+          let totalRounds = 0;
           for (const q of Object.values(queues)) {
             for (const r of q.rounds || []) {
+              totalRounds++;
               if (r.status === 'completed') continue;
+              const memberWallets = r.members?.map((m: { wallet?: string }) => m.wallet) || [];
               const isMember = r.members?.some((m: { wallet?: string }) =>
                 m.wallet?.toLowerCase() === userId?.toLowerCase() ||
                 m.wallet?.toLowerCase() === walletAddr?.toLowerCase()
               );
+              console.log('[Queue]', q.type, 'round', r.roundId, ':', isMember ? 'MATCH' : 'no match', 'wallets:', memberWallets.join(','));
               if (!isMember) continue;
               drafts.push({
                 id: r.draftId || `queue-${q.type}-${r.roundId}`,
@@ -157,9 +165,10 @@ export default function DraftingPage() {
               });
             }
           }
+          console.log('[Queue] Found', drafts.length, 'matching queue drafts out of', totalRounds, 'total rounds');
           setQueueDrafts(drafts);
         })
-        .catch(() => {});
+        .catch((e) => { console.error('[Queue] Poll failed:', e); });
     };
     poll();
     const interval = setInterval(poll, 5000);
