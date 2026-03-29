@@ -240,8 +240,7 @@ export default function HomePage() {
       {/* Get the App banner */}
       <AddToHomeScreenCard />
 
-      {/* Special Draft Banner (shows when user has Jackpot/HOF entries) */}
-      <SpecialDraftBanner />
+      {/* Special Draft Banner removed — special drafts now show on /drafting page */}
 
       {/* Featured Contest */}
       <section className="mb-6">
