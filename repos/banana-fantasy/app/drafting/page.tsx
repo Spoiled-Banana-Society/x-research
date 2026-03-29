@@ -235,7 +235,15 @@ export default function DraftingPage() {
           }),
         });
         if (res.draftId) {
-          const updatedDraft = { ...draft, queueDraftId: res.draftId };
+          // Re-fetch queue to get the actual draftId stored in Firestore
+          // (may differ from JoinLeagues return due to Go API ID format)
+          let finalDraftId = res.draftId;
+          try {
+            const queues = await fetchJson<Record<string, { rounds?: Array<{ roundId: number; draftId?: string | null }> }>>('/api/queues');
+            const round = queues[queueType]?.rounds?.find(r => r.roundId === roundId);
+            if (round?.draftId) finalDraftId = round.draftId;
+          } catch {}
+          const updatedDraft = { ...draft, queueDraftId: finalDraftId };
           router.push(buildDraftRoomUrl(updatedDraft));
         }
       } catch (err) {

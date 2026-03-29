@@ -74,8 +74,15 @@ export async function POST(req: Request) {
     // 3. Update the queue round in Firestore with the draftId
     await updateQueueRoundDraftId(queueType, roundId, String(draftId));
 
-    // 4. Fill with 9 bots on Go API
-    const fillRes = await fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${draftId}`, {
+    // Re-read queue to get actual stored draftId (may differ from JoinLeagues return)
+    const { getQueueStatus: getQS } = await import('@/lib/db');
+    const updatedQueues = await getQS();
+    const updatedRound = updatedQueues[queueType]?.rounds?.find((r: { roundId: number }) => r.roundId === roundId);
+    const actualDraftId = updatedRound?.draftId || draftId;
+    console.log('[create-draft] JoinLeagues returned:', draftId, '| Queue stored:', actualDraftId);
+
+    // 4. Fill with 9 bots on Go API (use the actual stored draftId)
+    const fillRes = await fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${actualDraftId}`, {
       method: 'POST',
     }).catch(() => null);
     console.log('[create-draft] fill-bots result:', fillRes?.status, fillRes?.ok);
@@ -87,7 +94,7 @@ export async function POST(req: Request) {
     let stateReady = false;
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
-        const infoRes = await fetch(`${STAGING_API_URL}/draft/${draftId}/state/info`);
+        const infoRes = await fetch(`${STAGING_API_URL}/draft/${actualDraftId}/state/info`);
         if (infoRes.ok) {
           const info = await infoRes.json();
           if (info.draftOrder && info.draftOrder.length >= 10) {
@@ -100,14 +107,14 @@ export async function POST(req: Request) {
       await new Promise(r => setTimeout(r, 2000));
     }
     if (!stateReady) {
-      console.warn('[create-draft] Draft state not ready after 10 attempts for', draftId);
+      console.warn('[create-draft] Draft state not ready after 10 attempts for', actualDraftId);
     }
 
     // 6. Sync Firestore queue: add bot members + set status to 'drafting'
     await fillQueueRoundWithBots(queueType, roundId, 9).catch(() => {});
 
-    // 7. Return the draftId to the client
-    return json({ draftId: String(draftId) }, 200);
+    // 7. Return the actual draftId to the client
+    return json({ draftId: String(actualDraftId) }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     const msg = err instanceof Error ? err.message : String(err);
