@@ -2672,19 +2672,23 @@ function DraftRoomContent() {
                   {isMuted ? 'UNMUTE' : 'MUTE'} <span className="ml-1">🎵</span>
                 </button>
               </div>
-              {/* Airplane mode toggle */}
-              <button
-                onClick={isLiveMode ? handleToggleAutoDraft : handleToggleAirplane}
-                disabled={isLiveMode && autoDraftLoading}
-                title={(isLiveMode ? autoDraft : engine.airplaneMode) ? 'Auto-draft ON — click to disable' : 'Auto-draft OFF — click to enable'}
-                className={`cursor-pointer text-[12px] flex items-center justify-center border px-1 font-primary transition-all ${
-                  (isLiveMode ? autoDraft : engine.airplaneMode)
-                    ? 'border-emerald-500 text-emerald-400'
-                    : 'border-gray-500 text-white/60'
-                } ${isLiveMode && autoDraftLoading ? 'opacity-50 cursor-wait' : ''}`}
-              >
-                ✈️ {(isLiveMode ? autoDraft : engine.airplaneMode) ? 'ON' : 'OFF'}
-              </button>
+              {/* Airplane mode toggle — use server autoDraft during drafting, local engine state otherwise */}
+              {(() => {
+                const isOn = (isLiveMode && phase === 'drafting') ? autoDraft : engine.airplaneMode;
+                const handler = (isLiveMode && phase === 'drafting') ? handleToggleAutoDraft : handleToggleAirplane;
+                return (
+                  <button
+                    onClick={handler}
+                    disabled={isLiveMode && phase === 'drafting' && autoDraftLoading}
+                    title={isOn ? 'Auto-draft ON — click to disable' : 'Auto-draft OFF — click to enable'}
+                    className={`cursor-pointer text-[12px] flex items-center justify-center border px-1 font-primary transition-all ${
+                      isOn ? 'border-emerald-500 text-emerald-400' : 'border-gray-500 text-white/60'
+                    } ${isLiveMode && phase === 'drafting' && autoDraftLoading ? 'opacity-50 cursor-wait' : ''}`}
+                  >
+                    ✈️ {isOn ? 'ON' : 'OFF'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
 
