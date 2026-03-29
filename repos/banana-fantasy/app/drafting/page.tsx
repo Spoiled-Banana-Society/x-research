@@ -202,7 +202,9 @@ export default function DraftingPage() {
       params.set('wallet', user.walletAddress);
     }
     if (draft.passType) params.set('passType', draft.passType);
-    if (draft.specialType) params.set('specialType', draft.specialType);
+    // Special drafts: ensure specialType is always in the URL
+    const st = draft.specialType || ((draft.type === 'jackpot' || draft.type === 'hof') && draft.draftSpeed === 'slow' ? draft.type : undefined);
+    if (st) params.set('specialType', st);
     return `/draft-room?${params.toString()}`;
   };
 
