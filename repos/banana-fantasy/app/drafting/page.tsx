@@ -1096,6 +1096,13 @@ export default function DraftingPage() {
         {/* Left: Drafts */}
         <div className="flex-1 min-w-0">
 
+      {/* Debug: show queue state */}
+      {isStagingMode() && (
+        <div className="text-[10px] text-white/30 px-2 mb-2 font-mono">
+          uid:{user?.id?.slice(0,12)} | wallet:{user?.walletAddress?.slice(0,12)} | queueDrafts:{queueDrafts.length} | special:{specialDrafts.length} | regular:{regularDrafts.length} | active:{activeDrafts.length}
+        </div>
+      )}
+
       {/* Special Drafts Section — uses same row rendering as regular drafts */}
       {specialDrafts.length > 0 && (
         <div className="mb-4">
