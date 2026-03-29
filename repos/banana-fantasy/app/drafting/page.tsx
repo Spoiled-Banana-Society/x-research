@@ -122,9 +122,10 @@ export default function DraftingPage() {
 
 
   // Queue drafts (Jackpot/HOF from wheel) — inject into regular active drafts list
+  // Polls Firestore queue (not Go API), so doesn't require isLive/walletAddress
   const [queueDrafts, setQueueDrafts] = useState<Draft[]>([]);
   useEffect(() => {
-    if (!user?.id || !isLive) return;
+    if (!user?.id) return;
     const userId = user.id;
     const walletAddr = user.walletAddress;
     const poll = () => {
