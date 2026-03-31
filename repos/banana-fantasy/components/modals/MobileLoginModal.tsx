@@ -15,7 +15,6 @@ interface MobileLoginModalProps {
 const WALLETS = [
   { id: 'metamask', name: 'MetaMask', bg: '#F6851B', letter: 'M' },
   { id: 'coinbase', name: 'Coinbase Wallet', bg: '#0052FF', letter: 'C' },
-  { id: 'walletconnect', name: 'Other Wallets', bg: '#3B99FC', letter: 'W' },
 ];
 
 export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin, onTwitterLogin }: MobileLoginModalProps) {
