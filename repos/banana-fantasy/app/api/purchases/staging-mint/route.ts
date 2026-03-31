@@ -1,8 +1,11 @@
 export const dynamic = "force-dynamic";
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
-import { isFirestoreConfigured } from '@/lib/firebaseAdmin';
+import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { getStagingApiUrl } from '@/lib/staging';
+import { FieldValue } from 'firebase-admin/firestore';
+
+const USERS_COLLECTION = 'v2_users';
 
 export async function POST(req: Request) {
   try {
@@ -16,9 +19,6 @@ export async function POST(req: Request) {
     }
 
     // 1. Mint tokens via Go API using the real mint endpoint (numeric IDs).
-    //    The /staging/mint-tokens/ endpoint creates string-based IDs that crash
-    //    the /draftToken/all endpoint (strconv.Atoi fails), so we use the real
-    //    /owner/{wallet}/draftToken/mint endpoint with high numeric IDs instead.
     const goApiUrl = getStagingApiUrl();
     const baseId = Date.now();
     const mintedTokens: number[] = [];
@@ -36,16 +36,17 @@ export async function POST(req: Request) {
       mintedTokens.push(tokenId);
     }
 
-    // 2. Optionally create purchase record if Firestore is available
+    // 2. Increment draftPasses in Firestore so the count persists on reload
     if (isFirestoreConfigured()) {
       try {
-        const { createPurchase, verifyPurchase } = await import('@/lib/db');
-        const { purchase } = await createPurchase(userId, quantity, 'usdc');
-        const txHash = `staging-${Date.now()}`;
-        await verifyPurchase(purchase.id, txHash);
+        const db = getAdminFirestore();
+        const userRef = db.collection(USERS_COLLECTION).doc(userId);
+        await userRef.set(
+          { draftPasses: FieldValue.increment(quantity) },
+          { merge: true }
+        );
       } catch (dbErr) {
-        // Firestore record is optional for staging mint — Go API mint is what matters
-        console.warn('staging-mint: Firestore record failed (non-fatal):', dbErr);
+        console.warn('staging-mint: Firestore draftPasses increment failed:', dbErr);
       }
     }
 
