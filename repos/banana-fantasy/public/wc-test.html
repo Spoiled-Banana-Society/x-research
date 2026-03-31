@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WC Test</title>
+  <style>
+    body { background: #000; color: #fff; font-family: -apple-system, sans-serif; padding: 20px; }
+    button { background: #f59e0b; color: #000; border: none; padding: 15px 30px; border-radius: 12px; font-size: 16px; font-weight: bold; width: 100%; margin: 10px 0; cursor: pointer; }
+    #log { background: #111; padding: 15px; border-radius: 8px; margin-top: 20px; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+    .error { color: #ef4444; }
+    .success { color: #22c55e; }
+  </style>
+</head>
+<body>
+  <h2>WalletConnect Test</h2>
+  <p style="color:#888;font-size:13px;">Testing WC relay connection from mobile Safari</p>
+
+  <button onclick="testWC('metamask')">Connect MetaMask</button>
+  <button onclick="testWC('rainbow')">Connect Rainbow</button>
+  <button onclick="testWC('coinbase')">Connect Coinbase</button>
+
+  <div id="log">Ready. Tap a wallet to test.<br></div>
+
+  <script type="module">
+    const log = (msg, cls) => {
+      const el = document.getElementById('log');
+      const span = document.createElement('span');
+      if (cls) span.className = cls;
+      span.textContent = new Date().toLocaleTimeString() + ' ' + msg + '\n';
+      el.appendChild(span);
+      el.scrollTop = el.scrollHeight;
+    };
+
+    const DEEP_LINKS = {
+      metamask: 'https://metamask.app.link',
+      rainbow: 'https://rnbwapp.com',
+      coinbase: 'https://go.cb-w.com',
+    };
+
+    window.testWC = async function(walletId) {
+      log('--- Starting test for ' + walletId + ' ---');
+
+      try {
+        log('Step 1: Importing @walletconnect/ethereum-provider...');
+        const { EthereumProvider } = await import('https://esm.sh/@walletconnect/ethereum-provider@2.22.4');
+        log('Step 1: OK', 'success');
+      } catch(e) {
+        log('Step 1 FAILED: ' + e.message, 'error');
+        log('Trying alternative import...');
+
+        try {
+          // Try CDN import
+          const mod = await import('https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.22.4/+esm');
+          log('Alt import OK', 'success');
+        } catch(e2) {
+          log('Alt import FAILED: ' + e2.message, 'error');
+        }
+        return;
+      }
+
+      try {
+        log('Step 2: Initializing provider with Privy project ID...');
+        const { EthereumProvider } = await import('https://esm.sh/@walletconnect/ethereum-provider@2.22.4');
+
+        const provider = await EthereumProvider.init({
+          projectId: '34357d3c125c2bcf2ce2bc3309d98715',
+          optionalChains: [1, 8453],
+          showQrModal: false,
+          metadata: {
+            name: 'Banana Fantasy',
+            description: 'Test',
+            url: window.location.origin,
+            icons: [window.location.origin + '/icons/icon-192.png'],
+          },
+        });
+        log('Step 2: OK - Provider initialized', 'success');
+
+        log('Step 3: Setting up URI listener...');
+        provider.on('display_uri', (uri) => {
+          log('Step 3: Got URI! Length=' + uri.length, 'success');
+          log('URI: ' + uri.substring(0, 80) + '...');
+
+          const prefix = DEEP_LINKS[walletId];
+          const deepLink = prefix + '/wc?uri=' + encodeURIComponent(uri);
+          log('Step 4: Opening ' + walletId + '...');
+          log('Deep link: ' + deepLink.substring(0, 80) + '...');
+
+          // Open wallet
+          window.location.href = deepLink;
+        });
+
+        log('Step 3: Listener set. Calling connect()...');
+
+        provider.connect().then(() => {
+          log('Step 5: Connected!', 'success');
+          provider.request({ method: 'eth_accounts' }).then(accounts => {
+            log('Accounts: ' + JSON.stringify(accounts), 'success');
+          });
+        }).catch(err => {
+          log('Connect error: ' + err.message, 'error');
+        });
+
+      } catch(e) {
+        log('Step 2 FAILED: ' + e.message, 'error');
+        log('Full error: ' + String(e), 'error');
+      }
+    };
+  </script>
+</body>
+</html>

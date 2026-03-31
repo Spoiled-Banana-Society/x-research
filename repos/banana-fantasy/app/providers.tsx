@@ -16,6 +16,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import OneSignal from 'react-onesignal';
 import { useNotificationOptIn, type NotifOptInTrigger } from '@/hooks/useNotificationOptIn';
 import { NotificationOptIn } from '@/components/notifications/NotificationOptIn';
+import { MobileLoginModal } from '@/components/modals/MobileLoginModal';
 
 // Context to expose triggerOptIn to any component in the tree
 type NotifContextType = { triggerOptIn: (trigger?: NotifOptInTrigger) => void };
@@ -23,7 +24,7 @@ const NotifContext = createContext<NotifContextType>({ triggerOptIn: () => {} })
 export const useNotifOptIn = () => useContext(NotifContext);
 
 function AppContent({ children }: { children: React.ReactNode }) {
-  const { showLoginModal, setShowLoginModal, setShowOnboarding, login } = useAuth();
+  const { showLoginModal, setShowLoginModal, setShowOnboarding, login, showMobileLoginModal, setShowMobileLoginModal, loginWithPrivy, loginWithWallet } = useAuth();
   const { showOnboarding } = useOnboarding();
   const pathname = usePathname();
   const isDraftRoom = pathname === '/draft-room';
@@ -57,6 +58,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
         {showOnboarding && <OnboardingTutorial onComplete={() => setShowOnboarding(false)} />}
         {showTutorial && <OnboardingTutorial onComplete={() => setShowTutorial(false)} />}
         <CrispChat />
+        <MobileLoginModal
+          isOpen={showMobileLoginModal}
+          onClose={() => setShowMobileLoginModal(false)}
+          onEmailLogin={() => { setShowMobileLoginModal(false); loginWithPrivy(); }}
+          onGoogleLogin={() => { setShowMobileLoginModal(false); loginWithPrivy(); }}
+          onTwitterLogin={() => { setShowMobileLoginModal(false); loginWithPrivy(); }}
+        />
         <NotificationOptIn
           show={notif.showPrompt}
           isLoading={notif.isLoading}

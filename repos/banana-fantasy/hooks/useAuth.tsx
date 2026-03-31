@@ -5,6 +5,7 @@ import { useSafePrivy as usePrivy, usePrivyAvailable } from '@/providers/PrivyPr
 import { User } from '@/types';
 import { getOwnerUser, getOwnerDraftTokens, updateOwnerDisplayName, updateOwnerPfpImage } from '@/lib/api/owner';
 import { ApiError as ClientApiError } from '@/lib/api/client';
+import { MobileLoginModal } from '@/components/modals/MobileLoginModal';
 
 const USER_PROFILE_KEY = 'banana-fantasy-user-profile';
 const USER_BALANCE_KEY = 'banana-fantasy-user-balance';
@@ -130,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(MOCK_USER);
   const [isBalanceLoaded, setIsBalanceLoaded] = useState(MOCK_AUTH);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showMobileLoginModal, setShowMobileLoginModal] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -474,9 +476,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { setIsBalanceLoaded(true); /* silent — don't block auth */ });
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   const login = useCallback((_method?: 'wallet' | 'social') => {
-    privy.login();
-  }, [privy]);
+    if (isMobile) {
+      setShowMobileLoginModal(true);
+    } else {
+      privy.login();
+    }
+  }, [privy, isMobile]);
 
   const logout = useCallback(async () => {
     await privy.logout();
@@ -607,6 +615,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <MobileLoginModal
+        isOpen={showMobileLoginModal}
+        onClose={() => setShowMobileLoginModal(false)}
+      />
     </AuthContext.Provider>
   );
 }
