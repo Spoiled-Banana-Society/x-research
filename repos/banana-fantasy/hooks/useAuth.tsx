@@ -453,7 +453,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data && typeof data.wheelSpins === 'number') {
           setUser(prev => {
             if (!prev || prev.id !== userId) return prev;
-            return {
+            const updated = {
               ...prev,
               wheelSpins: data.wheelSpins,
               freeDrafts: data.freeDrafts ?? prev.freeDrafts,
@@ -461,6 +461,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               hofEntries: data.hofEntries ?? prev.hofEntries,
               cardPurchaseCount: data.cardPurchaseCount ?? prev.cardPurchaseCount,
             };
+            // Fallback: if Go API token fetch failed (draftPasses stuck at 0),
+            // use Firestore draftPasses count — same logic as refreshBalance()
+            if (prev.draftPasses === 0 && typeof data.draftPasses === 'number' && data.draftPasses > 0) {
+              updated.draftPasses = data.draftPasses;
+            }
+            return updated;
           });
         }
         setIsBalanceLoaded(true);
