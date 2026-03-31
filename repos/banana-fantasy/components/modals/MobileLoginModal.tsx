@@ -1,15 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
+import { useLoginWithOAuth, useLoginWithEmail } from '@privy-io/react-auth';
 import { useWalletConnectLogin } from '@/hooks/useWalletConnectLogin';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onEmailLogin: () => void;
-  onGoogleLogin: () => void;
-  onTwitterLogin: () => void;
 }
 
 const WALLETS = [
@@ -17,16 +15,51 @@ const WALLETS = [
   { id: 'coinbase', name: 'Coinbase Wallet' },
 ];
 
-export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin, onTwitterLogin }: MobileLoginModalProps) {
-  const { connectWithWallet, status, error, reset } = useWalletConnectLogin();
+export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
+  const { connectWithWallet, status: walletStatus, error: walletError, reset: resetWallet } = useWalletConnectLogin();
+  const { initOAuth } = useLoginWithOAuth();
+  const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
+
+  const [email, setEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [view, setView] = useState<'main' | 'email-input' | 'otp'>('main');
 
   if (!isOpen) return null;
 
-  const isConnecting = status === 'connecting' || status === 'approving' || status === 'signing';
+  const isWalletConnecting = walletStatus === 'connecting' || walletStatus === 'approving' || walletStatus === 'signing';
+  const isEmailSending = emailState.status === 'sending-code';
+  const isOtpSubmitting = emailState.status === 'submitting-code';
 
   const handleClose = () => {
-    reset();
+    resetWallet();
+    setView('main');
+    setEmail('');
+    setOtpCode('');
+    setEmailError('');
     onClose();
+  };
+
+  const handleSendCode = async () => {
+    if (!email.trim()) return;
+    setEmailError('');
+    try {
+      await sendCode({ email: email.trim() });
+      setView('otp');
+    } catch {
+      setEmailError('Failed to send code. Check your email and try again.');
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!otpCode.trim()) return;
+    setEmailError('');
+    try {
+      await loginWithCode({ code: otpCode.trim() });
+      handleClose();
+    } catch {
+      setEmailError('Invalid code. Please try again.');
+    }
   };
 
   return (
@@ -39,6 +72,16 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
       >
         {/* Header */}
         <div className="flex items-center justify-end px-5 pt-5 pb-2">
+          {view !== 'main' && (
+            <button
+              onClick={() => { setView('main'); setEmail(''); setOtpCode(''); setEmailError(''); }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.06] mr-auto"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ba2ae" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.06]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ba2ae" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -51,16 +94,22 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
           <div className="mb-3">
             <Image src="/sbs-logo.png" alt="SBS" width={56} height={56} className="rounded-xl mx-auto" />
           </div>
-          <h2 className="text-white font-semibold text-[17px]">Log in or sign up</h2>
+          <h2 className="text-white font-semibold text-[17px]">
+            {view === 'email-input' ? 'Enter your email' : view === 'otp' ? 'Check your email' : 'Log in or sign up'}
+          </h2>
+          {view === 'otp' && (
+            <p className="text-[#7b8491] text-[13px] mt-1">We sent a code to {email}</p>
+          )}
         </div>
 
         {/* Content */}
         <div className="px-5 pb-3">
-          {!isConnecting && !error && (
+          {/* Main view */}
+          {view === 'main' && !isWalletConnecting && !walletError && (
             <div className="space-y-2">
               {/* Email */}
               <button
-                onClick={() => { handleClose(); onEmailLogin(); }}
+                onClick={() => setView('email-input')}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7b8491" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -68,12 +117,11 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
                   <path d="M22 7l-10 7L2 7" />
                 </svg>
                 <span className="text-[#7b8491] text-[14px]">your@email.com</span>
-                <span className="ml-auto text-[11px] px-2 py-0.5 rounded bg-white/[0.06] text-[#7b8491]">Recent</span>
               </button>
 
-              {/* Google */}
+              {/* Google — direct OAuth redirect */}
               <button
-                onClick={() => { handleClose(); onGoogleLogin(); }}
+                onClick={() => initOAuth({ provider: 'google' })}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24">
@@ -85,9 +133,9 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
                 <span className="text-white text-[14px] font-medium">Google</span>
               </button>
 
-              {/* Twitter */}
+              {/* Twitter — direct OAuth redirect */}
               <button
-                onClick={() => { handleClose(); onTwitterLogin(); }}
+                onClick={() => initOAuth({ provider: 'twitter' })}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="#f8f8f8">
@@ -96,7 +144,7 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
-              {/* Wallets — inline, no extra click */}
+              {/* Wallets */}
               {WALLETS.map(wallet => (
                 <button
                   key={wallet.id}
@@ -116,24 +164,78 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
             </div>
           )}
 
-          {/* Connecting */}
-          {isConnecting && (
+          {/* Email input view */}
+          {view === 'email-input' && (
+            <div className="space-y-3">
+              <input
+                type="email"
+                autoFocus
+                placeholder="your@email.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendCode()}
+                className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-[14px] placeholder-[#7b8491] outline-none focus:border-[#f59e0b]/50 transition-colors"
+              />
+              {emailError && <p className="text-red-400 text-[12px]">{emailError}</p>}
+              <button
+                onClick={handleSendCode}
+                disabled={!email.trim() || isEmailSending}
+                className="w-full py-3 rounded-xl bg-[#f59e0b] text-black font-semibold text-[14px] disabled:opacity-50 transition-opacity"
+              >
+                {isEmailSending ? 'Sending...' : 'Continue'}
+              </button>
+            </div>
+          )}
+
+          {/* OTP code view */}
+          {view === 'otp' && (
+            <div className="space-y-3">
+              <input
+                type="text"
+                autoFocus
+                inputMode="numeric"
+                placeholder="Enter code"
+                value={otpCode}
+                onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
+                maxLength={6}
+                className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-[14px] text-center tracking-[0.3em] placeholder-[#7b8491] outline-none focus:border-[#f59e0b]/50 transition-colors"
+              />
+              {emailError && <p className="text-red-400 text-[12px]">{emailError}</p>}
+              <button
+                onClick={handleVerifyCode}
+                disabled={!otpCode.trim() || isOtpSubmitting}
+                className="w-full py-3 rounded-xl bg-[#f59e0b] text-black font-semibold text-[14px] disabled:opacity-50 transition-opacity"
+              >
+                {isOtpSubmitting ? 'Verifying...' : 'Log in'}
+              </button>
+              <button
+                onClick={() => { setOtpCode(''); setEmailError(''); sendCode({ email: email.trim() }); }}
+                className="w-full py-2 text-[#7b8491] text-[13px]"
+              >
+                Resend code
+              </button>
+            </div>
+          )}
+
+          {/* Wallet connecting */}
+          {isWalletConnecting && (
             <div className="py-10 text-center">
               <div className="w-12 h-12 mx-auto mb-4 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
               <p className="text-white font-medium text-[15px] mb-1">
-                {status === 'connecting' && 'Initializing...'}
-                {status === 'approving' && 'Approve in your wallet'}
-                {status === 'signing' && 'Signing in...'}
+                {walletStatus === 'connecting' && 'Initializing...'}
+                {walletStatus === 'approving' && 'Approve in your wallet'}
+                {walletStatus === 'signing' && 'Signing in...'}
               </p>
               <p className="text-[#7b8491] text-[13px]">
-                {status === 'approving' && 'Check your wallet app'}
-                {status === 'signing' && 'Almost there'}
+                {walletStatus === 'approving' && 'Check your wallet app'}
+                {walletStatus === 'signing' && 'Almost there'}
               </p>
             </div>
           )}
 
-          {/* Error */}
-          {error && (
+          {/* Wallet error */}
+          {walletError && (
             <div className="py-8 text-center">
               <div className="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center bg-red-500/10">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -141,9 +243,9 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
                 </svg>
               </div>
               <p className="text-white font-medium text-[15px] mb-1">Connection failed</p>
-              <p className="text-[#7b8491] text-[13px] mb-4">{error}</p>
+              <p className="text-[#7b8491] text-[13px] mb-4">{walletError}</p>
               <button
-                onClick={reset}
+                onClick={resetWallet}
                 className="px-6 py-2 rounded-lg text-[13px] font-medium bg-[#f59e0b] text-black"
               >
                 Try again
