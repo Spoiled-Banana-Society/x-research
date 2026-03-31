@@ -1,93 +1,53 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import Image from 'next/image';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useSendTransaction, useWallets, useFundWallet } from '@privy-io/react-auth';
-import { useAuth } from '@/hooks/useAuth';
-import { useCollectionStats, useListings, useMyNfts, useNftOffers, useCollectionNfts, useActivityHistory, useMyNftOffers, useLastSales, useWatchlist, logActivity, notifySeller } from '@/hooks/useMarketplace';
+import { useFundWallet, useSendTransaction, useWallets } from '@privy-io/react-auth';
 import { useNotifications } from '@/components/NotificationCenter';
+import { ActivityTab } from '@/app/components/marketplace/ActivityTab';
+import { BuyTab } from '@/app/components/marketplace/BuyTab';
+import { SellTab } from '@/app/components/marketplace/SellTab';
+import { SweepModal } from '@/app/components/marketplace/SweepModal';
+import { WatchlistTab } from '@/app/components/marketplace/WatchlistTab';
+import { useAuth } from '@/hooks/useAuth';
+import { logActivity, notifySeller, useActivityHistory, useCollectionNfts, useCollectionStats, useLastSales, useListings, useMyNftOffers, useMyNfts, useWatchlist } from '@/hooks/useMarketplace';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
-import type { Address } from 'viem';
-import type { MarketplaceTeam } from '@/lib/opensea';
 import { isDraftingOpen } from '@/lib/draftTypes';
 import { logger } from '@/lib/logger';
+import type { MarketplaceTeam } from '@/lib/opensea';
+import type { Address } from 'viem';
 
-function CardSkeleton() {
-  return (
-    <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl overflow-hidden animate-pulse">
-      <div className="h-32 bg-bg-tertiary" />
-      <div className="p-5 space-y-3">
-        <div className="h-5 bg-bg-tertiary rounded w-1/2" />
-        <div className="h-3 bg-bg-tertiary rounded w-1/3" />
-        <div className="grid grid-cols-3 gap-3 p-3 bg-bg-primary rounded-xl">
-          <div className="h-8 bg-bg-tertiary rounded" />
-          <div className="h-8 bg-bg-tertiary rounded" />
-          <div className="h-8 bg-bg-tertiary rounded" />
-        </div>
-        <div className="flex justify-between items-center">
-          <div className="h-6 bg-bg-tertiary rounded w-20" />
-          <div className="h-10 bg-bg-tertiary rounded w-24" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatSkeleton() {
-  return (
-    <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-5 animate-pulse">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-xl bg-bg-tertiary" />
-        <div className="h-3 bg-bg-tertiary rounded w-20" />
-      </div>
-      <div className="h-7 bg-bg-tertiary rounded w-24 mb-1" />
-      <div className="h-3 bg-bg-tertiary rounded w-32" />
-    </div>
-  );
-}
-
-function SellTabOfferBadge({ tokenId }: { tokenId: string }) {
-  const { bestOffer } = useNftOffers(tokenId);
-  if (!bestOffer) return null;
-  return (
-    <span className="text-xs text-banana font-mono font-medium">
-      Best offer: ${bestOffer.amount.toFixed(2)}
-    </span>
-  );
-}
+type TabKey = 'buy' | 'sell' | 'activity' | 'watchlist';
+type ViewFilter = 'listed' | 'all' | 'top' | 'jackpot' | 'hof';
+type BuyStep = 'confirm' | 'processing' | 'complete';
+type PaymentMethod = 'card' | 'usdc';
+type SweepStep = 'confirm' | 'processing' | 'complete';
+type SweepStatus = 'pending' | 'processing' | 'done' | 'failed';
+type SuccessType = 'buy' | 'sell' | 'list';
+type CardFlowStep = 'idle' | 'funding' | 'waiting' | 'buying';
 
 export default function MarketplacePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
   const { addNotification } = useNotifications();
-  const { wallets, ready: walletsReady } = useWallets();
+  const { wallets } = useWallets();
   const { sendTransaction } = useSendTransaction();
   const { fundWallet } = useFundWallet();
 
   const selectedWallet = useMemo(() => {
     if (wallets.length === 0) return null;
     if (walletAddress) {
-      return wallets.find(w => w.address.toLowerCase() === walletAddress.toLowerCase()) || wallets[0];
+      return wallets.find(wallet => wallet.address.toLowerCase() === walletAddress.toLowerCase()) || wallets[0];
     }
     return wallets[0];
   }, [walletAddress, wallets]);
 
-  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'activity' | 'watchlist'>('buy');
-
-  // Handle ?tab= URL parameter
-  useEffect(() => {
-    const tabParam = searchParams?.get('tab');
-    if (tabParam === 'sell' || tabParam === 'activity' || tabParam === 'watchlist') {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
-
-  const [viewFilter, setViewFilter] = useState<'listed' | 'all' | 'top' | 'jackpot' | 'hof'>('listed');
-  const [hofFilter, setHofFilter] = useState(false);
-  const [jackpotFilter, setJackpotFilter] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('buy');
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('listed');
+  const [hofFilter] = useState(false);
+  const [jackpotFilter] = useState(false);
   const [rosterFilter, setRosterFilter] = useState('');
   const [sortBy, setSortBy] = useState('price-low');
   const [selectedTeam, setSelectedTeam] = useState<MarketplaceTeam | null>(null);
@@ -95,22 +55,26 @@ export default function MarketplacePage() {
   const [showSellModal, setShowSellModal] = useState(false);
   const [showFreePassInfo, setShowFreePassInfo] = useState<'team' | 'pass' | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successType, setSuccessType] = useState<'buy' | 'sell' | 'list'>('buy');
+  const [successType, setSuccessType] = useState<SuccessType>('buy');
   const [listPrice, setListPrice] = useState('');
-  const [buyStep, setBuyStep] = useState<'confirm' | 'processing' | 'complete'>('confirm');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'usdc'>('card');
+  const [buyStep, setBuyStep] = useState<BuyStep>('confirm');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
   const [txError, setTxError] = useState<string | null>(null);
   const [cancelConfirmTeam, setCancelConfirmTeam] = useState<MarketplaceTeam | null>(null);
-  const [cardFlowStep, setCardFlowStep] = useState<'idle' | 'funding' | 'waiting' | 'buying'>('idle');
-
-  // Sweep state
+  const [cardFlowStep, setCardFlowStep] = useState<CardFlowStep>('idle');
   const [sweepMode, setSweepMode] = useState(false);
   const [sweepSelected, setSweepSelected] = useState<Set<string>>(new Set());
   const [showSweepModal, setShowSweepModal] = useState(false);
-  const [sweepStep, setSweepStep] = useState<'confirm' | 'processing' | 'complete'>('confirm');
-  const [sweepProgress, setSweepProgress] = useState<Record<string, 'pending' | 'processing' | 'done' | 'failed'>>({});
-  const [sweepPaymentMethod, setSweepPaymentMethod] = useState<'card' | 'usdc'>('card');
+  const [sweepStep, setSweepStep] = useState<SweepStep>('confirm');
+  const [sweepProgress, setSweepProgress] = useState<Record<string, SweepStatus>>({});
+  const [sweepPaymentMethod, setSweepPaymentMethod] = useState<PaymentMethod>('card');
+  const [cancellingTokenId, setCancellingTokenId] = useState<string | null>(null);
   const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam === 'sell' || tabParam === 'activity' || tabParam === 'watchlist') setActiveTab(tabParam);
+  }, [searchParams]);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -119,111 +83,61 @@ export default function MarketplacePage() {
     };
   }, []);
 
-  // Real data hooks
   const { data: collectionStats, isLoading: statsLoading } = useCollectionStats();
 
-  // Map sortBy to OpenSea sort params
   const sortMap: Record<string, { sort: string; direction: string }> = {
     'price-low': { sort: 'price', direction: 'asc' },
     'price-high': { sort: 'price', direction: 'desc' },
-    'rank': { sort: 'price', direction: 'asc' },
-    'points': { sort: 'price', direction: 'desc' },
-    'playoffs': { sort: 'price', direction: 'desc' },
+    rank: { sort: 'price', direction: 'asc' },
+    points: { sort: 'price', direction: 'desc' },
+    playoffs: { sort: 'price', direction: 'desc' },
   };
   const currentSort = sortMap[sortBy] || sortMap['price-low'];
 
-  const {
-    data: listings,
-    isLoading: listingsLoading,
-    hasMore,
-    loadMore,
-    refetch: refetchListings,
-  } = useListings(currentSort.sort, currentSort.direction);
-
-  const {
-    data: allNfts,
-    isLoading: allNftsLoading,
-    hasMore: allNftsHasMore,
-    loadMore: loadMoreAllNfts,
-    refetch: refetchAllNfts,
-  } = useCollectionNfts();
-
-  const {
-    data: myNfts,
-    isLoading: myNftsLoading,
-    refetch: refetchMyNfts,
-  } = useMyNfts(isLoggedIn ? walletAddress : null);
-
-  const {
-    activities,
-    isLoading: activityLoading,
-    hasMore: activityHasMore,
-    loadMore: loadMoreActivity,
-    refetch: refetchActivity,
-  } = useActivityHistory(isLoggedIn ? walletAddress : null);
-
-  const {
-    allOffers: myNftOffers,
-    isLoading: myNftOffersLoading,
-  } = useMyNftOffers(isLoggedIn ? walletAddress : null, myNfts);
-
-  // Watchlist hook
+  const { data: listings, isLoading: listingsLoading, hasMore, loadMore, refetch: refetchListings } = useListings(currentSort.sort, currentSort.direction);
+  const { data: allNfts, isLoading: allNftsLoading, hasMore: allNftsHasMore, loadMore: loadMoreAllNfts } = useCollectionNfts();
+  const { data: myNfts, isLoading: myNftsLoading, refetch: refetchMyNfts } = useMyNfts(isLoggedIn ? walletAddress : null);
+  const { activities, isLoading: activityLoading, hasMore: activityHasMore, loadMore: loadMoreActivity, refetch: refetchActivity } = useActivityHistory(isLoggedIn ? walletAddress : null);
+  const { allOffers: myNftOffers, isLoading: myNftOffersLoading } = useMyNftOffers(isLoggedIn ? walletAddress : null, myNfts);
   const { watchlist, watchlistSet, toggle: toggleWatchlist } = useWatchlist(isLoggedIn ? walletAddress : null);
 
-  // Enrich listings with current user's profile (backend may not have it yet)
   const enrichedListings = useMemo(() => {
     if (!walletAddress || !user) return listings;
-    return listings.map(team => {
-      if (team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase()) {
-        return {
-          ...team,
-          owner: user.username || team.owner,
-          ownerPfp: user.profilePicture || team.ownerPfp,
-        };
-      }
-      return team;
-    });
+    return listings.map(team => team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase()
+      ? { ...team, owner: user.username || team.owner, ownerPfp: user.profilePicture || team.ownerPfp }
+      : team);
   }, [listings, walletAddress, user]);
 
-  // Pick data source based on view filter
   const baseTeams = useMemo(() => {
     if (viewFilter === 'all') return allNfts;
-    if (viewFilter === 'jackpot') return viewFilter === 'jackpot' ? enrichedListings.concat(allNfts.filter(n => !n.orderHash)) : enrichedListings;
-    if (viewFilter === 'hof') return enrichedListings.concat(allNfts.filter(n => !n.orderHash));
-    if (viewFilter === 'top') return enrichedListings.concat(allNfts.filter(n => !n.orderHash));
-    return enrichedListings; // 'listed'
+    if (viewFilter === 'jackpot' || viewFilter === 'hof' || viewFilter === 'top') return enrichedListings.concat(allNfts.filter(team => !team.orderHash));
+    return enrichedListings;
   }, [viewFilter, enrichedListings, allNfts]);
 
-  // Apply client-side filters (roster search, viewFilter type, sort)
-  const filteredTeams = baseTeams.filter(team => {
-    // View filter type restrictions
+  const filteredTeams = useMemo(() => baseTeams.filter(team => {
     if (viewFilter === 'jackpot' && !team.isJackpot) return false;
     if (viewFilter === 'hof' && !team.isHof) return false;
     if (viewFilter === 'top' && team.points <= 0) return false;
-
-    // Legacy pill filters (only apply when on 'listed' or 'all' views)
     if (viewFilter === 'listed' || viewFilter === 'all') {
       if (hofFilter && !team.isHof) return false;
       if (jackpotFilter && !team.isJackpot) return false;
     }
 
     if (rosterFilter) {
-      const q = rosterFilter.trim().replace(/^#/, '');
-      if (/^\d+$/.test(q)) {
-        const matchesTokenId = team.tokenId === q;
-        const matchesName = team.name.includes(q);
+      const query = rosterFilter.trim().replace(/^#/, '');
+      if (/^\d+$/.test(query)) {
+        const matchesTokenId = team.tokenId === query;
+        const matchesName = team.name.includes(query);
         if (!matchesTokenId && !matchesName) return false;
       } else {
-        const upper = q.toUpperCase().replace(/\s+/g, '');
-        // Search team name (league name), roster players, and owner
-        const matchesName = team.name.toUpperCase().replace(/\s+/g, '').includes(upper);
-        const hasRosterMatch = team.roster.some(slot => slot.toUpperCase().replace(/\s+/g, '').includes(upper));
+        const normalized = query.toUpperCase().replace(/\s+/g, '');
+        const matchesName = team.name.toUpperCase().replace(/\s+/g, '').includes(normalized);
+        const hasRosterMatch = team.roster.some(slot => slot.toUpperCase().replace(/\s+/g, '').includes(normalized));
         if (!matchesName && !hasRosterMatch) return false;
       }
     }
     return true;
   }).sort((a, b) => {
-    // Top teams view defaults to points desc
     if (viewFilter === 'top') return b.points - a.points;
     switch (sortBy) {
       case 'price-low': return (a.price || 9999) - (b.price || 9999);
@@ -233,9 +147,8 @@ export default function MarketplacePage() {
       case 'playoffs': return b.playoffOdds - a.playoffOdds;
       default: return 0;
     }
-  });
+  }), [baseTeams, viewFilter, hofFilter, jackpotFilter, rosterFilter, sortBy]);
 
-  // Deduplicate by tokenId (in case listed teams appear in both sources)
   const deduplicatedTeams = useMemo(() => {
     const seen = new Set<string>();
     return filteredTeams.filter(team => {
@@ -245,176 +158,64 @@ export default function MarketplacePage() {
     });
   }, [filteredTeams]);
 
-  // Last sale prices for displayed cards
-  const displayedTokenIds = useMemo(() => deduplicatedTeams.map(t => t.tokenId), [deduplicatedTeams]);
+  const displayedTokenIds = useMemo(() => deduplicatedTeams.map(team => team.tokenId), [deduplicatedTeams]);
   const lastSales = useLastSales(displayedTokenIds);
+  const sweepTeams = useMemo(() => deduplicatedTeams.filter(team => sweepSelected.has(team.tokenId) && team.price != null), [deduplicatedTeams, sweepSelected]);
+  const sweepTotal = useMemo(() => sweepTeams.reduce((sum, team) => sum + (team.price || 0), 0), [sweepTeams]);
+  const leaderboardTeams = useMemo(() => [...enrichedListings].filter(team => team.price !== null).sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 5), [enrichedListings]);
 
-  // Share handler — opens X intent directly from card icons
-  const handleShare = useCallback((team: { name: string; tokenId: string; price?: number | null }, e?: React.MouseEvent) => {
-    if (e) { e.stopPropagation(); e.preventDefault(); }
+  const requireLogin = useCallback((callback: () => void) => {
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
+    callback();
+  }, [isLoggedIn, setShowLoginModal]);
+
+  const handleShare = useCallback((team: { name: string; tokenId: string; price?: number | null }, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
     const url = `${window.location.origin}/marketplace/${team.tokenId}`;
     const text = `Check out ${team.name}${team.price ? ` - $${team.price.toFixed(2)}` : ''} on SBS Marketplace`;
     window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
   }, []);
 
-  // Sweep helpers
+  const openBuyModal = useCallback((team: MarketplaceTeam) => {
+    requireLogin(() => {
+      setSelectedTeam(team);
+      setBuyStep('confirm');
+      setTxError(null);
+      setShowBuyModal(true);
+    });
+  }, [requireLogin]);
+
+  const openSellModal = useCallback((team: MarketplaceTeam) => {
+    setSelectedTeam(team);
+    setListPrice('');
+    setTxError(null);
+    setShowSellModal(true);
+  }, []);
+
   const toggleSweepSelect = useCallback((tokenId: string) => {
-    setSweepSelected(prev => {
-      const next = new Set(prev);
+    setSweepSelected(previous => {
+      const next = new Set(previous);
       if (next.has(tokenId)) next.delete(tokenId);
       else next.add(tokenId);
       return next;
     });
   }, []);
 
-  const sweepTeams = useMemo(
-    () => deduplicatedTeams.filter(t => sweepSelected.has(t.tokenId) && t.price != null),
-    [deduplicatedTeams, sweepSelected],
-  );
-  const sweepTotal = useMemo(
-    () => sweepTeams.reduce((sum, t) => sum + (t.price || 0), 0),
-    [sweepTeams],
-  );
-
-  const executeSweep = useCallback(async () => {
-    if (sweepTeams.length === 0 || !walletAddress) return;
-
-    setSweepStep('processing');
-
-    // Init progress
-    const progress: Record<string, 'pending' | 'processing' | 'done' | 'failed'> = {};
-    sweepTeams.forEach(t => { progress[t.tokenId] = 'pending'; });
-    setSweepProgress({ ...progress });
-
-    if (sweepPaymentMethod === 'card') {
-      // Fund wallet for total first
-      try {
-        const result = await fundWallet({
-          address: walletAddress,
-          options: {
-            chain: BASE_SEPOLIA,
-            amount: String(sweepTotal),
-            asset: 'USDC',
-            card: { preferredProvider: 'moonpay' },
-          },
-        });
-        if (result.status === 'cancelled') {
-          setSweepStep('confirm');
-          return;
-        }
-        // Wait for funds
-        const requiredUsdc = BigInt(Math.ceil(sweepTotal * 1e6));
-        const startTime = Date.now();
-        while (!cancelledRef.current && Date.now() - startTime < 300_000) {
-          const balance = await getUsdcBalance(walletAddress as Address);
-          if (balance >= requiredUsdc) break;
-          await new Promise(r => setTimeout(r, 3000));
-        }
-        if (cancelledRef.current) return;
-      } catch (err) {
-        console.error('[Sweep] Fund failed:', err);
-        setSweepStep('confirm');
-        return;
-      }
-    } else {
-      // USDC: check balance upfront
-      try {
-        const { checkUsdcBalance } = await import('@/lib/marketplace/buy');
-        const { sufficient, balance } = await checkUsdcBalance(walletAddress, sweepTotal);
-        if (!sufficient) {
-          setTxError(`Insufficient balance. You have $${balance.toFixed(2)} but need $${sweepTotal.toFixed(2)}.`);
-          setSweepStep('confirm');
-          return;
-        }
-      } catch {
-        setSweepStep('confirm');
-        return;
-      }
-    }
-
-    // Execute each purchase sequentially
-    const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
-
-    for (const team of sweepTeams) {
-      progress[team.tokenId] = 'processing';
-      setSweepProgress({ ...progress });
-
-      try {
-        if (!team.orderHash || !team.protocolAddress) throw new Error('Missing order data');
-        const tx = await getFulfillmentTx(team.orderHash, walletAddress, team.protocolAddress);
-        const receipt = await sendTransaction(
-          { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
-          { sponsor: true, uiOptions: { description: `Purchase ${team.name} — gas fees covered by SBS` } },
-        );
-        const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
-
-        if (team.ownerAddress) {
-          notifySeller({
-            sellerWallet: team.ownerAddress,
-            tokenId: team.tokenId,
-            teamName: team.name,
-            price: team.price || 0,
-            buyerWallet: walletAddress,
-          });
-        }
-        logActivity({ type: 'buy', walletAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, counterparty: team.ownerAddress || null, orderHash: team.orderHash || null, txHash: txHash ? String(txHash) : null });
-        if (team.ownerAddress) {
-          logActivity({ type: 'sell', walletAddress: team.ownerAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, counterparty: walletAddress, orderHash: team.orderHash || null, txHash: txHash ? String(txHash) : null });
-        }
-
-        progress[team.tokenId] = 'done';
-      } catch (err) {
-        console.error(`[Sweep] Failed ${team.tokenId}:`, err);
-        progress[team.tokenId] = 'failed';
-      }
-      setSweepProgress({ ...progress });
-    }
-
-    setSweepStep('complete');
-    refetchListings();
-    refetchMyNfts();
-    refetchActivity();
-  }, [sweepTeams, sweepTotal, sweepPaymentMethod, walletAddress, sendTransaction, fundWallet, refetchListings, refetchMyNfts, refetchActivity]);
-
-  // Top performing listings for leaderboard section
-  const leaderboardTeams = [...enrichedListings]
-    .filter(t => t.price !== null)
-    .sort((a, b) => (b.price || 0) - (a.price || 0))
-    .slice(0, 5);
-
-  const openBuyModal = (team: MarketplaceTeam) => {
-    if (!isLoggedIn) {
-      setShowLoginModal(true);
-      return;
-    }
-    setSelectedTeam(team);
-    setBuyStep('confirm');
-    setTxError(null);
-    setShowBuyModal(true);
-  };
-
-  const openSellModal = (team: MarketplaceTeam) => {
-    setSelectedTeam(team);
-    setListPrice('');
-    setTxError(null);
-    setShowSellModal(true);
-  };
-
   const executeBuy = useCallback(async () => {
-    if (!selectedTeam?.orderHash || !selectedTeam?.protocolAddress || !walletAddress) return;
+    if (!selectedTeam?.orderHash || !selectedTeam.protocolAddress || !walletAddress) return;
 
     const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
-    const tx = await getFulfillmentTx(
-      selectedTeam.orderHash,
-      walletAddress,
-      selectedTeam.protocolAddress,
-    );
-
+    const tx = await getFulfillmentTx(selectedTeam.orderHash, walletAddress, selectedTeam.protocolAddress);
     const receipt = await sendTransaction(
       { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
       { sponsor: true, uiOptions: { description: 'Purchase NFT — gas fees covered by SBS' } },
     );
-
     const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
     logger.debug('[Marketplace] Buy tx:', txHash);
 
@@ -428,32 +229,11 @@ export default function MarketplacePage() {
       });
     }
 
-    logActivity({
-      type: 'buy',
-      walletAddress,
-      tokenId: selectedTeam.tokenId,
-      teamName: selectedTeam.name,
-      price: selectedTeam.price,
-      counterparty: selectedTeam.ownerAddress || null,
-      orderHash: selectedTeam.orderHash || null,
-      txHash: txHash ? String(txHash) : null,
-    });
-
-    // Log seller-side activity
+    logActivity({ type: 'buy', walletAddress, tokenId: selectedTeam.tokenId, teamName: selectedTeam.name, price: selectedTeam.price, counterparty: selectedTeam.ownerAddress || null, orderHash: selectedTeam.orderHash || null, txHash: txHash ? String(txHash) : null });
     if (selectedTeam.ownerAddress) {
-      logActivity({
-        type: 'sell',
-        walletAddress: selectedTeam.ownerAddress,
-        tokenId: selectedTeam.tokenId,
-        teamName: selectedTeam.name,
-        price: selectedTeam.price,
-        counterparty: walletAddress,
-        orderHash: selectedTeam.orderHash || null,
-        txHash: txHash ? String(txHash) : null,
-      });
+      logActivity({ type: 'sell', walletAddress: selectedTeam.ownerAddress, tokenId: selectedTeam.tokenId, teamName: selectedTeam.name, price: selectedTeam.price, counterparty: walletAddress, orderHash: selectedTeam.orderHash || null, txHash: txHash ? String(txHash) : null });
     }
 
-    // Add local notification for buyer
     addNotification({
       type: 'purchase_complete',
       title: 'Purchase Complete',
@@ -462,14 +242,13 @@ export default function MarketplacePage() {
     });
 
     return txHash;
-  }, [selectedTeam, walletAddress, sendTransaction, addNotification]);
+  }, [addNotification, selectedTeam, sendTransaction, walletAddress]);
 
   const handleBuy = useCallback(async () => {
-    if (!selectedTeam?.orderHash || !selectedTeam?.protocolAddress || !walletAddress) return;
+    if (!selectedTeam?.orderHash || !selectedTeam.protocolAddress || !walletAddress) return;
     const price = selectedTeam.price || 0;
 
     if (paymentMethod === 'usdc') {
-      // Check USDC balance before proceeding
       setBuyStep('processing');
       setTxError(null);
       try {
@@ -483,7 +262,6 @@ export default function MarketplacePage() {
 
         await executeBuy();
         setBuyStep('complete');
-
         setTimeout(() => {
           setShowBuyModal(false);
           setSuccessType('buy');
@@ -492,77 +270,64 @@ export default function MarketplacePage() {
           refetchMyNfts();
           refetchActivity();
         }, 1500);
-      } catch (err) {
-        console.error('[Marketplace] Buy failed:', err);
-        setTxError(err instanceof Error ? err.message : 'Transaction failed');
+      } catch (error) {
+        console.error('[Marketplace] Buy failed:', error);
+        setTxError(error instanceof Error ? error.message : 'Transaction failed');
         setBuyStep('confirm');
       }
-    } else {
-      // Card flow via MoonPay
-      setTxError(null);
-      setCardFlowStep('funding');
-      setBuyStep('processing');
-
-      try {
-        const fundingAmount = String(price);
-        const result = await fundWallet({
-          address: walletAddress,
-          options: {
-            chain: BASE_SEPOLIA,
-            amount: fundingAmount,
-            asset: 'USDC',
-            card: { preferredProvider: 'moonpay' },
-          },
-        });
-
-        if (result.status === 'cancelled') {
-          setCardFlowStep('idle');
-          setBuyStep('confirm');
-          return;
-        }
-
-        // Poll for USDC arrival
-        setCardFlowStep('waiting');
-        const requiredUsdc = BigInt(Math.ceil(price * 1e6));
-        const startTime = Date.now();
-        const maxWait = 300_000;
-
-        while (!cancelledRef.current && Date.now() - startTime < maxWait) {
-          const balance = await getUsdcBalance(walletAddress as Address);
-          if (balance >= requiredUsdc) break;
-          await new Promise(r => setTimeout(r, 3000));
-        }
-        if (cancelledRef.current) return;
-
-        // Execute Seaport buy
-        setCardFlowStep('buying');
-        await executeBuy();
-
-        setBuyStep('complete');
-        setCardFlowStep('idle');
-
-        setTimeout(() => {
-          setShowBuyModal(false);
-          setSuccessType('buy');
-          setShowSuccessModal(true);
-          refetchListings();
-          refetchMyNfts();
-          refetchActivity();
-        }, 1500);
-      } catch (err) {
-        console.error('[Marketplace] Card buy failed:', err);
-        setTxError(err instanceof Error ? err.message : 'Payment failed');
-        setBuyStep('confirm');
-        setCardFlowStep('idle');
-      }
+      return;
     }
-  }, [selectedTeam, walletAddress, paymentMethod, executeBuy, fundWallet, refetchListings, refetchMyNfts, refetchActivity]);
+
+    setTxError(null);
+    setCardFlowStep('funding');
+    setBuyStep('processing');
+
+    try {
+      const result = await fundWallet({
+        address: walletAddress,
+        options: { chain: BASE_SEPOLIA, amount: String(price), asset: 'USDC', card: { preferredProvider: 'moonpay' } },
+      });
+
+      if (result.status === 'cancelled') {
+        setCardFlowStep('idle');
+        setBuyStep('confirm');
+        return;
+      }
+
+      setCardFlowStep('waiting');
+      const requiredUsdc = BigInt(Math.ceil(price * 1e6));
+      const startTime = Date.now();
+      while (!cancelledRef.current && Date.now() - startTime < 300_000) {
+        const balance = await getUsdcBalance(walletAddress as Address);
+        if (balance >= requiredUsdc) break;
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+      if (cancelledRef.current) return;
+
+      setCardFlowStep('buying');
+      await executeBuy();
+      setBuyStep('complete');
+      setCardFlowStep('idle');
+      setTimeout(() => {
+        setShowBuyModal(false);
+        setSuccessType('buy');
+        setShowSuccessModal(true);
+        refetchListings();
+        refetchMyNfts();
+        refetchActivity();
+      }, 1500);
+    } catch (error) {
+      console.error('[Marketplace] Card buy failed:', error);
+      setTxError(error instanceof Error ? error.message : 'Payment failed');
+      setBuyStep('confirm');
+      setCardFlowStep('idle');
+    }
+  }, [executeBuy, fundWallet, paymentMethod, refetchActivity, refetchListings, refetchMyNfts, selectedTeam, walletAddress]);
 
   const handleList = useCallback(async () => {
     if (!selectedTeam || !walletAddress || !listPrice) return;
     setTxError(null);
 
-    // Block free-pass teams during draft season
     if (selectedTeam.passType === 'free' && isDraftingOpen()) {
       setShowSellModal(false);
       setShowFreePassInfo('team');
@@ -577,32 +342,23 @@ export default function MarketplacePage() {
       if (!selectedWallet) throw new Error('No wallet connected');
       const ethereum = await selectedWallet.getEthereumProvider();
       const currentChainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
-      if (parseInt(currentChainHex, 16) !== 8453) {
-        await selectedWallet.switchChain(8453);
-      }
+      if (parseInt(currentChainHex, 16) !== 8453) await selectedWallet.switchChain(8453);
 
-      // Sponsor the one-time NFT approval via Privy if not already approved
       const OPENSEA_CONDUIT = '0x1e0049783f008a0085193e00003d00cd54003c71';
       const iface = new ethers.Interface([
         'function isApprovedForAll(address owner, address operator) view returns (bool)',
         'function setApprovalForAll(address operator, bool approved)',
       ]);
-
-      // Check if already approved
       const checkData = iface.encodeFunctionData('isApprovedForAll', [walletAddress, OPENSEA_CONDUIT]);
       const checkRes = await fetch(process.env.NEXT_PUBLIC_ALCHEMY_BASE_RPC_URL || 'https://mainnet.base.org', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1, method: 'eth_call',
-          params: [{ to: BBB4_CONTRACT, data: checkData }, 'latest'],
-        }),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: BBB4_CONTRACT, data: checkData }, 'latest'] }),
       });
       const checkResult = await checkRes.json();
       const isApproved = checkResult?.result && parseInt(checkResult.result, 16) === 1;
 
       if (!isApproved) {
-        // Send sponsored approval tx
         const approvalData = iface.encodeFunctionData('setApprovalForAll', [OPENSEA_CONDUIT, true]);
         const receipt = await sendTransaction(
           { to: BBB4_CONTRACT as `0x${string}`, data: approvalData as `0x${string}`, chainId: 8453 },
@@ -612,24 +368,10 @@ export default function MarketplacePage() {
       }
 
       const provider = new ethers.BrowserProvider(ethereum);
-      const result = await createListing(
-        selectedTeam.tokenId,
-        parseFloat(listPrice),
-        walletAddress,
-        provider,
-      );
-
+      const result = await createListing(selectedTeam.tokenId, parseFloat(listPrice), walletAddress, provider);
       logger.debug('[Marketplace] Listed with orderHash:', result.orderHash);
 
-      logActivity({
-        type: 'list',
-        walletAddress,
-        tokenId: selectedTeam.tokenId,
-        teamName: selectedTeam.name,
-        price: parseFloat(listPrice),
-        orderHash: result.orderHash || null,
-      });
-
+      logActivity({ type: 'list', walletAddress, tokenId: selectedTeam.tokenId, teamName: selectedTeam.name, price: parseFloat(listPrice), orderHash: result.orderHash || null });
       addNotification({
         type: 'listing_created',
         title: 'Team Listed',
@@ -643,13 +385,11 @@ export default function MarketplacePage() {
       refetchListings();
       refetchMyNfts();
       refetchActivity();
-    } catch (err) {
-      console.error('[Marketplace] List failed:', err);
-      setTxError(err instanceof Error ? err.message : 'Listing failed');
+    } catch (error) {
+      console.error('[Marketplace] List failed:', error);
+      setTxError(error instanceof Error ? error.message : 'Listing failed');
     }
-  }, [selectedTeam, walletAddress, listPrice, selectedWallet, sendTransaction, refetchListings, refetchMyNfts, refetchActivity, addNotification]);
-
-  const [cancellingTokenId, setCancellingTokenId] = useState<string | null>(null);
+  }, [addNotification, listPrice, refetchActivity, refetchListings, refetchMyNfts, selectedTeam, selectedWallet, sendTransaction, walletAddress]);
 
   const executeCancel = useCallback(async (team: MarketplaceTeam) => {
     if (!team.orderHash || !walletAddress) return;
@@ -657,1898 +397,332 @@ export default function MarketplacePage() {
     setTxError(null);
 
     try {
-      const res = await fetch('/api/marketplace/cancel', {
+      const response = await fetch('/api/marketplace/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderHash: team.orderHash }),
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: 'Failed to prepare cancel transaction' }));
-        throw new Error(errData.error || `Cancel failed: ${res.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to prepare cancel transaction' }));
+        throw new Error(errorData.error || `Cancel failed: ${response.status}`);
       }
 
-      const tx = await res.json();
-
+      const tx = await response.json();
       await sendTransaction(
         { to: tx.to as `0x${string}`, data: tx.data as `0x${string}`, chainId: 8453 },
         { sponsor: true, uiOptions: { description: 'Cancel your listing — fees covered by SBS' } },
       );
 
       logger.debug('[Marketplace] Cancelled listing for token:', team.tokenId);
-
-      logActivity({
-        type: 'cancel',
-        walletAddress,
-        tokenId: team.tokenId,
-        teamName: team.name,
-        price: team.price,
-        orderHash: team.orderHash || null,
-      });
-
+      logActivity({ type: 'cancel', walletAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, orderHash: team.orderHash || null });
       refetchListings();
       refetchMyNfts();
       refetchActivity();
-    } catch (err) {
-      console.error('[Marketplace] Cancel failed:', err);
-      setTxError(err instanceof Error ? err.message : 'Failed to cancel listing');
+    } catch (error) {
+      console.error('[Marketplace] Cancel failed:', error);
+      setTxError(error instanceof Error ? error.message : 'Failed to cancel listing');
     } finally {
       setCancellingTokenId(null);
       setCancelConfirmTeam(null);
     }
-  }, [walletAddress, sendTransaction, refetchListings, refetchMyNfts, refetchActivity]);
+  }, [refetchActivity, refetchListings, refetchMyNfts, sendTransaction, walletAddress]);
 
-  const handleCancel = useCallback((team: MarketplaceTeam) => {
-    setCancelConfirmTeam(team);
-  }, []);
+  const executeSweep = useCallback(async () => {
+    if (sweepTeams.length === 0 || !walletAddress) return;
+
+    setSweepStep('processing');
+    const progress: Record<string, SweepStatus> = {};
+    sweepTeams.forEach(team => { progress[team.tokenId] = 'pending'; });
+    setSweepProgress({ ...progress });
+
+    if (sweepPaymentMethod === 'card') {
+      try {
+        const result = await fundWallet({
+          address: walletAddress,
+          options: { chain: BASE_SEPOLIA, amount: String(sweepTotal), asset: 'USDC', card: { preferredProvider: 'moonpay' } },
+        });
+        if (result.status === 'cancelled') {
+          setSweepStep('confirm');
+          return;
+        }
+        const requiredUsdc = BigInt(Math.ceil(sweepTotal * 1e6));
+        const startTime = Date.now();
+        while (!cancelledRef.current && Date.now() - startTime < 300_000) {
+          const balance = await getUsdcBalance(walletAddress as Address);
+          if (balance >= requiredUsdc) break;
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        if (cancelledRef.current) return;
+      } catch (error) {
+        console.error('[Sweep] Fund failed:', error);
+        setSweepStep('confirm');
+        return;
+      }
+    } else {
+      try {
+        const { checkUsdcBalance } = await import('@/lib/marketplace/buy');
+        const { sufficient, balance } = await checkUsdcBalance(walletAddress, sweepTotal);
+        if (!sufficient) {
+          setTxError(`Insufficient balance. You have $${balance.toFixed(2)} but need $${sweepTotal.toFixed(2)}.`);
+          setSweepStep('confirm');
+          return;
+        }
+      } catch {
+        setSweepStep('confirm');
+        return;
+      }
+    }
+
+    const { getFulfillmentTx } = await import('@/lib/marketplace/buy');
+    for (const team of sweepTeams) {
+      progress[team.tokenId] = 'processing';
+      setSweepProgress({ ...progress });
+
+      try {
+        if (!team.orderHash || !team.protocolAddress) throw new Error('Missing order data');
+        const tx = await getFulfillmentTx(team.orderHash, walletAddress, team.protocolAddress);
+        const receipt = await sendTransaction(
+          { to: tx.to, value: BigInt(tx.value), data: tx.data as `0x${string}`, chainId: 8453 },
+          { sponsor: true, uiOptions: { description: `Purchase ${team.name} — gas fees covered by SBS` } },
+        );
+        const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
+
+        if (team.ownerAddress) {
+          notifySeller({ sellerWallet: team.ownerAddress, tokenId: team.tokenId, teamName: team.name, price: team.price || 0, buyerWallet: walletAddress });
+        }
+        logActivity({ type: 'buy', walletAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, counterparty: team.ownerAddress || null, orderHash: team.orderHash || null, txHash: txHash ? String(txHash) : null });
+        if (team.ownerAddress) {
+          logActivity({ type: 'sell', walletAddress: team.ownerAddress, tokenId: team.tokenId, teamName: team.name, price: team.price, counterparty: walletAddress, orderHash: team.orderHash || null, txHash: txHash ? String(txHash) : null });
+        }
+
+        progress[team.tokenId] = 'done';
+      } catch (error) {
+        console.error(`[Sweep] Failed ${team.tokenId}:`, error);
+        progress[team.tokenId] = 'failed';
+      }
+      setSweepProgress({ ...progress });
+    }
+
+    setSweepStep('complete');
+    refetchListings();
+    refetchMyNfts();
+    refetchActivity();
+  }, [fundWallet, refetchActivity, refetchListings, refetchMyNfts, sendTransaction, sweepPaymentMethod, sweepTeams, sweepTotal, walletAddress]);
+
+  const handleCancel = useCallback((team: MarketplaceTeam | null) => setCancelConfirmTeam(team), []);
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 py-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary mb-2">Team Marketplace</h1>
-          <p className="text-text-secondary text-sm">Buy and sell BBB teams instantly. No external accounts needed.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1 bg-bg-secondary p-1 rounded-xl border border-bg-tertiary">
-            <button
-              onClick={() => setActiveTab('buy')}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'buy'
-                  ? 'bg-banana text-black'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              Buy Teams
-            </button>
-            <button
-              onClick={() => {
-                if (!isLoggedIn) {
-                  setShowLoginModal(true);
-                  return;
-                }
-                setActiveTab('sell');
-              }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'sell'
-                  ? 'bg-banana text-black'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              Sell My Teams
-            </button>
-            <button
-              onClick={() => {
-                if (!isLoggedIn) {
-                  setShowLoginModal(true);
-                  return;
-                }
-                setActiveTab('activity');
-              }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'activity'
-                  ? 'bg-banana text-black'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              Activity
-            </button>
-            <button
-              onClick={() => {
-                if (!isLoggedIn) {
-                  setShowLoginModal(true);
-                  return;
-                }
-                setActiveTab('watchlist');
-              }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                activeTab === 'watchlist'
-                  ? 'bg-banana text-black'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill={activeTab === 'watchlist' ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              Watchlist
-              {watchlist.length > 0 && (
-                <span className="text-[10px] bg-error/20 text-error px-1.5 py-0.5 rounded-full font-bold leading-none">
-                  {watchlist.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+      <Header
+        activeTab={activeTab}
+        watchlistCount={watchlist.length}
+        onChangeTab={(tab) => {
+          if (tab === 'buy') {
+            setActiveTab(tab);
+            return;
+          }
+          requireLogin(() => setActiveTab(tab));
+        }}
+      />
 
       {activeTab === 'buy' && (
-        <>
-          {/* Stats Bar */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {statsLoading || !collectionStats ? (
-              <>
-                <StatSkeleton />
-                <StatSkeleton />
-                <StatSkeleton />
-                <StatSkeleton />
-              </>
-            ) : (
-              <>
-                <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-banana/20 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-banana" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                      </svg>
-                    </div>
-                    <span className="text-text-muted text-xs uppercase tracking-wider">Total Volume</span>
-                  </div>
-                  <div className="text-2xl font-bold text-text-primary font-mono">
-                    {collectionStats.totalVolume > 0
-                      ? `$${collectionStats.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                      : '$0'}
-                  </div>
-                  {collectionStats.weeklyVolumeChange != null && (
-                    <div className={`text-xs flex items-center gap-1 mt-1 ${collectionStats.weeklyVolumeChange >= 0 ? 'text-success' : 'text-error'}`}>
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d={collectionStats.weeklyVolumeChange >= 0 ? "M7 14l5-5 5 5z" : "M7 10l5 5 5-5z"}/>
-                      </svg>
-                      {Math.abs(collectionStats.weeklyVolumeChange).toFixed(1)}% this week
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                      </svg>
-                    </div>
-                    <span className="text-text-muted text-xs uppercase tracking-wider">Teams Listed</span>
-                  </div>
-                  <div className="text-2xl font-bold text-text-primary font-mono">
-                    {collectionStats.totalListed.toLocaleString()}
-                  </div>
-                  <div className="text-text-secondary text-xs mt-1">
-                    {collectionStats.numOwners.toLocaleString()} owners
-                  </div>
-                </div>
-
-                <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-banana/20 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-banana" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                      </svg>
-                    </div>
-                    <span className="text-text-muted text-xs uppercase tracking-wider">Floor Price</span>
-                  </div>
-                  <div className="text-2xl font-bold text-text-primary font-mono">
-                    {collectionStats.floorPrice > 0
-                      ? `$${collectionStats.floorPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                      : '--'}
-                  </div>
-                  <div className="text-text-secondary text-xs mt-1">
-                    {collectionStats.floorPriceSymbol}
-                  </div>
-                </div>
-
-                <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-hof/20 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-hof" fill="currentColor" viewBox="0 0 24 24">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                    </div>
-                    <span className="text-text-muted text-xs uppercase tracking-wider">Total Sales</span>
-                  </div>
-                  <div className="text-2xl font-bold text-text-primary font-mono">
-                    {collectionStats.totalSales.toLocaleString()}
-                  </div>
-                  <div className="text-text-secondary text-xs mt-1">
-                    Avg ${collectionStats.averagePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* View Filter Toggles + Search */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
-            <div className="flex flex-wrap items-center gap-3">
-              {/* View Toggle Pills */}
-              <div className="flex gap-1 bg-bg-secondary p-1 rounded-xl border border-bg-tertiary">
-                {([
-                  { key: 'listed', label: 'Listed' },
-                  { key: 'all', label: 'All Teams' },
-                  { key: 'top', label: 'Top Teams' },
-                  { key: 'jackpot', label: 'Jackpot' },
-                  { key: 'hof', label: 'HOF' },
-                ] as const).map(f => (
-                  <button
-                    key={f.key}
-                    onClick={() => setViewFilter(f.key)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      viewFilter === f.key
-                        ? f.key === 'jackpot' ? 'bg-error text-white'
-                        : f.key === 'hof' ? 'bg-hof text-white'
-                        : f.key === 'top' ? 'bg-success text-white'
-                        : 'bg-banana text-black'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Roster/Position Search */}
-              <div className="relative">
-                <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-                </svg>
-                <input
-                  type="text"
-                  value={rosterFilter}
-                  onChange={(e) => setRosterFilter(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && rosterFilter.trim()) {
-                      const q = rosterFilter.trim().replace(/^#/, '');
-                      if (/^\d+$/.test(q)) {
-                        router.push(`/marketplace/${q}`);
-                      }
-                    }
-                  }}
-                  placeholder="Search by team #, league name, or roster"
-                  className="bg-bg-secondary border border-bg-tertiary rounded-full pl-9 pr-4 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-banana w-72"
-                />
-                {rosterFilter && (
-                  <button
-                    onClick={() => setRosterFilter('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path d="M18 6 6 18M6 6l12 12"/>
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Sweep Toggle */}
-              <button
-                onClick={() => {
-                  if (!isLoggedIn) { setShowLoginModal(true); return; }
-                  setSweepMode(prev => {
-                    if (prev) setSweepSelected(new Set());
-                    return !prev;
-                  });
-                }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                  sweepMode
-                    ? 'bg-banana text-black'
-                    : 'bg-bg-secondary border border-bg-tertiary text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                Sweep
-              </button>
-
-              {/* Sort Dropdown */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-bg-secondary border border-bg-tertiary rounded-xl px-4 py-2 text-sm text-text-primary appearance-none cursor-pointer pr-10 focus:outline-none focus:border-banana"
-                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px' }}
-              >
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="rank">Best Rank</option>
-                <option value="points">Most Points</option>
-                <option value="playoffs">Playoff Odds</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Teams Grid */}
-          {(viewFilter === 'all' || viewFilter === 'top' || viewFilter === 'jackpot' || viewFilter === 'hof' ? allNftsLoading : listingsLoading) ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-12">
-              {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
-            </div>
-          ) : deduplicatedTeams.length === 0 ? (
-            <div className="text-center py-16 mb-12">
-              <div className="text-4xl mb-4">🍌</div>
-              <h3 className="text-text-primary font-semibold text-lg mb-2">
-                {viewFilter === 'listed' ? 'No Listings Found' : 'No Teams Found'}
-              </h3>
-              <p className="text-text-secondary text-sm">
-                {viewFilter === 'jackpot'
-                  ? 'No Jackpot teams found. These are rare — only 1 per 100 drafts!'
-                  : viewFilter === 'hof'
-                  ? 'No Hall of Fame teams found in this view.'
-                  : viewFilter === 'top'
-                  ? 'No top performing teams found yet.'
-                  : rosterFilter
-                  ? 'No teams match your search. Try entering a team # and pressing Enter to look up any team.'
-                  : 'No BBB4 teams are currently listed for sale. Check back later!'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 mb-12">
-              {deduplicatedTeams.map((team) => (
-                <div
-                  key={`${team.id}-${team.orderHash}`}
-                  onClick={() => {
-                    if (sweepMode && team.price != null) {
-                      toggleSweepSelect(team.tokenId);
-                    } else {
-                      router.push(`/marketplace/${team.tokenId}`);
-                    }
-                  }}
-                  className={`bg-bg-secondary border rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer ${
-                    sweepMode && sweepSelected.has(team.tokenId)
-                      ? 'ring-2 ring-banana border-banana/50'
-                      : team.isJackpot
-                      ? 'border-error/30 hover:shadow-error/20'
-                      : team.isHof
-                      ? 'border-hof/30 hover:shadow-hof/20'
-                      : 'border-bg-tertiary hover:border-bg-elevated'
-                  }`}
-                >
-                  {/* Team Header */}
-                  <div className="relative h-80 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
-                    {team.imageUrl ? (
-                      <Image
-                        src={team.imageUrl}
-                        alt={team.name}
-                        width={230}
-                        height={300}
-                        className="rounded-2xl shadow-lg"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center">
-                        <svg width="160" height="100" viewBox="0 0 160 100" className="drop-shadow-lg">
-                          <defs>
-                            <linearGradient id={`passGrad-${team.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#FBBF24"/>
-                              <stop offset="100%" stopColor="#D97706"/>
-                            </linearGradient>
-                          </defs>
-                          <rect x="0" y="0" width="160" height="100" rx="12" fill={`url(#passGrad-${team.id})`}/>
-                          <circle cx="0" cy="50" r="10" fill="#1a1a2e"/>
-                          <circle cx="160" cy="50" r="10" fill="#1a1a2e"/>
-                          <text x="80" y="55" textAnchor="middle" fill="#1C1C1E" fontSize="13" fontWeight="bold" fontFamily="system-ui">Banana Best Ball IV</text>
-                        </svg>
-                      </div>
-                    )}
-
-                    {/* Share + Heart icons */}
-                    <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
-                      <button
-                        onClick={(e) => handleShare(team, e)}
-                        className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
-                        title="Share on X"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          if (!isLoggedIn) { setShowLoginModal(true); return; }
-                          toggleWatchlist(team.tokenId, team.price);
-                        }}
-                        className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-colors"
-                      >
-                        <svg
-                          className={`w-3.5 h-3.5 ${watchlistSet.has(team.tokenId) ? 'text-red-500' : 'text-white'}`}
-                          fill={watchlistSet.has(team.tokenId) ? 'currentColor' : 'none'}
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Draft Type Badge */}
-                    <div className="absolute top-3 left-3">
-                      {team.isJackpot ? (
-                        <span className="px-3 py-1 bg-error text-white text-[10px] font-bold uppercase rounded-full">
-                          JACKPOT
-                        </span>
-                      ) : team.isHof ? (
-                        <span className="px-3 py-1 bg-gradient-to-r from-hof to-pink-600 text-white text-[10px] font-bold uppercase rounded-full flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                          HOF
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 bg-pro text-white text-[10px] font-bold uppercase rounded-full">
-                          PRO
-                        </span>
-                      )}
-                    </div>
-
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-text-primary font-mono truncate">{team.name}</h3>
-                          {team.rank > 0 && (
-                            <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              team.rank === 1 ? 'bg-yellow-500/20 text-yellow-400' :
-                              team.rank === 2 ? 'bg-gray-400/20 text-gray-300' :
-                              team.rank === 3 ? 'bg-orange-500/20 text-orange-400' :
-                              'bg-white/10 text-white/50'
-                            }`}>
-                              #{team.rank}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {team.ownerPfp ? (
-                            <Image src={team.ownerPfp} alt="" width={20} height={20} className="rounded-full" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full bg-bg-tertiary flex items-center justify-center flex-shrink-0">
-                              <span className="text-[10px]">🍌</span>
-                            </div>
-                          )}
-                          <p className="text-text-muted text-xs">{team.owner}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stats */}
-                    {(team.points > 0 || team.weeklyAvg > 0 || team.rank > 0) && (
-                      <div className={`grid ${team.rank > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-3 p-3 bg-bg-primary rounded-xl mb-4`}>
-                        {team.rank > 0 && (
-                          <div className="text-center">
-                            <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Rank</p>
-                            <p className={`font-mono text-sm font-semibold ${
-                              team.rank <= 3 ? 'text-banana' : 'text-text-primary'
-                            }`}>
-                              {team.rank}/{10}
-                            </p>
-                          </div>
-                        )}
-                        <div className="text-center">
-                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Season</p>
-                          <p className="font-mono text-sm font-semibold text-text-primary">
-                            {team.points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Weekly</p>
-                          <p className="font-mono text-sm font-semibold text-success">
-                            {team.weeklyAvg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        {team.price != null ? (
-                          <>
-                            <p className="text-text-muted text-[10px] mb-0.5">Price</p>
-                            <p className="text-text-primary font-mono text-lg font-bold">
-                              ${team.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </p>
-                            {lastSales[team.tokenId] && (
-                              <p className="text-text-muted text-[10px] font-mono">
-                                Last sale: ${lastSales[team.tokenId].price.toFixed(2)}
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-text-muted text-xs">Not listed</p>
-                            {lastSales[team.tokenId] && (
-                              <p className="text-text-muted text-[10px] font-mono">
-                                Last sale: ${lastSales[team.tokenId].price.toFixed(2)}
-                              </p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {sweepMode && team.price != null ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              toggleSweepSelect(team.tokenId);
-                            }}
-                            className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${
-                              sweepSelected.has(team.tokenId)
-                                ? 'border-banana bg-banana text-black'
-                                : 'border-bg-tertiary hover:border-text-muted'
-                            }`}
-                          >
-                            {sweepSelected.has(team.tokenId) && (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path d="M5 13l4 4L19 7"/>
-                              </svg>
-                            )}
-                          </button>
-                        ) : walletAddress && team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase() ? (
-                          team.price != null ? (
-                            <span className="text-text-muted text-xs">You</span>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setActiveTab('sell');
-                              }}
-                              className="px-5 py-2 bg-banana text-black text-xs font-semibold rounded-xl hover:brightness-110 transition-all"
-                            >
-                              List
-                            </button>
-                          )
-                        ) : team.price != null ? (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                router.push(`/marketplace/${team.tokenId}?offer=true`);
-                              }}
-                              className="text-banana text-xs font-medium hover:underline"
-                            >
-                              Make Offer
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openBuyModal(team);
-                              }}
-                              className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
-                            >
-                              Buy Now
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              router.push(`/marketplace/${team.tokenId}?offer=true`);
-                            }}
-                            className="px-5 py-2.5 border border-banana text-banana text-sm font-semibold rounded-xl hover:bg-banana/10 transition-all"
-                          >
-                            Make Offer
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Load More */}
-          {((viewFilter === 'listed' && hasMore && !listingsLoading) ||
-            (viewFilter !== 'listed' && allNftsHasMore && !allNftsLoading)) && (
-            <div className="text-center mb-12">
-              <button
-                onClick={viewFilter === 'listed' ? loadMore : loadMoreAllNfts}
-                className="px-8 py-3 bg-bg-secondary border border-bg-tertiary text-text-primary rounded-xl hover:bg-bg-tertiary transition-colors text-sm font-medium"
-              >
-                Load More
-              </button>
-            </div>
-          )}
-
-          {/* Leaderboard Section */}
-          {leaderboardTeams.length > 0 && (
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-xl font-bold text-text-primary flex items-center gap-3">
-                  <span className="text-2xl">🏆</span>
-                  Top Performing Teams for Sale
-                </h2>
-                <Link href="/standings" className="text-banana hover:underline text-sm font-medium transition-colors">
-                  View Full Standings
-                </Link>
-              </div>
-
-              <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl overflow-x-auto">
-                {/* Header */}
-                <div className="grid grid-cols-7 gap-4 px-6 py-3 bg-bg-primary text-text-muted text-xs uppercase tracking-wider font-medium min-w-[600px]">
-                  <span>Rank</span>
-                  <span className="col-span-2">Team</span>
-                  <span>Points</span>
-                  <span>Playoff %</span>
-                  <span>Price</span>
-                  <span>Action</span>
-                </div>
-
-                {/* Rows */}
-                {leaderboardTeams.map((team, index) => (
-                  <div
-                    key={`lb-${team.id}-${team.orderHash}`}
-                    className="grid grid-cols-7 gap-4 px-6 py-4 items-center border-t border-bg-tertiary hover:bg-bg-tertiary/50 transition-colors min-w-[600px]"
-                  >
-                    <span className={`font-mono font-bold ${index < 3 ? 'text-banana' : 'text-text-primary'}`}>
-                      {team.rank > 0 ? `#${team.rank}` : `#${index + 1}`}
-                    </span>
-                    <div className="col-span-2 flex items-center gap-3">
-                      {team.imageUrl ? (
-                        <Image src={team.imageUrl} alt={team.name} width={40} height={40} className="rounded-xl" />
-                      ) : (
-                        <svg width="40" height="28" viewBox="0 0 88 56" className="flex-shrink-0">
-                          <defs>
-                            <linearGradient id={`lbGrad-${team.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#FBBF24"/>
-                              <stop offset="100%" stopColor="#D97706"/>
-                            </linearGradient>
-                          </defs>
-                          <rect x="0" y="0" width="88" height="56" rx="6" fill={`url(#lbGrad-${team.id})`}/>
-                          <circle cx="0" cy="28" r="6" fill="#1a1a2e"/>
-                          <circle cx="88" cy="28" r="6" fill="#1a1a2e"/>
-                          <text x="44" y="38" textAnchor="middle" fill="#1C1C1E" fontSize="14" fontWeight="bold" fontFamily="system-ui">BBB IV</text>
-                        </svg>
-                      )}
-                      <div>
-                        <h4 className="text-text-primary font-medium text-sm font-mono">{team.name}</h4>
-                        <span className="text-text-muted text-xs">{team.owner}</span>
-                      </div>
-                      {(team.isHof || team.isJackpot) && (
-                        <div className="flex gap-1">
-                          {team.isJackpot && (
-                            <span className="px-2 py-0.5 bg-error/20 text-error text-[9px] font-bold rounded">JP</span>
-                          )}
-                          {team.isHof && (
-                            <span className="px-2 py-0.5 bg-hof/20 text-hof text-[9px] font-bold rounded">HOF</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-text-primary font-mono text-sm">{team.points > 0 ? team.points.toLocaleString() : '--'}</span>
-                    <span className={`font-mono text-sm ${team.playoffOdds >= 50 ? 'text-success' : team.playoffOdds > 0 ? 'text-warning' : 'text-text-muted'}`}>
-                      {team.playoffOdds > 0 ? `${team.playoffOdds}%` : '--'}
-                    </span>
-                    <span className="text-text-primary font-mono text-sm">
-                      ${team.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </span>
-                    <div>
-                      {walletAddress && team.ownerAddress?.toLowerCase() === walletAddress.toLowerCase() ? (
-                        <span className="text-text-muted text-xs">Listed</span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => router.push(`/marketplace/${team.tokenId}?offer=true`)}
-                            className="px-4 py-1.5 border border-banana text-banana text-xs font-semibold rounded-lg hover:bg-banana/10 transition-all"
-                          >
-                            Make Offer
-                          </button>
-                          <button
-                            onClick={() => openBuyModal(team)}
-                            className="px-4 py-1.5 bg-banana text-black text-xs font-semibold rounded-lg hover:brightness-110 transition-all"
-                          >
-                            Buy Now
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Info Section */}
-          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6 mb-8">
-            <h3 className="text-lg font-semibold text-text-primary mb-4">Why Trade Teams?</h3>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-banana/20 flex items-center justify-center mb-3">
-                  <svg className="w-5 h-5 text-banana" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                </div>
-                <h4 className="text-text-primary font-medium mb-2">Recoup Your Investment</h4>
-                <p className="text-text-secondary text-sm">Bad draft? Sell your team and get back some of your entry fee.</p>
-              </div>
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center mb-3">
-                  <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-                  </svg>
-                </div>
-                <h4 className="text-text-primary font-medium mb-2">Buy Contenders</h4>
-                <p className="text-text-secondary text-sm">Skip the draft and buy a team already performing well mid-season.</p>
-              </div>
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-error/20 flex items-center justify-center mb-3">
-                  <span className="text-error font-bold text-sm">JP</span>
-                </div>
-                <h4 className="text-text-primary font-medium mb-2">Get Jackpot Access</h4>
-                <p className="text-text-secondary text-sm">Buy a Jackpot team or unused Jackpot pass. Win the league and you skip straight to finals.</p>
-              </div>
-            </div>
-          </div>
-        </>
+        <BuyTab
+          collectionStats={collectionStats}
+          statsLoading={statsLoading}
+          viewFilter={viewFilter}
+          rosterFilter={rosterFilter}
+          sortBy={sortBy}
+          sweepMode={sweepMode}
+          sweepSelected={sweepSelected}
+          deduplicatedTeams={deduplicatedTeams}
+          listingsLoading={listingsLoading}
+          allNftsLoading={allNftsLoading}
+          hasMore={hasMore}
+          allNftsHasMore={allNftsHasMore}
+          watchlistSet={watchlistSet}
+          walletAddress={walletAddress}
+          lastSales={lastSales}
+          leaderboardTeams={leaderboardTeams}
+          showBuyModal={showBuyModal}
+          selectedTeam={selectedTeam}
+          buyStep={buyStep}
+          paymentMethod={paymentMethod}
+          cardFlowStep={cardFlowStep}
+          txError={txError}
+          userUsdcBalance={user?.usdcBalance}
+          onSetViewFilter={setViewFilter}
+          onSetRosterFilter={setRosterFilter}
+          onSetSortBy={setSortBy}
+          onToggleSweepMode={() => requireLogin(() => setSweepMode(previous => {
+            if (previous) setSweepSelected(new Set());
+            return !previous;
+          }))}
+          onToggleSweepSelect={toggleSweepSelect}
+          onClearSweep={() => setSweepSelected(new Set())}
+          onOpenSweepModal={() => {
+            setSweepStep('confirm');
+            setShowSweepModal(true);
+          }}
+          onLoadMore={viewFilter === 'listed' ? loadMore : loadMoreAllNfts}
+          onSearchToken={(tokenId) => router.push(`/marketplace/${tokenId}`)}
+          onToggleWatchlist={(tokenId, price) => requireLogin(() => toggleWatchlist(tokenId, price))}
+          onShare={handleShare}
+          onOpenBuyModal={openBuyModal}
+          onGoToSellTab={() => requireLogin(() => setActiveTab('sell'))}
+          onNavigateToTeam={(tokenId) => router.push(`/marketplace/${tokenId}`)}
+          onMakeOffer={(tokenId) => router.push(`/marketplace/${tokenId}?offer=true`)}
+          onCloseBuyModal={() => setShowBuyModal(false)}
+          onSetPaymentMethod={setPaymentMethod}
+          onHandleBuy={handleBuy}
+        />
       )}
 
       {activeTab === 'sell' && (
-        <div>
-          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6 mb-8">
-            <h3 className="text-lg font-semibold text-text-primary mb-2">Sell Your Teams</h3>
-            <p className="text-text-secondary text-sm mb-6">List any of your BBB teams for sale. Set your price and buyers can purchase instantly.</p>
-
-            {myNftsLoading ? (
-              <div className="space-y-4">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="bg-bg-primary border border-bg-tertiary rounded-xl p-4 animate-pulse">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-bg-tertiary" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-bg-tertiary rounded w-32" />
-                        <div className="h-3 bg-bg-tertiary rounded w-48" />
-                      </div>
-                      <div className="h-10 bg-bg-tertiary rounded w-28" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {myNfts.map((team) => (
-                  <div
-                    key={team.id}
-                    className={`bg-bg-primary border rounded-xl p-4 flex items-center justify-between ${
-                      team.isHof ? 'border-hof/30' : 'border-bg-tertiary'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {team.imageUrl ? (
-                        <Image src={team.imageUrl} alt={team.name} width={56} height={56} className="rounded-xl" />
-                      ) : (
-                        <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${team.color} flex items-center justify-center`}>
-                          <span className="text-xl">🍌</span>
-                        </div>
-                      )}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-text-primary font-semibold font-mono">{team.name}</h4>
-                          {team.isHof && (
-                            <span className="px-2 py-0.5 bg-hof/20 text-hof text-[9px] font-bold rounded">HOF</span>
-                          )}
-                          {team.isJackpot && (
-                            <span className="px-2 py-0.5 bg-error/20 text-error text-[9px] font-bold rounded">JP</span>
-                          )}
-                        </div>
-                        <p className="text-text-muted text-xs">
-                          {team.rank > 0 ? `Rank #${team.rank} • ` : ''}
-                          {team.points > 0 ? `${team.points.toLocaleString()} pts` : `Token #${team.tokenId}`}
-                          {team.playoffOdds > 0 ? ` • ${team.playoffOdds}% playoffs` : ''}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <SellTabOfferBadge tokenId={team.tokenId} />
-                      {team.orderHash ? (
-                        <>
-                          <span className="text-sm text-green-400 font-medium">
-                            Listed at ${team.price?.toFixed(2)}
-                          </span>
-                          <button
-                            onClick={() => handleCancel(team)}
-                            disabled={cancellingTokenId === team.tokenId}
-                            className="px-4 py-2 rounded-xl text-sm font-semibold transition-all border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                          >
-                            {cancellingTokenId === team.tokenId ? 'Cancelling...' : 'Delist'}
-                          </button>
-                        </>
-                      ) : team.passType === 'free' && isDraftingOpen() ? (
-                        <button
-                          onClick={() => setShowFreePassInfo('team')}
-                          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-white/10 text-white/40 hover:bg-white/15 hover:text-white/50"
-                        >
-                          Available After Season
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => openSellModal(team)}
-                          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all bg-banana text-black hover:brightness-110"
-                        >
-                          List for Sale
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {txError && !showBuyModal && !showSellModal && (
-              <div className="mt-4 p-3 bg-error/10 border border-error/30 rounded-xl">
-                <p className="text-error text-sm">{txError}</p>
-              </div>
-            )}
-
-            {!myNftsLoading && myNfts.length === 0 && (
-              <div className="text-center py-12">
-                <div className="text-4xl mb-4">🍌</div>
-                <h4 className="text-text-primary font-semibold mb-2">No Teams Yet</h4>
-                <p className="text-text-secondary text-sm mb-4">Draft some teams to start selling!</p>
-                <Link href="/" className="inline-block px-6 py-2 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all">
-                  Enter a Draft
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* Selling Tips */}
-          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-text-primary mb-4">Selling Tips</h3>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-banana/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-banana text-xs font-bold">1</span>
-                </div>
-                <div>
-                  <h4 className="text-text-primary font-medium text-sm">Price competitively</h4>
-                  <p className="text-text-secondary text-xs">Check similar teams to set a fair price. Jackpot and HOF teams command premiums.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-banana/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-banana text-xs font-bold">2</span>
-                </div>
-                <div>
-                  <h4 className="text-text-primary font-medium text-sm">Highlight your perks</h4>
-                  <p className="text-text-secondary text-xs">Jackpot teams that win their league skip to finals. HOF teams compete for bonus prizes. Buyers pay more for these.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-banana/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-banana text-xs font-bold">3</span>
-                </div>
-                <div>
-                  <h4 className="text-text-primary font-medium text-sm">Low fees</h4>
-                  <p className="text-text-secondary text-xs">Only a 1% OpenSea fee. No hidden charges — SBS takes zero cut.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SellTab
+          myNfts={myNfts}
+          myNftsLoading={myNftsLoading}
+          myNftOffers={myNftOffers}
+          myNftOffersLoading={myNftOffersLoading}
+          collectionStats={collectionStats}
+          showSellModal={showSellModal}
+          showFreePassInfo={showFreePassInfo}
+          showSuccessModal={showSuccessModal}
+          successType={successType}
+          selectedTeam={selectedTeam}
+          listPrice={listPrice}
+          txError={txError}
+          cancelConfirmTeam={cancelConfirmTeam}
+          cancellingTokenId={cancellingTokenId}
+          onOpenSellModal={openSellModal}
+          onCloseSellModal={() => setShowSellModal(false)}
+          onSetListPrice={setListPrice}
+          onHandleList={handleList}
+          onShowFreePassInfo={setShowFreePassInfo}
+          onHandleCancel={handleCancel}
+          onExecuteCancel={executeCancel}
+          onCloseSuccessModal={() => setShowSuccessModal(false)}
+        />
       )}
 
       {activeTab === 'activity' && (
-        <div className="space-y-8">
-          {/* Active Listings */}
-          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
-              Your Active Listings
-              {myNfts.filter(n => n.orderHash).length > 0 && (
-                <span className="text-xs bg-banana/20 text-banana px-2 py-0.5 rounded-full font-normal">
-                  {myNfts.filter(n => n.orderHash).length}
-                </span>
-              )}
-            </h3>
-
-            {myNftsLoading ? (
-              <div className="space-y-3">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="h-16 bg-bg-tertiary rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : myNfts.filter(n => n.orderHash).length === 0 ? (
-              <p className="text-text-muted text-sm py-4 text-center">No active listings</p>
-            ) : (
-              <div className="space-y-3">
-                {myNfts.filter(n => n.orderHash).map(team => (
-                  <div
-                    key={`listing-${team.id}`}
-                    className={`flex items-center justify-between p-4 rounded-xl border ${
-                      team.isHof ? 'border-hof/30 bg-hof/5' : 'border-bg-tertiary bg-bg-primary'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {team.imageUrl ? (
-                        <Image src={team.imageUrl} alt={team.name} width={48} height={48} className="rounded-xl" />
-                      ) : (
-                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${team.color} flex items-center justify-center`}>
-                          <span className="text-lg">🍌</span>
-                        </div>
-                      )}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-text-primary font-semibold font-mono text-sm">{team.name}</h4>
-                          {team.isJackpot && <span className="px-2 py-0.5 bg-error/20 text-error text-[9px] font-bold rounded">JP</span>}
-                          {team.isHof && <span className="px-2 py-0.5 bg-hof/20 text-hof text-[9px] font-bold rounded">HOF</span>}
-                        </div>
-                        <p className="text-text-muted text-xs mt-0.5">
-                          Listed at <span className="text-banana font-mono font-semibold">${team.price?.toFixed(2)}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Link
-                        href={`/marketplace/${team.tokenId}`}
-                        className="text-text-secondary text-xs hover:text-text-primary transition-colors"
-                      >
-                        View
-                      </Link>
-                      <button
-                        onClick={() => handleCancel(team)}
-                        disabled={cancellingTokenId === team.tokenId}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold transition-all border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                      >
-                        {cancellingTokenId === team.tokenId ? 'Cancelling...' : 'Cancel'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Active Offers on Your NFTs */}
-          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
-              Offers on Your Teams
-              {myNftOffers.length > 0 && (
-                <span className="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full font-normal">
-                  {myNftOffers.length}
-                </span>
-              )}
-            </h3>
-
-            {myNftOffersLoading ? (
-              <div className="space-y-3">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="h-16 bg-bg-tertiary rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : myNftOffers.length === 0 ? (
-              <p className="text-text-muted text-sm py-4 text-center">No active offers on your teams</p>
-            ) : (
-              <div className="space-y-3">
-                {myNftOffers.map((offer, i) => (
-                  <div
-                    key={`offer-${offer.orderHash}`}
-                    className={`flex items-center justify-between p-4 rounded-xl border ${
-                      i === 0 ? 'border-banana/20 bg-banana/5' : 'border-bg-tertiary bg-bg-primary'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {offer.imageUrl ? (
-                        <Image src={offer.imageUrl} alt={offer.teamName} width={48} height={48} className="rounded-xl" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-bg-tertiary flex items-center justify-center">
-                          <span className="text-lg">🍌</span>
-                        </div>
-                      )}
-                      <div>
-                        <h4 className="text-text-primary font-semibold font-mono text-sm">{offer.teamName}</h4>
-                        <p className="text-text-muted text-xs mt-0.5">
-                          <span className="text-banana font-mono font-semibold">${offer.amount.toFixed(2)}</span>
-                          {' '}from {offer.offererName}
-                        </p>
-                      </div>
-                    </div>
-                    <Link
-                      href={`/marketplace/${offer.tokenId}`}
-                      className="px-4 py-2 bg-success text-white text-xs font-semibold rounded-xl hover:brightness-110 transition-all"
-                    >
-                      Review
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Transaction History */}
-          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-text-primary mb-4">Transaction History</h3>
-
-            {activityLoading && activities.length === 0 ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-14 bg-bg-tertiary rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : activities.length === 0 ? (
-              <p className="text-text-muted text-sm py-8 text-center">No transaction history yet. Buy, sell, or list a team to get started.</p>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  {activities.map(activity => {
-                    const typeConfig: Record<string, { label: string; icon: string; color: string }> = {
-                      buy: { label: 'Bought', icon: '🛒', color: 'text-success' },
-                      sell: { label: 'Sold', icon: '💵', color: 'text-banana' },
-                      list: { label: 'Listed', icon: '📋', color: 'text-pro' },
-                      cancel: { label: 'Cancelled', icon: '❌', color: 'text-error' },
-                      offer_made: { label: 'Offer Made', icon: '💰', color: 'text-banana' },
-                      offer_accepted: { label: 'Sold (Offer)', icon: '✅', color: 'text-success' },
-                    };
-                    const config = typeConfig[activity.type] || { label: activity.type, icon: '📝', color: 'text-text-secondary' };
-
-                    const timeAgo = (() => {
-                      const diff = Date.now() - new Date(activity.timestamp).getTime();
-                      const mins = Math.floor(diff / 60000);
-                      if (mins < 1) return 'Just now';
-                      if (mins < 60) return `${mins}m ago`;
-                      const hrs = Math.floor(mins / 60);
-                      if (hrs < 24) return `${hrs}h ago`;
-                      const days = Math.floor(hrs / 24);
-                      if (days < 7) return `${days}d ago`;
-                      return new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    })();
-
-                    return (
-                      <Link
-                        key={activity.id}
-                        href={`/marketplace/${activity.tokenId}`}
-                        className="flex items-center justify-between p-3 rounded-xl bg-bg-primary border border-bg-tertiary hover:bg-bg-tertiary/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-bg-tertiary flex items-center justify-center text-base">
-                            {config.icon}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-semibold ${config.color}`}>{config.label}</span>
-                              <span className="text-text-primary text-sm font-mono">{activity.teamName}</span>
-                            </div>
-                            {activity.counterparty && (
-                              <p className="text-text-muted text-[11px]">
-                                {activity.type === 'buy' ? 'from' : 'to'} {activity.counterparty.slice(0, 6)}...{activity.counterparty.slice(-4)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {activity.price != null && (
-                            <p className="text-text-primary font-mono text-sm font-medium">${activity.price.toFixed(2)}</p>
-                          )}
-                          <p className="text-text-muted text-[10px]">{timeAgo}</p>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-
-                {activityHasMore && (
-                  <div className="text-center mt-4">
-                    <button
-                      onClick={loadMoreActivity}
-                      className="px-6 py-2 bg-bg-primary border border-bg-tertiary text-text-primary rounded-xl hover:bg-bg-tertiary transition-colors text-sm font-medium"
-                    >
-                      Load More
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <ActivityTab
+          myNfts={myNfts}
+          myNftsLoading={myNftsLoading}
+          activities={activities}
+          activityLoading={activityLoading}
+          activityHasMore={activityHasMore}
+          cancellingTokenId={cancellingTokenId}
+          onCancel={(team) => setCancelConfirmTeam(team)}
+          onLoadMoreActivity={loadMoreActivity}
+        />
       )}
 
-      {/* Watchlist Tab */}
       {activeTab === 'watchlist' && (
-        <div>
-          {watchlist.length === 0 ? (
-            <div className="text-center py-20">
-              <div className="w-16 h-16 mx-auto mb-6 bg-bg-secondary rounded-full flex items-center justify-center border border-bg-tertiary">
-                <svg className="w-8 h-8 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </div>
-              <h3 className="text-text-primary font-semibold text-lg mb-2">No teams watchlisted yet</h3>
-              <p className="text-text-secondary text-sm mb-6">Tap the heart icon on any team card to add it to your watchlist.</p>
-              <button
-                onClick={() => setActiveTab('buy')}
-                className="px-6 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all text-sm"
-              >
-                Browse Teams
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-              {deduplicatedTeams.filter(t => watchlistSet.has(t.tokenId)).map((team) => (
-                <div
-                  key={`wl-${team.id}-${team.orderHash}`}
-                  onClick={() => router.push(`/marketplace/${team.tokenId}`)}
-                  className={`bg-bg-secondary border rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer ${
-                    team.isJackpot
-                      ? 'border-error/30 hover:shadow-error/20'
-                      : team.isHof
-                      ? 'border-hof/30 hover:shadow-hof/20'
-                      : 'border-bg-tertiary hover:border-bg-elevated'
-                  }`}
-                >
-                  <div className="relative h-80 bg-gradient-to-br from-bg-tertiary to-bg-secondary flex items-center justify-center">
-                    {team.imageUrl ? (
-                      <Image src={team.imageUrl} alt={team.name} width={230} height={300} className="rounded-2xl shadow-lg" />
-                    ) : (
-                      <div className="flex items-center justify-center">
-                        <svg width="160" height="100" viewBox="0 0 160 100" className="drop-shadow-lg">
-                          <defs><linearGradient id={`wlGrad-${team.id}`} x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#FBBF24"/><stop offset="100%" stopColor="#D97706"/></linearGradient></defs>
-                          <rect x="0" y="0" width="160" height="100" rx="12" fill={`url(#wlGrad-${team.id})`}/>
-                          <circle cx="0" cy="50" r="10" fill="#1a1a2e"/><circle cx="160" cy="50" r="10" fill="#1a1a2e"/>
-                          <text x="80" y="55" textAnchor="middle" fill="#1C1C1E" fontSize="13" fontWeight="bold" fontFamily="system-ui">Banana Best Ball IV</text>
-                        </svg>
-                      </div>
-                    )}
-                    {/* Heart (remove) */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleWatchlist(team.tokenId, team.price); }}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-colors z-10"
-                    >
-                      <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="p-5">
-                    <h3 className="text-lg font-semibold text-text-primary font-mono mb-1">{team.name}</h3>
-                    <div className="flex items-center justify-between mt-3">
-                      <div>
-                        {team.price != null ? (
-                          <p className="text-text-primary font-mono text-lg font-bold">${team.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-                        ) : (
-                          <p className="text-text-muted text-xs">Not listed</p>
-                        )}
-                      </div>
-                      {team.price != null && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openBuyModal(team); }}
-                          className="px-6 py-2.5 bg-banana text-black text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
-                        >
-                          Buy Now
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {/* Show watchlisted tokens not in current view */}
-              {watchlist.filter(w => !deduplicatedTeams.some(t => t.tokenId === w.tokenId)).length > 0 && (
-                <div className="col-span-full text-center py-6">
-                  <p className="text-text-muted text-sm">
-                    {watchlist.filter(w => !deduplicatedTeams.some(t => t.tokenId === w.tokenId)).length} watchlisted teams not currently loaded.
-                    <button onClick={() => { setViewFilter('all'); setActiveTab('buy'); }} className="text-banana hover:underline ml-1">View All Teams</button>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <WatchlistTab
+          watchlist={watchlist}
+          watchlistSet={watchlistSet}
+          deduplicatedTeams={deduplicatedTeams}
+          onBrowseTeams={() => setActiveTab('buy')}
+          onViewTeam={(tokenId) => router.push(`/marketplace/${tokenId}`)}
+          onToggleWatchlist={(tokenId, price) => toggleWatchlist(tokenId, price)}
+          onOpenBuyModal={openBuyModal}
+          onViewAllTeams={() => {
+            setViewFilter('all');
+            setActiveTab('buy');
+          }}
+        />
       )}
 
-      {/* Sweep Floating Bar */}
-      {sweepMode && sweepSelected.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-bg-secondary/95 backdrop-blur-md border-t border-bg-tertiary px-4 sm:px-8 py-4">
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="text-text-primary font-semibold text-sm">
-                {sweepSelected.size} team{sweepSelected.size > 1 ? 's' : ''} selected
-              </span>
-              <span className="text-text-muted text-sm font-mono">
-                Total: ${sweepTotal.toFixed(2)}
-              </span>
-              <button
-                onClick={() => setSweepSelected(new Set())}
-                className="text-text-muted text-xs hover:text-text-primary transition-colors"
-              >
-                Clear all
-              </button>
-            </div>
-            <button
-              onClick={() => {
-                setSweepStep('confirm');
-                setShowSweepModal(true);
-              }}
-              className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all text-sm"
-            >
-              Buy {sweepSelected.size} Team{sweepSelected.size > 1 ? 's' : ''}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Sweep Modal */}
-      {showSweepModal && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => sweepStep === 'confirm' && setShowSweepModal(false)}
-        >
-          <div
-            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            {sweepStep === 'confirm' && (
-              <>
-                <div className="flex items-center justify-between p-6 border-b border-bg-tertiary sticky top-0 bg-bg-secondary z-10">
-                  <h2 className="text-lg font-semibold text-text-primary">Sweep Buy</h2>
-                  <button
-                    onClick={() => setShowSweepModal(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-primary text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path d="M18 6L6 18M6 6l12 12"/>
-                    </svg>
-                  </button>
-                </div>
-                <div className="p-6">
-                  {/* Selected teams */}
-                  <div className="space-y-3 mb-6">
-                    {sweepTeams.map(team => (
-                      <div key={team.tokenId} className="flex items-center justify-between p-3 bg-bg-primary rounded-xl border border-bg-tertiary">
-                        <div className="flex items-center gap-3">
-                          {team.imageUrl ? (
-                            <Image src={team.imageUrl} alt={team.name} width={40} height={40} className="rounded-lg" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-bg-tertiary flex items-center justify-center"><span className="text-sm">🍌</span></div>
-                          )}
-                          <span className="text-text-primary font-mono text-sm">{team.name}</span>
-                        </div>
-                        <span className="text-text-primary font-mono text-sm font-semibold">${(team.price || 0).toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Payment method */}
-                  <div className="mb-4">
-                    <label className="block text-text-secondary text-sm mb-3">Payment Method</label>
-                    <div className="grid gap-3 grid-cols-2">
-                      <button
-                        onClick={() => setSweepPaymentMethod('card')}
-                        className={`p-3 rounded-xl border-2 transition-all text-center ${sweepPaymentMethod === 'card' ? 'border-banana bg-banana/10' : 'border-bg-tertiary hover:border-bg-elevated'}`}
-                      >
-                        <span className={`text-sm font-medium ${sweepPaymentMethod === 'card' ? 'text-text-primary' : 'text-text-secondary'}`}>Card</span>
-                      </button>
-                      <button
-                        onClick={() => setSweepPaymentMethod('usdc')}
-                        className={`p-3 rounded-xl border-2 transition-all text-center ${sweepPaymentMethod === 'usdc' ? 'border-banana bg-banana/10' : 'border-bg-tertiary hover:border-bg-elevated'}`}
-                      >
-                        <span className={`text-sm font-medium ${sweepPaymentMethod === 'usdc' ? 'text-text-primary' : 'text-text-secondary'}`}>USDC</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Total */}
-                  <div className="p-4 bg-bg-primary rounded-xl space-y-2 mb-4">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-text-secondary">{sweepTeams.length} teams</span>
-                      <span className="text-text-primary font-mono">${sweepTotal.toFixed(2)}</span>
-                    </div>
-                    {sweepPaymentMethod === 'card' && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary">Processing Fee (3%)</span>
-                        <span className="text-text-primary font-mono">${(sweepTotal * 0.03).toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm pt-2 border-t border-bg-tertiary font-semibold">
-                      <span className="text-text-primary">Total</span>
-                      <span className="text-text-primary font-mono">
-                        ${sweepPaymentMethod === 'card' ? (sweepTotal * 1.03).toFixed(2) : sweepTotal.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {txError && (
-                    <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
-                      <p className="text-error text-sm">{txError}</p>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={executeSweep}
-                    className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
-                  >
-                    Pay ${sweepPaymentMethod === 'card' ? (sweepTotal * 1.03).toFixed(2) : sweepTotal.toFixed(2)}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {sweepStep === 'processing' && (
-              <div className="p-6">
-                <h3 className="text-text-primary font-semibold text-lg mb-6 text-center">Purchasing Teams</h3>
-                <div className="space-y-3">
-                  {sweepTeams.map(team => {
-                    const status = sweepProgress[team.tokenId] || 'pending';
-                    return (
-                      <div key={team.tokenId} className="flex items-center justify-between p-3 bg-bg-primary rounded-xl border border-bg-tertiary">
-                        <div className="flex items-center gap-3">
-                          {status === 'done' ? (
-                            <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
-                              <svg className="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                          ) : status === 'failed' ? (
-                            <div className="w-6 h-6 rounded-full bg-error/20 flex items-center justify-center">
-                              <svg className="w-3.5 h-3.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M18 6L6 18M6 6l12 12"/></svg>
-                            </div>
-                          ) : status === 'processing' ? (
-                            <div className="w-6 h-6 rounded-full border-2 border-banana/30 border-t-banana animate-spin" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full border border-bg-tertiary" />
-                          )}
-                          <span className="text-text-primary font-mono text-sm">{team.name}</span>
-                        </div>
-                        <span className="text-text-primary font-mono text-sm">${(team.price || 0).toFixed(2)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {sweepStep === 'complete' && (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 mx-auto mb-6 bg-success/20 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M5 13l4 4L19 7"/></svg>
-                </div>
-                <h3 className="text-text-primary font-semibold text-lg mb-2">Sweep Complete!</h3>
-                <p className="text-text-secondary text-sm mb-6">
-                  {Object.values(sweepProgress).filter(s => s === 'done').length} of {sweepTeams.length} teams purchased
-                  {Object.values(sweepProgress).some(s => s === 'failed') && (
-                    <span className="text-error"> ({Object.values(sweepProgress).filter(s => s === 'failed').length} failed)</span>
-                  )}
-                </p>
-                <button
-                  onClick={() => {
-                    setShowSweepModal(false);
-                    setSweepMode(false);
-                    setSweepSelected(new Set());
-                  }}
-                  className="px-8 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
-                >
-                  Done
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Buy Modal */}
-      {showBuyModal && selectedTeam && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => buyStep === 'confirm' && setShowBuyModal(false)}
-        >
-          <div
-            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-md"
-            onClick={e => e.stopPropagation()}
-          >
-            {buyStep === 'confirm' && (
-              <>
-                <div className="flex items-center justify-between p-6 border-b border-bg-tertiary">
-                  <h2 className="text-lg font-semibold text-text-primary">Buy Team</h2>
-                  <button
-                    onClick={() => setShowBuyModal(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-primary text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path d="M18 6L6 18M6 6l12 12"/>
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="p-6">
-                  {/* Team Preview */}
-                  <div className="flex items-center gap-4 p-4 bg-bg-primary rounded-xl mb-4">
-                    {selectedTeam.imageUrl ? (
-                      <Image src={selectedTeam.imageUrl} alt={selectedTeam.name} width={56} height={56} className="rounded-xl" />
-                    ) : (
-                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${selectedTeam.color} flex items-center justify-center`}>
-                        <span className="text-2xl">🍌</span>
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="text-text-primary font-semibold font-mono">{selectedTeam.name}</h3>
-                      <div className="flex gap-2 mt-1">
-                        {selectedTeam.isJackpot && (
-                          <span className="px-2 py-0.5 bg-error/20 text-error text-[10px] font-bold rounded">JACKPOT</span>
-                        )}
-                        {selectedTeam.isHof && (
-                          <span className="px-2 py-0.5 bg-hof/20 text-hof text-[10px] font-bold rounded">HOF</span>
-                        )}
-                        {selectedTeam.rank > 0 && (
-                          <span className="text-text-muted text-xs">Rank #{selectedTeam.rank}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Team Stats */}
-                  {(selectedTeam.points > 0 || selectedTeam.weeklyAvg > 0) && (
-                    <div className="grid grid-cols-3 gap-3 p-4 bg-bg-primary rounded-xl mb-4">
-                      <div className="text-center">
-                        <p className="text-text-muted text-[10px] uppercase mb-1">Points</p>
-                        <p className="font-mono text-sm font-semibold text-text-primary">{selectedTeam.points.toLocaleString()}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-text-muted text-[10px] uppercase mb-1">Wk Avg</p>
-                        <p className="font-mono text-sm font-semibold text-success">{selectedTeam.weeklyAvg}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-text-muted text-[10px] uppercase mb-1">Playoffs</p>
-                        <p className="font-mono text-sm font-semibold text-success">{selectedTeam.playoffOdds}%</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Jackpot/HOF Perks */}
-                  {(selectedTeam.isJackpot || selectedTeam.isHof) && (
-                    <div className={`p-4 rounded-xl mb-4 ${selectedTeam.isJackpot ? 'bg-error/10 border border-error/30' : 'bg-hof/10 border border-hof/30'}`}>
-                      <p className={`text-sm font-medium ${selectedTeam.isJackpot ? 'text-error' : 'text-hof'}`}>
-                        {selectedTeam.isJackpot
-                          ? '🎰 Jackpot Perk: Win your league and skip straight to the finals!'
-                          : '⭐ HOF Perk: Compete for bonus prizes on top of regular rewards!'
-                        }
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Payment Method */}
-                  <div className="mb-4">
-                    <label className="block text-text-secondary text-sm mb-3">Payment Method</label>
-                    <div className="grid gap-3 grid-cols-2">
-                      <button
-                        onClick={() => setPaymentMethod('card')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          paymentMethod === 'card'
-                            ? 'border-banana bg-banana/10'
-                            : 'border-bg-tertiary hover:border-bg-elevated'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                          <svg className="w-6 h-4" viewBox="0 0 24 16" fill="none">
-                            <rect width="24" height="16" rx="2" fill="#1A1F71"/>
-                            <path d="M9.5 10.5L10.5 5.5H12L11 10.5H9.5Z" fill="white"/>
-                            <path d="M15.5 5.5C15 5.5 14.5 5.7 14.3 6L12 10.5H13.7L14 9.7H16L16.2 10.5H17.7L16.5 5.5H15.5ZM14.5 8.5L15.2 6.7L15.6 8.5H14.5Z" fill="white"/>
-                            <path d="M8 5.5L6 10.5H7.5L7.8 9.5H9.5L9.8 10.5H11.3L9.3 5.5H8ZM8 8.3L8.5 6.7L9 8.3H8Z" fill="white"/>
-                          </svg>
-                          <svg className="w-8 h-5" viewBox="0 0 32 20" fill="none">
-                            <rect width="32" height="20" rx="2" fill="#EB001B"/>
-                            <circle cx="12" cy="10" r="6" fill="#EB001B"/>
-                            <circle cx="20" cy="10" r="6" fill="#F79E1B"/>
-                            <path d="M16 5.5C17.5 6.7 18.5 8.2 18.5 10C18.5 11.8 17.5 13.3 16 14.5C14.5 13.3 13.5 11.8 13.5 10C13.5 8.2 14.5 6.7 16 5.5Z" fill="#FF5F00"/>
-                          </svg>
-                        </div>
-                        <span className={`text-sm font-medium ${paymentMethod === 'card' ? 'text-text-primary' : 'text-text-secondary'}`}>
-                          Card
-                        </span>
-                        <p className="text-text-muted text-[10px] mt-1">Powered by MoonPay</p>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('usdc')}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          paymentMethod === 'usdc'
-                            ? 'border-banana bg-banana/10'
-                            : 'border-bg-tertiary hover:border-bg-elevated'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                          <span className="text-lg font-bold text-text-primary">$</span>
-                        </div>
-                        <span className={`text-sm font-medium ${paymentMethod === 'usdc' ? 'text-text-primary' : 'text-text-secondary'}`}>
-                          USDC
-                        </span>
-                        {user?.usdcBalance != null && (
-                          <p className="text-text-muted text-[10px] mt-1">
-                            Balance: ${user.usdcBalance.toFixed(2)}
-                          </p>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Error display */}
-                  {txError && (
-                    <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
-                      <p className="text-error text-sm">{txError}</p>
-                    </div>
-                  )}
-
-                  {/* Price Summary */}
-                  <div className="p-4 bg-bg-primary rounded-xl space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-text-secondary">Price</span>
-                      <span className="text-text-primary font-mono">
-                        ${(selectedTeam.price || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    {paymentMethod === 'card' ? (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary">Processing Fee (3%)</span>
-                        <span className="text-text-primary font-mono">
-                          ${((selectedTeam.price || 0) * 0.03).toFixed(2)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary">Network Fee (est.)</span>
-                        <span className="text-text-primary font-mono">~$0.01</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm pt-3 border-t border-bg-tertiary font-semibold">
-                      <span className="text-text-primary">Total</span>
-                      <span className="text-text-primary font-mono">
-                        {paymentMethod === 'card'
-                          ? `$${((selectedTeam.price || 0) * 1.03).toFixed(2)}`
-                          : `$${((selectedTeam.price || 0) + 0.01).toFixed(2)}`
-                        }
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 pt-0">
-                  <button
-                    onClick={handleBuy}
-                    disabled={(buyStep as string) === 'processing'}
-                    className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {paymentMethod === 'card' ? (
-                      <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                        </svg>
-                        Pay ${((selectedTeam.price || 0) * 1.03).toFixed(2)}
-                      </>
-                    ) : (
-                      <>
-                        Pay ${((selectedTeam.price || 0) + 0.01).toFixed(2)} USDC
-                      </>
-                    )}
-                  </button>
-                  <p className="text-center text-text-muted text-xs mt-3">
-                    {paymentMethod === 'card'
-                      ? 'Secure payment powered by MoonPay'
-                      : 'USDC payment on Base network'
-                    }
-                  </p>
-                </div>
-              </>
-            )}
-
-            {buyStep === 'processing' && (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 mx-auto mb-6 relative">
-                  <div className="absolute inset-0 border-4 border-bg-tertiary rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-banana rounded-full border-t-transparent animate-spin"></div>
-                </div>
-                <h3 className="text-text-primary font-semibold text-lg mb-2">
-                  {paymentMethod === 'card'
-                    ? cardFlowStep === 'funding' ? 'Completing Payment'
-                    : cardFlowStep === 'waiting' ? 'Waiting for Funds'
-                    : 'Purchasing Team'
-                    : 'Processing Payment'
-                  }
-                </h3>
-                <p className="text-text-secondary text-sm">
-                  {paymentMethod === 'card'
-                    ? cardFlowStep === 'funding' ? 'Complete your payment in the MoonPay window...'
-                    : cardFlowStep === 'waiting' ? 'Your funds are on the way. This may take a moment...'
-                    : 'Completing your purchase on Base...'
-                    : 'Completing your purchase on Base...'
-                  }
-                </p>
-                {paymentMethod === 'card' && cardFlowStep !== 'idle' && (
-                  <div className="mt-6 space-y-2 text-left max-w-[240px] mx-auto">
-                    {[
-                      { key: 'funding', label: 'Card payment' },
-                      { key: 'waiting', label: 'Funds arriving' },
-                      { key: 'buying', label: 'Purchase team' },
-                    ].map(({ key, label }) => {
-                      const stepOrder = ['funding', 'waiting', 'buying'];
-                      const currentIdx = stepOrder.indexOf(cardFlowStep);
-                      const stepIdx = stepOrder.indexOf(key);
-                      const isComplete = stepIdx < currentIdx;
-                      const isActive = key === cardFlowStep;
-
-                      return (
-                        <div key={key} className="flex items-center gap-2.5 text-sm">
-                          {isComplete ? (
-                            <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center">
-                              <svg className="w-3 h-3 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path d="M5 13l4 4L19 7"/>
-                              </svg>
-                            </div>
-                          ) : isActive ? (
-                            <div className="w-5 h-5 rounded-full border-2 border-banana/30 border-t-banana animate-spin" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full border border-bg-tertiary" />
-                          )}
-                          <span className={isComplete ? 'text-text-primary' : isActive ? 'text-text-secondary' : 'text-text-muted'}>
-                            {label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {buyStep === 'complete' && (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 mx-auto mb-6 bg-success/20 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path d="M5 13l4 4L19 7"/>
-                  </svg>
-                </div>
-                <h3 className="text-text-primary font-semibold text-lg mb-2">Purchase Complete!</h3>
-                <p className="text-text-secondary text-sm">{selectedTeam.name} is now yours</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Sell/List Modal */}
-      {/* Free Pass Info Modal */}
-      {showFreePassInfo && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowFreePassInfo(null)}
-        >
-          <div
-            className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 max-w-sm w-full cursor-default"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-bold text-white mb-3">
-              {showFreePassInfo === 'team' ? 'Free Draft Team' : 'Free Draft Pass'}
-            </h3>
-            <p className="text-white/60 text-[14px] leading-[1.7] mb-2">
-              {showFreePassInfo === 'team'
-                ? 'This team was drafted using a free pass. Free draft teams can be listed on the marketplace after the draft season closes on September 4th.'
-                : 'Free draft passes cannot be sold on the marketplace. They can only be used to enter drafts.'}
-            </p>
-            <p className="text-white/40 text-[13px] leading-[1.6] mb-6">
-              {showFreePassInfo === 'team'
-                ? 'Teams drafted with paid passes can be listed at any time.'
-                : 'Once you draft a team with a free pass, that team becomes listable after the season starts.'}
-            </p>
-            <button
-              onClick={() => setShowFreePassInfo(null)}
-              className="w-full px-4 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
-            >
-              Got It
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showSellModal && selectedTeam && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowSellModal(false)}
-        >
-          <div
-            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-md"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-6 border-b border-bg-tertiary">
-              <h2 className="text-lg font-semibold text-text-primary">List for Sale</h2>
-              <button
-                onClick={() => setShowSellModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-bg-primary text-text-secondary hover:text-text-primary transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6">
-              {/* Team Preview */}
-              <div className="flex items-center gap-4 p-4 bg-bg-primary rounded-xl mb-6">
-                {selectedTeam.imageUrl ? (
-                  <Image src={selectedTeam.imageUrl} alt={selectedTeam.name} width={56} height={56} className="rounded-xl" />
-                ) : (
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${selectedTeam.color} flex items-center justify-center`}>
-                    <span className="text-2xl">🍌</span>
-                  </div>
-                )}
-                <div>
-                  <h3 className="text-text-primary font-semibold font-mono">{selectedTeam.name}</h3>
-                  <p className="text-text-muted text-xs">
-                    {selectedTeam.rank > 0 ? `Rank #${selectedTeam.rank} • ` : ''}
-                    {selectedTeam.playoffOdds > 0 ? `${selectedTeam.playoffOdds}% playoffs` : `Token #${selectedTeam.tokenId}`}
-                  </p>
-                </div>
-              </div>
-
-              {/* Price Input */}
-              <div className="mb-6">
-                <label className="block text-text-secondary text-sm mb-2">Set your price</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-mono">$</span>
-                  <input
-                    type="number"
-                    step="1"
-                    value={listPrice}
-                    onChange={(e) => setListPrice(e.target.value)}
-                    placeholder="0"
-                    className="w-full bg-bg-primary border border-bg-tertiary rounded-xl pl-8 pr-4 py-3 text-text-primary font-mono text-lg focus:outline-none focus:border-banana"
-                  />
-                </div>
-                {/* Floor price hint */}
-                {collectionStats && collectionStats.floorPrice > 0 && (
-                  <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
-                    <span>Floor: <span className="text-banana font-mono font-medium">${collectionStats.floorPrice.toFixed(2)}</span></span>
-                    <span>&middot;</span>
-                    <span>Avg: <span className="text-text-secondary font-mono font-medium">${collectionStats.averagePrice.toFixed(2)}</span></span>
-                    <button
-                      type="button"
-                      onClick={() => setListPrice(collectionStats.floorPrice.toFixed(2))}
-                      className="text-banana hover:underline ml-auto"
-                    >
-                      Use floor
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Error display */}
-              {txError && (
-                <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
-                  <p className="text-error text-sm">{txError}</p>
-                </div>
-              )}
-
-              {/* Fee Info */}
-              {listPrice && parseFloat(listPrice) > 0 && (
-                <div className="p-4 bg-bg-primary border border-bg-tertiary rounded-xl mb-6 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-secondary">Listing price</span>
-                    <span className="text-text-primary font-mono">${parseFloat(listPrice).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-secondary">OpenSea fee (1%)</span>
-                    <span className="text-text-muted font-mono">-${(parseFloat(listPrice) * 0.01).toFixed(2)}</span>
-                  </div>
-                  <div className="border-t border-bg-tertiary pt-2 flex justify-between text-sm font-medium">
-                    <span className="text-text-secondary">You receive</span>
-                    <span className="text-success font-mono">${(parseFloat(listPrice) * 0.99).toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-6 pt-0">
-              <button
-                onClick={handleList}
-                disabled={!listPrice || parseFloat(listPrice) <= 0}
-                className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                List for ${listPrice ? parseFloat(listPrice).toLocaleString() : '0'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowSuccessModal(false)}
-        >
-          <div
-            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-sm p-8 text-center"
-            onClick={e => e.stopPropagation()}
-          >
+      {showSuccessModal && successType === 'buy' && selectedTeam && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowSuccessModal(false)}>
+          <div className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-sm p-8 text-center" onClick={event => event.stopPropagation()}>
             <div className="w-16 h-16 mx-auto mb-6 bg-success/20 rounded-full flex items-center justify-center">
               <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path d="M5 13l4 4L19 7"/>
+                <path d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-text-primary font-semibold text-lg mb-2">
-              {successType === 'buy' ? 'Purchase Complete!' : 'Team Listed!'}
-            </h3>
-            <p className="text-text-secondary text-sm mb-6">
-              {successType === 'buy'
-                ? 'The team has been transferred to your wallet.'
-                : 'Your team is now live on the marketplace.'
-              }
-            </p>
-            {selectedTeam && (
-              <Link
-                href={`/marketplace/${selectedTeam.tokenId}`}
-                onClick={() => setShowSuccessModal(false)}
-                className="w-full py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all block mb-3"
-              >
-                {successType === 'buy' ? 'View Your Team' : 'View Listing'}
-              </Link>
-            )}
-            <button
+            <h3 className="text-text-primary font-semibold text-lg mb-2">Purchase Complete!</h3>
+            <p className="text-text-secondary text-sm mb-6">The team has been transferred to your wallet.</p>
+            <Link
+              href={`/marketplace/${selectedTeam.tokenId}`}
               onClick={() => setShowSuccessModal(false)}
-              className="w-full py-3 border border-bg-tertiary text-text-secondary rounded-xl hover:bg-bg-tertiary transition-all text-sm"
+              className="w-full py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all block mb-3"
             >
+              View Your Team
+            </Link>
+            <button onClick={() => setShowSuccessModal(false)} className="w-full py-3 border border-bg-tertiary text-text-secondary rounded-xl hover:bg-bg-tertiary transition-all text-sm">
               Back to Marketplace
             </button>
           </div>
         </div>
       )}
 
-      {/* Cancel Confirmation Modal */}
-      {cancelConfirmTeam && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setCancelConfirmTeam(null)}
-        >
-          <div
-            className="bg-bg-secondary border border-bg-tertiary rounded-2xl w-full max-w-sm p-6"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 mx-auto mb-4 bg-error/10 rounded-full flex items-center justify-center">
-                <svg className="w-7 h-7 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <h3 className="text-text-primary font-semibold text-lg mb-2">Cancel Listing?</h3>
-              <p className="text-text-secondary text-sm">
-                Remove <span className="text-text-primary font-mono font-medium">{cancelConfirmTeam.name}</span> from sale at ${cancelConfirmTeam.price?.toFixed(2)}?
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCancelConfirmTeam(null)}
-                className="flex-1 py-3 border border-bg-tertiary text-text-secondary rounded-xl hover:bg-bg-tertiary transition-all text-sm font-medium"
-              >
-                Keep Listed
-              </button>
-              <button
-                onClick={() => executeCancel(cancelConfirmTeam)}
-                disabled={cancellingTokenId === cancelConfirmTeam.tokenId}
-                className="flex-1 py-3 bg-error text-white rounded-xl hover:brightness-110 transition-all text-sm font-semibold disabled:opacity-50"
-              >
-                {cancellingTokenId === cancelConfirmTeam.tokenId ? 'Cancelling...' : 'Yes, Cancel'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      <SweepModal
+        show={showSweepModal}
+        sweepStep={sweepStep}
+        sweepTeams={sweepTeams}
+        sweepProgress={sweepProgress}
+        sweepPaymentMethod={sweepPaymentMethod}
+        sweepTotal={sweepTotal}
+        txError={txError}
+        onClose={() => setShowSweepModal(false)}
+        onSetPaymentMethod={setSweepPaymentMethod}
+        onExecuteSweep={executeSweep}
+        onDone={() => {
+          setShowSweepModal(false);
+          setSweepMode(false);
+          setSweepSelected(new Set());
+        }}
+      />
     </div>
+  );
+}
+
+function Header({
+  activeTab,
+  watchlistCount,
+  onChangeTab,
+}: {
+  activeTab: TabKey;
+  watchlistCount: number;
+  onChangeTab: (tab: TabKey) => void;
+}) {
+  return (
+    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary mb-2">Team Marketplace</h1>
+        <p className="text-text-secondary text-sm">Buy and sell BBB teams instantly. No external accounts needed.</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1 bg-bg-secondary p-1 rounded-xl border border-bg-tertiary">
+          <TabButton active={activeTab === 'buy'} label="Buy Teams" onClick={() => onChangeTab('buy')} />
+          <TabButton active={activeTab === 'sell'} label="Sell My Teams" onClick={() => onChangeTab('sell')} />
+          <TabButton active={activeTab === 'activity'} label="Activity" onClick={() => onChangeTab('activity')} />
+          <button
+            onClick={() => onChangeTab('watchlist')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'watchlist' ? 'bg-banana text-black' : 'text-text-secondary hover:text-text-primary'}`}
+          >
+            <svg className="w-3.5 h-3.5" fill={activeTab === 'watchlist' ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+            Watchlist
+            {watchlistCount > 0 && (
+              <span className="text-[10px] bg-error/20 text-error px-1.5 py-0.5 rounded-full font-bold leading-none">{watchlistCount}</span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-banana text-black' : 'text-text-secondary hover:text-text-primary'}`}
+    >
+      {label}
+    </button>
   );
 }

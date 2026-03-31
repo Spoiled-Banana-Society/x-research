@@ -51,6 +51,8 @@ interface AuthContextType {
   newUserPromoClaimed: boolean;
   claimNewUserPromo: () => Promise<void>;
   isBB3Holder: boolean;
+  showMobileLoginModal: boolean;
+  setShowMobileLoginModal: (show: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -613,6 +615,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         newUserPromoClaimed,
         claimNewUserPromo,
         isBB3Holder,
+        showMobileLoginModal,
+        setShowMobileLoginModal,
       }}
     >
       {children}

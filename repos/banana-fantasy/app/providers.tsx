@@ -24,7 +24,7 @@ const NotifContext = createContext<NotifContextType>({ triggerOptIn: () => {} })
 export const useNotifOptIn = () => useContext(NotifContext);
 
 function AppContent({ children }: { children: React.ReactNode }) {
-  const { showLoginModal, setShowLoginModal, setShowOnboarding, login, showMobileLoginModal, setShowMobileLoginModal, loginWithPrivy, loginWithWallet } = useAuth();
+  const { showLoginModal, setShowLoginModal, setShowOnboarding, login } = useAuth();
   const { showOnboarding } = useOnboarding();
   const pathname = usePathname();
   const isDraftRoom = pathname === '/draft-room';
@@ -58,13 +58,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
         {showOnboarding && <OnboardingTutorial onComplete={() => setShowOnboarding(false)} />}
         {showTutorial && <OnboardingTutorial onComplete={() => setShowTutorial(false)} />}
         <CrispChat />
-        <MobileLoginModal
-          isOpen={showMobileLoginModal}
-          onClose={() => setShowMobileLoginModal(false)}
-          onEmailLogin={() => { setShowMobileLoginModal(false); loginWithPrivy(); }}
-          onGoogleLogin={() => { setShowMobileLoginModal(false); loginWithPrivy(); }}
-          onTwitterLogin={() => { setShowMobileLoginModal(false); loginWithPrivy(); }}
-        />
         <NotificationOptIn
           show={notif.showPrompt}
           isLoading={notif.isLoading}
