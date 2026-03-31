@@ -331,7 +331,7 @@ export default function ReferralsPage() {
               { refs: 10, reward: '10 Free Passes + HOF Entry', emoji: '🏆', unlocked: (data?.signups || 0) >= 10 },
               { refs: 25, reward: '25 Free Passes + Jackpot Entry', emoji: '🎰', unlocked: (data?.signups || 0) >= 25 },
               { refs: 50, reward: '50 Free Passes + VIP Status', emoji: '👑', unlocked: (data?.signups || 0) >= 50 },
-            ].map((tier, i) => (
+            ].map((tier, _i) => (
               <div
                 key={tier.refs}
                 className={`flex items-center justify-between rounded-lg px-3 py-2.5 transition-all ${

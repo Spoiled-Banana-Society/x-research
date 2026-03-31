@@ -47,6 +47,9 @@ export interface ApiRosterPlayer {
   ownerAddress?: string;
   pickNum?: number;
   round?: number;
+  scoreWeek?: number;
+  scoreSeason?: number;
+  isUsedInCardScore?: boolean;
   [k: string]: unknown;
 }
 
@@ -126,9 +129,9 @@ function mapRosterToUiRoster(roster?: ApiDraftToken['roster']): RosterPlayer[] {
       out.push({
         slot,
         teamPosition: `${p.team} ${p.position || slotPrefix}`,
-        weeklyPoints: typeof (p as any).scoreWeek === 'number' ? (p as any).scoreWeek : 0,
-        seasonPoints: typeof (p as any).scoreSeason === 'number' ? (p as any).scoreSeason : 0,
-        isInLineup: Boolean((p as any).isUsedInCardScore),
+        weeklyPoints: typeof p.scoreWeek === 'number' ? p.scoreWeek : 0,
+        seasonPoints: typeof p.scoreSeason === 'number' ? p.scoreSeason : 0,
+        isInLineup: Boolean(p.isUsedInCardScore),
         playerName: p.displayName || undefined,
       });
     });

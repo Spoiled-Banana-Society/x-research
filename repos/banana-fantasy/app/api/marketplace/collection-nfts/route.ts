@@ -3,8 +3,6 @@ import { json, jsonError, getSearchParam } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
 import {
   OPENSEA_API_BASE,
-  OPENSEA_CHAIN,
-  BBB4_CONTRACT,
   COLLECTION_SLUG,
   mapOpenSeaNftToTeam,
   type OpenSeaNft,
@@ -61,7 +59,7 @@ export async function GET(req: Request) {
     );
 
     // Also fetch active listings to cross-reference which are listed
-    let listingsMap = new Map<string, OpenSeaListing>();
+    const listingsMap = new Map<string, OpenSeaListing>();
     try {
       const listingsRes = await fetch(
         `${OPENSEA_API_BASE}/api/v2/listings/collection/${COLLECTION_SLUG}/all?limit=50`,

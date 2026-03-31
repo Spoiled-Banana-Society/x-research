@@ -10,7 +10,6 @@ import { DraftBoardGrid } from '@/components/drafting/DraftBoardGrid';
 import { DraftRoster } from '@/components/drafting/DraftRoster';
 import { DraftComplete } from '@/components/drafting/DraftComplete';
 import {
-  TOTAL_PICKS,
   getPositionColorHex,
   POSITION_COLORS,
 } from '@/lib/draftRoomConstants';

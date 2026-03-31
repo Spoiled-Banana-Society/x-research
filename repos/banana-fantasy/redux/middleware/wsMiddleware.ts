@@ -2,6 +2,8 @@ import { Socket } from "@/utils/webSocket"
 import { getDraftServerUrl } from "@/lib/staging"
 import type { Middleware } from "@reduxjs/toolkit"
 import { logger } from '@/lib/logger';
+import type { DraftInfoPayload, NewPickPayload, TimerPayload } from '@/hooks/useDraftWebSocket';
+import type { PlayerStateInfo } from '@/utils/types/types';
 import {
     setConnection,
     setCurrentDrafter,
@@ -18,6 +20,76 @@ import {
 type SocketAction = {
     type: string
     payload?: unknown
+}
+
+type CountdownUpdateMessage = {
+    type: "countdown_update"
+    payload: {
+        timeRemaining: number
+        currentDrafter: string
+    }
+}
+
+type TimerUpdateMessage = {
+    type: "timer_update"
+    payload: TimerPayload
+}
+
+type NewPickMessage = {
+    type: "new_pick"
+    payload: NewPickPayload
+}
+
+type DraftInfoUpdateMessage = {
+    type: "draft_info_update"
+    payload: DraftInfoPayload
+}
+
+type FinalCardMessage = {
+    type: "final_card"
+    payload: {
+        _imageUrl: string
+    }
+}
+
+type DraftCompleteMessage = {
+    type: "draft_complete"
+    payload?: unknown
+}
+
+type NewQueueMessage = {
+    type: "new_queue"
+    payload: PlayerStateInfo[]
+}
+
+type SocketMessage =
+    | CountdownUpdateMessage
+    | TimerUpdateMessage
+    | NewPickMessage
+    | DraftInfoUpdateMessage
+    | FinalCardMessage
+    | DraftCompleteMessage
+    | NewQueueMessage
+    | { type?: string; payload?: unknown }
+
+function isCountdownUpdateMessage(data: SocketMessage): data is CountdownUpdateMessage {
+    return data.type === "countdown_update"
+}
+
+function isTimerUpdateMessage(data: SocketMessage): data is TimerUpdateMessage {
+    return data.type === "timer_update"
+}
+
+function isNewPickMessage(data: SocketMessage): data is NewPickMessage {
+    return data.type === "new_pick"
+}
+
+function isDraftInfoUpdateMessage(data: SocketMessage): data is DraftInfoUpdateMessage {
+    return data.type === "draft_info_update"
+}
+
+function isFinalCardMessage(data: SocketMessage): data is FinalCardMessage {
+    return data.type === "final_card"
 }
 
 export const socketMiddleware =
@@ -42,36 +114,36 @@ export const socketMiddleware =
                 })
                 socket.on("message", (event: Event) => {
                     const message = event as MessageEvent
-                    let data: { type?: string; payload?: any }
+                    let data: SocketMessage
                     try {
-                        data = JSON.parse(message.data)
+                        data = JSON.parse(message.data) as SocketMessage
                     } catch (error) {
                         console.error("Failed to parse websocket message", error, message.data)
                         return
                     }
-                    if (data.type === "countdown_update") {
+                    if (isCountdownUpdateMessage(data)) {
                         logger.debug("countdown_update", data)
                         dispatch(setPreTimer(data.payload.timeRemaining))
                         dispatch(setCurrentDrafter(data.payload.currentDrafter))
                     }
-                    if (data.type === "timer_update") {
+                    if (isTimerUpdateMessage(data)) {
                         logger.debug("timer_update", data)
                         dispatch(setEndOfTurnTimestamp(data.payload.endOfTurnTimestamp))
                         dispatch(setStartOfTurnTimestamp(data.payload.startOfTurnTimestamp))
                         dispatch(setCurrentDrafter(data.payload.currentDrafter))
                     }
-                    if (data.type === "new_pick") {
+                    if (isNewPickMessage(data)) {
                         dispatch(setMostRecentPlayerDrafted(data.payload))
                         if (data.payload.pickNum === 150) {
                             dispatch(setPickNumber(data.payload.pickNum))
                             dispatch(setCurrentRound(data.payload.round))
                         }
                     }
-                    if (data.type === "draft_info_update") {
+                    if (isDraftInfoUpdateMessage(data)) {
                         dispatch(setPickNumber(data.payload.pickNumber))
                         dispatch(setCurrentRound(data.payload.roundNum))
                     }
-                    if (data.type === "final_card") {
+                    if (isFinalCardMessage(data)) {
                         logger.debug("final card", data.payload)
                         dispatch(setGeneratedCard(data.payload._imageUrl))
                         socket.disconnect()

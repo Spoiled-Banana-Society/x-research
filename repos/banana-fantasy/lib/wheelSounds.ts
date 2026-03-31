@@ -164,7 +164,7 @@ export function startSpinSound(): () => void {
 // Win sounds — tiered by prize quality
 export function playWinSound(tier: 'standard' | 'good' | 'great' | 'legendary') {
   const ctx = getAudioContext();
-  const now = ctx.currentTime;
+  const _now = ctx.currentTime;
 
   switch (tier) {
     case 'standard': {

@@ -39,7 +39,7 @@ const NAMES = [
   'FadeCandidate', 'CorrelationPlay', 'RunItBack', 'TourneyGrinder', 'CashLineKing',
 ];
 
-function generateEntries(tab: LeaderboardTab, yourWallet: string): LeaderboardEntry[] {
+function generateEntries(tab: LeaderboardTab, _yourWallet: string): LeaderboardEntry[] {
   const seed = tab === 'overall' ? 1 : tab === 'bbb' ? 2 : tab === 'jackpot' ? 3 : 4;
   const entries: LeaderboardEntry[] = [];
 

@@ -8,7 +8,6 @@ import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { AddToHomeScreenCard } from '@/components/home/AddToHomeScreenCard';
 import { usePWAInstallPromo } from '@/hooks/usePWAInstallPromo';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
-import { SpecialDraftBanner } from '@/components/home/SpecialDraftBanner';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
 
 const BuyPassesModal = dynamic(

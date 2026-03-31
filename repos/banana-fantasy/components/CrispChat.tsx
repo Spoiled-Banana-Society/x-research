@@ -32,8 +32,8 @@ export function CrispChat() {
 
     // Once Crisp loads, hide the bubble via API too
     const waitForCrisp = setInterval(() => {
-      if (window.$crisp && typeof (window.$crisp as any).push === 'function') {
-        try { (window.$crisp as any).push(['do', 'chat:hide']); } catch {}
+      if (window.$crisp && typeof (window.$crisp as unknown[]).push === 'function') {
+        try { (window.$crisp as unknown[]).push(['do', 'chat:hide']); } catch {}
         clearInterval(waitForCrisp);
       }
     }, 500);

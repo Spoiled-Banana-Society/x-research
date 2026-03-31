@@ -9,7 +9,7 @@
  * These persist in sessionStorage so they survive page navigations.
  */
 
-const STAGING_KEY = 'sbs-staging-mode';
+const _STAGING_KEY = 'sbs-staging-mode';
 const STAGING_API_OVERRIDE_KEY = 'sbs-staging-api-url';
 const STAGING_WS_OVERRIDE_KEY = 'sbs-staging-ws-url';
 

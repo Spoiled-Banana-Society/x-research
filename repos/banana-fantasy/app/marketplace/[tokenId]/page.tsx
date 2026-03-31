@@ -77,7 +77,7 @@ export default function NftDetailPage() {
   const autoBuy = searchParams?.get('buy') === 'true';
   const autoOffer = searchParams?.get('offer') === 'true';
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
-  const { wallets, ready: walletsReady } = useWallets();
+  const { wallets, ready: _walletsReady } = useWallets();
   const { sendTransaction } = useSendTransaction();
   const { fundWallet } = useFundWallet();
   const { addNotification } = useNotifications();

@@ -29,8 +29,8 @@ export async function GET(req: Request) {
       return jsonError('OpenSea API key not configured', 503);
     }
 
-    const sort = getSearchParam(req, 'sort') || 'eth_price';
-    const direction = getSearchParam(req, 'direction') || 'asc';
+    const _sort = getSearchParam(req, 'sort') || 'eth_price';
+    const _direction = getSearchParam(req, 'direction') || 'asc';
     const limit = Math.min(Number(getSearchParam(req, 'limit')) || 50, 50);
     const cursor = getSearchParam(req, 'cursor');
 

@@ -8,7 +8,6 @@ import { ReduxProvider } from '@/redux/provider';
 import { Header } from '@/components/layout/Header';
 import { MobileTabBar } from '@/components/layout/MobileTabBar';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
-import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
 import { OnboardingTutorial } from '@/components/onboarding/OnboardingTutorial';
 import { CrispChat } from '@/components/CrispChat';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,7 +15,6 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import OneSignal from 'react-onesignal';
 import { useNotificationOptIn, type NotifOptInTrigger } from '@/hooks/useNotificationOptIn';
 import { NotificationOptIn } from '@/components/notifications/NotificationOptIn';
-import { MobileLoginModal } from '@/components/modals/MobileLoginModal';
 
 // Context to expose triggerOptIn to any component in the tree
 type NotifContextType = { triggerOptIn: (trigger?: NotifOptInTrigger) => void };

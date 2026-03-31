@@ -1,5 +1,6 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import { logger } from '@/lib/logger';
 
 export default function Error({
@@ -10,6 +11,9 @@ export default function Error({
   reset: () => void;
 }) {
   logger.error('[Error Boundary]', error);
+  try {
+    Sentry.captureException(error);
+  } catch {}
 
   return (
     <div className="min-h-[50vh] flex items-center justify-center">

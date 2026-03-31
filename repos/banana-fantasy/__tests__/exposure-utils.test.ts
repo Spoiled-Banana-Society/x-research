@@ -25,8 +25,8 @@ describe('Exposure Utils', () => {
   describe('computeStacks', () => {
     it('detects same-team stacks', () => {
       const exposures: ExposureEntry[] = [
-        { team: 'KC', position: 'QB', exposure: 80, drafts: 8, totalDrafts: 10, displayName: 'KC-QB', bye: 6, adp: 5, projectedPoints: 20 },
-        { team: 'KC', position: 'TE', exposure: 60, drafts: 6, totalDrafts: 10, displayName: 'KC-TE', bye: 6, adp: 50, projectedPoints: 14 },
+        { team: 'KC', position: 'QB', teamPosition: 'KC QB', exposure: 80, drafts: 8, totalDrafts: 10, displayName: 'KC-QB', bye: 6, adp: 5, projectedPoints: 20 },
+        { team: 'KC', position: 'TE', teamPosition: 'KC TE', exposure: 60, drafts: 6, totalDrafts: 10, displayName: 'KC-TE', bye: 6, adp: 50, projectedPoints: 14 },
       ];
       const stacks = computeStacks(exposures);
       expect(stacks.length).toBeGreaterThan(0);
@@ -35,8 +35,8 @@ describe('Exposure Utils', () => {
 
     it('returns empty for no same-team pairs', () => {
       const exposures: ExposureEntry[] = [
-        { team: 'KC', position: 'QB', exposure: 80, drafts: 8, totalDrafts: 10, displayName: 'KC-QB', bye: 6, adp: 5, projectedPoints: 20 },
-        { team: 'BUF', position: 'QB', exposure: 60, drafts: 6, totalDrafts: 10, displayName: 'BUF-QB', bye: 7, adp: 1, projectedPoints: 24 },
+        { team: 'KC', position: 'QB', teamPosition: 'KC QB', exposure: 80, drafts: 8, totalDrafts: 10, displayName: 'KC-QB', bye: 6, adp: 5, projectedPoints: 20 },
+        { team: 'BUF', position: 'QB', teamPosition: 'BUF QB', exposure: 60, drafts: 6, totalDrafts: 10, displayName: 'BUF-QB', bye: 7, adp: 1, projectedPoints: 24 },
       ];
       const stacks = computeStacks(exposures);
       expect(stacks.length).toBe(0);
@@ -46,8 +46,8 @@ describe('Exposure Utils', () => {
   describe('computeByeWeekRisk', () => {
     it('groups exposure by bye week', () => {
       const exposures: ExposureEntry[] = [
-        { team: 'KC', position: 'QB', exposure: 50, drafts: 5, totalDrafts: 10, displayName: 'KC-QB', bye: 6, adp: 5, projectedPoints: 20 },
-        { team: 'MIA', position: 'WR1', exposure: 30, drafts: 3, totalDrafts: 10, displayName: 'MIA-WR1', bye: 6, adp: 10, projectedPoints: 17 },
+        { team: 'KC', position: 'QB', teamPosition: 'KC QB', exposure: 50, drafts: 5, totalDrafts: 10, displayName: 'KC-QB', bye: 6, adp: 5, projectedPoints: 20 },
+        { team: 'MIA', position: 'WR1', teamPosition: 'MIA WR1', exposure: 30, drafts: 3, totalDrafts: 10, displayName: 'MIA-WR1', bye: 6, adp: 10, projectedPoints: 17 },
       ];
       const risk = computeByeWeekRisk(exposures);
       expect(risk.length).toBeGreaterThan(0);

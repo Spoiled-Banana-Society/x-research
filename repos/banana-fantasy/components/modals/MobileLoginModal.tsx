@@ -10,8 +10,8 @@ interface MobileLoginModalProps {
 }
 
 const WALLETS = [
-  { id: 'metamask', name: 'MetaMask', privyId: 'metamask' },
-  { id: 'coinbase', name: 'Coinbase Wallet', privyId: 'coinbase_wallet' },
+  { id: 'metamask', name: 'MetaMask', privyId: 'metamask' as const },
+  { id: 'coinbase', name: 'Coinbase Wallet', privyId: 'coinbase_wallet' as const },
 ];
 
 export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
@@ -147,7 +147,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                   key={wallet.id}
                   onClick={() => {
                     onClose();
-                    privy.connectWallet({ walletList: [wallet.privyId as any] });
+                    privy.connectWallet({ walletList: [wallet.privyId] });
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
                 >

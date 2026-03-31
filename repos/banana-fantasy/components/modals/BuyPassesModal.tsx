@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMintDraftPass } from '@/hooks/useMintDraftPass';
 import { draftPassPricing } from '@/lib/pricing';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
-import { isStagingMode, getStagingApiUrl, getDraftsApiUrl } from '@/lib/staging';
+import { isStagingMode, getDraftsApiUrl } from '@/lib/staging';
 import { pushNotification } from '@/components/NotificationCenter';
 import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType';
 import { fetchJson } from '@/lib/appApiClient';

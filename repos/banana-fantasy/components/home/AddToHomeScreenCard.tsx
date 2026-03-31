@@ -203,7 +203,7 @@ function CopyLinkButton() {
 // ── Main Card ───────────────────────────────────────────────────────────
 
 export function AddToHomeScreenCard() {
-  const { canInstall, isStandalone, triggerInstall } = useInstallPrompt();
+  const { canInstall: _canInstall, isStandalone, triggerInstall } = useInstallPrompt();
   const [show, setShow] = useState(false);
   const [modalBrowser, setModalBrowser] = useState<'safari' | 'chrome' | null>(null);
 

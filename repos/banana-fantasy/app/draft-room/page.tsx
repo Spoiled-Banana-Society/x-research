@@ -150,9 +150,9 @@ function DraftRoomContent() {
 
   const [autoDraft, setAutoDraft] = useState(false);
   const [autoDraftLoading, setAutoDraftLoading] = useState(false);
-  const [sortPreference, setSortPreference] = useState<'adp' | 'rank'>('adp');
+  const [_sortPreference, setSortPreference] = useState<'adp' | 'rank'>('adp');
   const [missedPicksCount, setMissedPicksCount] = useState(0);
-  const [showAutoDraftNotification, setShowAutoDraftNotification] = useState(false);
+  const [showAutoDraftNotification, _setShowAutoDraftNotification] = useState(false);
   const [generatedCardUrl, setGeneratedCardUrl] = useState<string | null>(null);
   const prevDrafterRef = useRef<string>('');
 

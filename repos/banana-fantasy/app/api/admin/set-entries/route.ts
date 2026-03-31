@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 }
 
 // Also handle queue reset
-export async function DELETE(req: Request) {
+export async function DELETE(_req: Request) {
   try {
     const { getAdminFirestore } = await import('@/lib/firebaseAdmin');
     const db = getAdminFirestore();

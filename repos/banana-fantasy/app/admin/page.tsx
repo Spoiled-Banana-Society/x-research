@@ -6,7 +6,6 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import { isWalletAdmin } from '@/lib/adminAllowlist';
 import { SkeletonStatGrid, SkeletonTable } from '@/components/ui/Skeleton';
-import { ErrorState } from '@/components/ui/ErrorState';
 
 /* ────────── Types ────────── */
 
@@ -107,7 +106,7 @@ export default function AdminPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Data

@@ -94,7 +94,7 @@ export async function GET(req: Request) {
     );
 
     const nfts = bbb4Nfts.map(nft => {
-      const { ownerAddress, ...rest } = mapOpenSeaNftToTeam(nft, owner);
+      const { ownerAddress: _ownerAddress, ...rest } = mapOpenSeaNftToTeam(nft, owner);
       // Merge listing data if this token is actively listed
       const listing = listingMap.get(nft.identifier);
       if (listing) {

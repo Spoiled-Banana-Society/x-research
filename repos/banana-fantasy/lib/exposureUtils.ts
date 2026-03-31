@@ -5,6 +5,10 @@ export interface ExposureEntry {
   drafts: number;
   totalDrafts: number;
   exposure: number; // percentage
+  displayName?: string;
+  bye?: number;
+  adp?: number;
+  projectedPoints?: number;
 }
 
 export interface UserExposure {

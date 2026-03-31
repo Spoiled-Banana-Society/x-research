@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
-import { getPositionColorHex, positionFromPlayerId } from '@/lib/draftRoomConstants';
+import { getPositionColorHex } from '@/lib/draftRoomConstants';
 import type { PlayerData } from '@/lib/draftRoomConstants';
 
 interface DraftQueueProps {

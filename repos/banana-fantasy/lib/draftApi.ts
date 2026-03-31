@@ -80,6 +80,10 @@ export interface DraftSummaryItem {
 
 export type DraftSummary = DraftSummaryItem[];
 
+interface DraftSummaryEnvelope {
+  summary: DraftSummary;
+}
+
 export type RosterState = Record<
   string,
   { QB: string[]; RB: string[]; WR: string[]; TE: string[]; DST: string[] }
@@ -115,8 +119,8 @@ export async function getDraftSummary(draftId: string): Promise<DraftSummary> {
   const res = await apiFetch<unknown>(`/draft/${draftId}/state/summary`);
   if (Array.isArray(res)) return res as DraftSummary;
   if (res && typeof res === 'object') {
-    const obj = res as Record<string, unknown>;
-    if (Array.isArray(obj.summary)) return obj.summary as DraftSummary;
+    const obj = res as Partial<DraftSummaryEnvelope>;
+    if (Array.isArray(obj.summary)) return obj.summary;
   }
   return [];
 }

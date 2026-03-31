@@ -89,7 +89,7 @@ interface PendingSpin {
   rotation: number;
 }
 
-export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialDraftWin }: BananaWheelProps) {
+export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialDraftWin: _onSpecialDraftWin }: BananaWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [wonSegment, setWonSegment] = useState<WheelSegment | null>(null);
@@ -463,9 +463,9 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
               {/* Info for Jackpot/HOF wins — auto-queued */}
               {(wonSegment.id === 'jackpot' || wonSegment.id === 'hof') && (
                 <div className="bg-white/5 rounded-xl p-4 text-center space-y-2" style={{ animation: 'fadeIn 0.6s ease-out 0.6s both' }}>
-                  <p className="text-white/70 text-sm font-medium">You've been added to the {wonSegment.id === 'jackpot' ? 'Jackpot' : 'HOF'} draft queue!</p>
+                  <p className="text-white/70 text-sm font-medium">You&apos;ve been added to the {wonSegment.id === 'jackpot' ? 'Jackpot' : 'HOF'} draft queue!</p>
                   <p className="text-white/40 text-xs">
-                    8-hour picks · Draft starts as soon as 10 winners fill the queue · We'll notify you!
+                    8-hour picks · Draft starts as soon as 10 winners fill the queue · We&apos;ll notify you!
                   </p>
                   <a href="/drafting" className="inline-block mt-2 text-banana text-xs font-semibold hover:underline">
                     View My Drafts →

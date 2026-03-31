@@ -377,7 +377,7 @@ function calcSpinsForPurchase(quantity: number): number {
   return Math.floor(quantity / API_CONFIG.purchases.spinsPerPasses);
 }
 
-function calcBuyBonusFreeDrafts(quantity: number): number {
+function _calcBuyBonusFreeDrafts(quantity: number): number {
   if (!API_CONFIG.promos.buyBonus.enabled) return 0;
   return Math.floor(quantity / API_CONFIG.promos.buyBonus.buy) * API_CONFIG.promos.buyBonus.bonusFreeDrafts;
 }

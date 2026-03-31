@@ -18,6 +18,21 @@ import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue, Promo } from '@/types';
 import { logger } from '@/lib/logger';
 import type { Draft, LiveState } from '@/components/drafting/DraftRow';
+import type { DraftInfoPayload, TimerPayload } from '@/hooks/useDraftWebSocket';
+
+type DraftingPageSocketMessage =
+  | { type: 'timer_update'; payload: TimerPayload }
+  | { type: 'draft_info_update'; payload: DraftInfoPayload }
+  | { type: 'draft_complete'; payload?: unknown }
+  | { type?: string; payload?: unknown };
+
+function isTimerUpdateMessage(data: DraftingPageSocketMessage): data is Extract<DraftingPageSocketMessage, { type: 'timer_update' }> {
+  return data.type === 'timer_update';
+}
+
+function isDraftInfoUpdateMessage(data: DraftingPageSocketMessage): data is Extract<DraftingPageSocketMessage, { type: 'draft_info_update' }> {
+  return data.type === 'draft_info_update';
+}
 
 function getSnakeDrafterIndex(pickNumber: number): number {
   const round = Math.ceil(pickNumber / 10);
@@ -564,11 +579,12 @@ export function useDraftingPageState() {
 
         ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data) as { type?: string; payload?: any };
+            const data = JSON.parse(event.data) as DraftingPageSocketMessage;
             const { type, payload } = data;
             const draftId = draft.id;
 
-            if (type === 'timer_update' && payload) {
+            if (isTimerUpdateMessage(data)) {
+              const payload = data.payload;
               let endTs = payload.endOfTurnTimestamp;
               if (draft.draftSpeed === 'slow' && payload.startOfTurnTimestamp && endTs) {
                 const serverPickLen = endTs - payload.startOfTurnTimestamp;
@@ -585,8 +601,8 @@ export function useDraftingPageState() {
               });
             }
 
-            if (type === 'draft_info_update' && payload) {
-              const info = payload;
+            if (isDraftInfoUpdateMessage(data)) {
+              const info = data.payload;
               const currentDrafter = (info.currentDrafter || '').toLowerCase();
               const isUserTurn = wallet === currentDrafter;
               const userIndex = (info.draftOrder || []).findIndex(

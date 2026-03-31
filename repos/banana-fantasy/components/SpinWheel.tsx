@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
@@ -122,7 +122,7 @@ export function SpinWheel({
   const hasSpun = useRef(false);
 
   // Glow effect based on rotation speed
-  const glowOpacity = useTransform(rotation, (v) => {
+  const glowOpacity = useTransform(rotation, (_v) => {
     // Higher glow when spinning fast
     return spinning ? 0.6 : 0.2;
   });

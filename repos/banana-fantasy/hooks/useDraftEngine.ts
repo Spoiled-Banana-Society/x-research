@@ -135,6 +135,17 @@ export interface ServerDraftSummaryItem {
   };
 }
 
+type ServerRosterEntry = string | { playerId: string };
+
+type ServerRosterState = Record<
+  string,
+  { QB: ServerRosterEntry[]; RB: ServerRosterEntry[]; WR: ServerRosterEntry[]; TE: ServerRosterEntry[]; DST: ServerRosterEntry[] }
+>;
+
+function getRosterPlayerId(entry: ServerRosterEntry): string {
+  return typeof entry === 'string' ? entry : entry.playerId;
+}
+
 function createEmptyRoster(): PositionRoster {
   return { QB: [], RB: [], WR: [], TE: [], DST: [] };
 }
@@ -312,7 +323,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     draftInfo: ServerDraftInfoPayload,
     playerRankings: ServerPlayerData[],
     summary: ServerDraftSummaryItem[],
-    serverRosters: Record<string, { QB: unknown[]; RB: unknown[]; WR: unknown[]; TE: unknown[]; DST: unknown[] }>,
+    serverRosters: ServerRosterState,
     queue: ServerPickPayload[],
     userWallet: string,
   ) => {
@@ -368,11 +379,11 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     const builtRosters: Record<string, PositionRoster> = {};
     for (const [addr, roster] of Object.entries(serverRosters)) {
       builtRosters[addr] = {
-        QB: (roster.QB || []).map((p: any) => p.playerId || p),
-        RB: (roster.RB || []).map((p: any) => p.playerId || p),
-        WR: (roster.WR || []).map((p: any) => p.playerId || p),
-        TE: (roster.TE || []).map((p: any) => p.playerId || p),
-        DST: (roster.DST || []).map((p: any) => p.playerId || p),
+        QB: (roster.QB || []).map(getRosterPlayerId),
+        RB: (roster.RB || []).map(getRosterPlayerId),
+        WR: (roster.WR || []).map(getRosterPlayerId),
+        TE: (roster.TE || []).map(getRosterPlayerId),
+        DST: (roster.DST || []).map(getRosterPlayerId),
       };
     }
     setRosters(builtRosters);

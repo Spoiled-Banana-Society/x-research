@@ -12,6 +12,20 @@ import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
 import { isFirebaseAvailable } from '@/lib/api/firebase';
 import { logger } from '@/lib/logger';
 import type { RoomPhase } from '@/lib/draftRoomConstants';
+import type {
+  DraftInfoPayload,
+  NewPickPayload,
+  TimerPayload,
+} from '@/hooks/useDraftWebSocket';
+
+type PendingWsMessage =
+  | { type: 'timer_update'; payload: TimerPayload }
+  | { type: 'new_pick'; payload: NewPickPayload }
+  | { type: 'draft_info_update'; payload: DraftInfoPayload };
+
+function countSummaryPicks(summary: draftApi.DraftSummary): number {
+  return summary.filter((item) => Boolean(item.playerInfo?.playerId)).length;
+}
 
 function correctSlowDraftTimestamp(
   endTime: number | null | undefined,
@@ -70,7 +84,7 @@ export function useDraftLiveSync({
   const liveRetryCountRef = useRef(0);
   const loadLiveDataRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadLiveDataReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingWsMessagesRef = useRef<Array<{ type: string; payload: any }>>([]);
+  const pendingWsMessagesRef = useRef<PendingWsMessage[]>([]);
   const lastWsUpdateRef = useRef<number>(Date.now());
   const lastFirebaseUpdateRef = useRef<number>(Date.now());
 
@@ -345,10 +359,10 @@ export function useDraftLiveSync({
       lastWsUpdateRef.current = Date.now();
       if (liveInitializedRef.current && draftId) {
         draftApi.getDraftSummary(draftId).then(summary => {
-          const summaryArr = Array.isArray(summary) ? summary : (summary as any).summary || [];
+          const summaryArr = summary;
           if (summaryArr.length > 0) {
             engine.refreshSummaryPicks(summaryArr);
-            logger.debug(`[WS Reconnect] Synced ${summaryArr.filter((s: any) => s.playerInfo?.playerId).length} picks from summary`);
+            logger.debug(`[WS Reconnect] Synced ${countSummaryPicks(summaryArr)} picks from summary`);
           }
         }).catch(() => {});
       }
@@ -412,7 +426,7 @@ export function useDraftLiveSync({
         const draftInfo = infoResult.status === 'fulfilled' ? infoResult.value : null;
         const serverRosters = rostersResult.status === 'fulfilled'
           ? rostersResult.value
-          : ({} as Record<string, { QB: unknown[]; RB: unknown[]; WR: unknown[]; TE: unknown[]; DST: unknown[] }>);
+          : ({} as draftApi.RosterState);
         const queue = queueResult.status === 'fulfilled' ? queueResult.value : ([] as draftApi.PlayerStateInfo[]);
         const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : ([] as draftApi.DraftSummaryItem[]);
 
@@ -451,7 +465,7 @@ export function useDraftLiveSync({
           round: q.round,
         }));
 
-        const rostersForEngine: Record<string, { QB: unknown[]; RB: unknown[]; WR: unknown[]; TE: unknown[]; DST: unknown[] }> = {};
+        const rostersForEngine: draftApi.RosterState = {};
         for (const [addr, roster] of Object.entries(serverRosters)) {
           rostersForEngine[addr] = roster;
         }
@@ -582,10 +596,10 @@ export function useDraftLiveSync({
 
         if (liveInitializedRef.current) {
           draftApi.getDraftSummary(draftId).then(summary => {
-            const summaryArr = Array.isArray(summary) ? summary : (summary as any).summary || [];
+            const summaryArr = summary;
             if (summaryArr.length > 0) {
               engine.refreshSummaryPicks(summaryArr);
-              logger.debug(`[Watchdog] Re-synced ${summaryArr.filter((s: any) => s.playerInfo?.playerId).length} picks from REST`);
+              logger.debug(`[Watchdog] Re-synced ${countSummaryPicks(summaryArr)} picks from REST`);
             }
           }).catch(() => {});
 
