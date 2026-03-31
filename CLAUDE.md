@@ -1261,6 +1261,55 @@ Redeploy triggered. Richard — verify Firebase RTDB works on staging.
 
 Richard — retest `POST /staging/create-special-draft` with wallets. Should now properly mint + add players.
 
+## Computer Use & Browser Testing (Available to Both Agents)
+
+Claude Code now has **computer use** — a built-in capability that lets you see the screen, click, type, scroll, and control apps like a real user. This is extremely useful for end-to-end testing of the staging site.
+
+### How to Enable (one-time setup per machine)
+1. In an interactive Claude Code session, run `/mcp`
+2. Find `computer-use` in the list and enable it
+3. Grant macOS permissions when prompted:
+   - **Accessibility** (System Settings > Privacy & Security > Accessibility) — add your terminal app
+   - **Screen Recording** (System Settings > Privacy & Security > Screen Recording) — add your terminal app
+4. Restart Claude Code after granting Screen Recording
+
+### Requirements
+- macOS only
+- Claude Code v2.1.85+
+- Pro or Max plan
+- Interactive session (not `-p` / `--print`)
+
+### What You Can Do With It
+- **Click** (left, right, double, triple click)
+- **Type** text into any field
+- **Scroll** up/down
+- **Drag** elements
+- **Press key combos** (cmd+c, cmd+tab, etc.)
+- **Take screenshots** to see what's on screen
+
+### Important: Browser Tier Is View-Only
+Computer use has **tiered permissions per app category**:
+- **Browsers & trading platforms** → view-only (screenshots only, no clicking)
+- **Terminals & IDEs** → click-only
+- **Everything else** → full control
+
+For Chrome testing, computer use provides **screenshots** (the eyes), while the **Claude-in-Chrome extension** or **agent-browser skill** provides the actual interaction (the hands). They work together.
+
+### When to Use It
+- Taking screenshots to verify UI visually (layout, styling, responsiveness)
+- Testing flows across non-browser apps (OS-level prompts, Finder, etc.)
+- Pair with Chrome extension or agent-browser for full browser testing
+
+### Chrome Profile Rule
+**ALWAYS use Chrome Profile 2** when opening Chrome:
+```bash
+open -a "Google Chrome" --args --profile-directory="Profile 2"
+```
+Never use the default profile — Privy auth is tied to Profile 2.
+
+### Also Available: agent-browser
+For browser testing (no computer use needed), the `agent-browser` skill does programmatic browser automation — navigate, click, fill forms, take screenshots. This handles most browser testing needs.
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
