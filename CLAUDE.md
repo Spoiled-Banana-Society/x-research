@@ -1261,6 +1261,33 @@ Redeploy triggered. Richard — verify Firebase RTDB works on staging.
 
 Richard — retest `POST /staging/create-special-draft` with wallets. Should now properly mint + add players.
 
+## BACKEND FIX NEEDED (Boris): Old String-ID Tokens Crashing Go API
+> **From Richard's session (2026-03-31):** The Go API `/draftToken/all` endpoint crashes with `strconv.Atoi: parsing "staging-1771912537015-4": invalid syntax` because old tokens minted via the deprecated `/staging/mint-tokens/` endpoint have string-based IDs. The frontend now has a Firestore fallback so paid pass counts persist on reload, but the Go API is still broken for this wallet.
+
+**Two options:**
+1. **Clean up old tokens in Firestore** — delete all `staging-*` documents from:
+   - `draftTokens/{staging-*}` (top-level collection)
+   - `owners/{wallet}/validDraftTokens/{staging-*}` (subcollection)
+   - Wallet affected: `0xd3301bc039faf4223da98bceb5fb818c9993620`
+
+2. **Fix Go API to handle non-numeric card IDs** — in the `/draftToken/all` handler, skip tokens where `strconv.Atoi` fails instead of crashing. This is more robust long-term.
+
+**Verify after fix:**
+```bash
+curl -s "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/owner/0xd3301bc039faf4223da98bceb5fb818c9993620/draftToken/all"
+# Should return JSON array, not strconv.Atoi error
+```
+
+## Richard's Session (2026-03-31): Comprehensive Code Review & 46 Bug Fixes
+Richard ran a full code review using Codex + Claude agents. Found and fixed 46 bugs:
+- **5 critical security fixes** (auth bypass on wheel/purchases/withdrawals, forceResult exploit, zero-address guard)
+- **WebSocket overhaul** (reconnect, duplicate connections, event normalization)
+- **State management fixes** (Redux resets, null guards, typed actions)
+- **Performance** (polling 10s→60s, API throttling, abort controllers)
+- **40+ TypeScript errors fixed** — `tsc --noEmit` now passes clean
+- **18 new Playwright security tests** added
+- All changes are on staging only (`banana-fantasy-sbs.vercel.app`)
+
 ## Future Tasks (Boris's List)
 > Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
 
