@@ -72,9 +72,9 @@ function timeUntil(iso: string): string {
 export default function NftDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const tokenId = params.tokenId as string;
-  const autoBuy = searchParams.get('buy') === 'true';
-  const autoOffer = searchParams.get('offer') === 'true';
+  const tokenId = (params?.tokenId as string) ?? '';
+  const autoBuy = searchParams?.get('buy') === 'true';
+  const autoOffer = searchParams?.get('offer') === 'true';
   const { isLoggedIn, walletAddress, user, setShowLoginModal } = useAuth();
   const { wallets, ready: walletsReady } = useWallets();
   const { sendTransaction } = useSendTransaction();

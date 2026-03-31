@@ -862,7 +862,7 @@ export async function joinQueue(
     if (!queue.rounds) queue.rounds = [];
 
     const entryField = type === 'jackpot' ? 'jackpotEntries' : 'hofEntries';
-    const entries = (user as Record<string, unknown>)[entryField] as number || 0;
+    const entries = (user as unknown as Record<string, unknown>)[entryField] as number || 0;
     if (entries <= 0) throw new ApiError(400, `No ${type} entries available`);
 
     // Consume entries
@@ -981,4 +981,19 @@ export async function fillQueueRoundWithBots(
 export async function resetQueue(type: 'jackpot' | 'hof'): Promise<void> {
   const db = getAdminFirestore();
   await db.collection(QUEUES_COLLECTION).doc(type).set(emptyQueueDoc(type));
+}
+
+// ── Promo recording stubs ───────────────────────────────────────────
+// These are called by the draft-complete and pick10 API routes.
+// They record a draft completion / pick-10 event for promo tracking.
+// TODO: implement real promo tracking logic once backend is ready.
+
+export async function recordDraftCompletion(userId: string, draftId: string): Promise<Promo | null> {
+  console.log(`[db] recordDraftCompletion stub: userId=${userId}, draftId=${draftId}`);
+  return null;
+}
+
+export async function recordPick10(userId: string, draftId: string, _draftName: string): Promise<Promo | null> {
+  console.log(`[db] recordPick10 stub: userId=${userId}, draftId=${draftId}`);
+  return null;
 }

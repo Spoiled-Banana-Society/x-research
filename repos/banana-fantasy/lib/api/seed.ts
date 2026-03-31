@@ -19,6 +19,7 @@ const seedUser1: User = {
   nflTeam: 'Chiefs',
   xHandle: '@BananaKing99',
   draftPasses: 0,
+  usdcBalance: 0,
   freeDrafts: 0,
   wheelSpins: 2,
   jackpotEntries: 0,

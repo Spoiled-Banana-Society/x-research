@@ -12,7 +12,7 @@ export function MobileTabBar() {
   const { unreadCount } = useNotifications();
 
   // Don't show in draft room — it has its own UI
-  if (pathname.startsWith('/draft-room')) return null;
+  if (pathname?.startsWith('/draft-room')) return null;
 
   const wheelSpins = isLoggedIn && user ? user.wheelSpins : 0;
 
@@ -79,7 +79,7 @@ export function MobileTabBar() {
   ];
 
   const isActive = (tab: typeof tabs[0]) =>
-    tab.matchPaths.some(p => pathname === p || pathname.startsWith(p + '/'));
+    tab.matchPaths.some(p => pathname === p || (pathname ?? '').startsWith(p + '/'));
 
   return (
     <nav

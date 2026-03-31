@@ -395,7 +395,7 @@ export default function ExposurePage() {
 
       {/* ── Depth Chart Modal ─────────────────────────────────────────── */}
       {selectedExposure && (
-        <Modal onClose={() => setSelectedExposure(null)}>
+        <Modal isOpen={!!selectedExposure} onClose={() => setSelectedExposure(null)}>
           <div className="p-5">
             {/* Header */}
             <div className="flex items-center gap-3 mb-5">

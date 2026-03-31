@@ -78,7 +78,7 @@ export default function MarketplacePage() {
 
   // Handle ?tab= URL parameter
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
+    const tabParam = searchParams?.get('tab');
     if (tabParam === 'sell' || tabParam === 'activity' || tabParam === 'watchlist') {
       setActiveTab(tabParam);
     }
@@ -607,7 +607,7 @@ export default function MarketplacePage() {
           { to: BBB4_CONTRACT as `0x${string}`, data: approvalData as `0x${string}`, chainId: 8453 },
           { sponsor: true, uiOptions: { description: 'Approve marketplace to list your NFTs — no cost to you, fees covered by SBS' } },
         );
-        console.log('[Marketplace] Approval tx:', receipt.transactionHash);
+        console.log('[Marketplace] Approval tx:', receipt.hash);
       }
 
       const provider = new ethers.BrowserProvider(ethereum);
@@ -2220,7 +2220,7 @@ export default function MarketplacePage() {
                 <div className="p-6 pt-0">
                   <button
                     onClick={handleBuy}
-                    disabled={buyStep === 'processing'}
+                    disabled={(buyStep as string) === 'processing'}
                     className="w-full py-4 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {paymentMethod === 'card' ? (

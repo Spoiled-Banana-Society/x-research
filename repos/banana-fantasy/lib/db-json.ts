@@ -90,6 +90,7 @@ function getOrCreateUser(db: DbSchema, userId: string): User {
     username: `User${userId}`,
     walletAddress: '0x0',
     draftPasses: 0,
+    usdcBalance: 0,
     freeDrafts: 0,
     wheelSpins: 0,
     jackpotEntries: 0,

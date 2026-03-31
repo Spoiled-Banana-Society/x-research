@@ -10,7 +10,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useHistory } from '@/hooks/useHistory';
 import { League } from '@/types';
 import { useLeagues } from '@/hooks/useLeagues';
-import { useLeaderboard } from '@/hooks/useLeaderboard';
 
 type TabType = 'roster' | 'leaderboard' | 'draftboard';
 
@@ -18,8 +17,6 @@ export default function HistoryPage() {
   const { isLoggedIn, setShowLoginModal, user } = useAuth();
   const _historyQuery = useHistory({ userId: user?.id });
   const leaguesQuery = useLeagues({ userId: user?.id });
-  const leaderboardQuery = useLeaderboard();
-  const leaderboard = leaderboardQuery.data;
   const completedLeagues = (leaguesQuery.data ?? []).filter(
     (l) => l.status === 'completed' || l.status === 'eliminated',
   );
@@ -172,7 +169,7 @@ export default function HistoryPage() {
           {/* Tab Content */}
           {activeTab === 'roster' && <RosterView league={selectedLeague} />}
           {activeTab === 'leaderboard' && (
-            <LeaderboardView league={selectedLeague} leaderboard={leaderboard} />
+            <LeaderboardView gameweek={selectedLeague.draftDate || 'current'} />
           )}
           {activeTab === 'draftboard' && <DraftBoardView league={selectedLeague} />}
         </section>

@@ -67,6 +67,7 @@ export function LeaderboardView({ gameweek, onOpenLeagueDetail }: LeaderboardVie
         isCurrentUser: Boolean(e.isCurrentUser),
         pickCount: typeof e.pickCount === 'number' ? e.pickCount : undefined,
         roster: Array.isArray(e.roster) ? e.roster as string[] : undefined,
+        leagueLevel: typeof e.leagueLevel === 'string' ? e.leagueLevel : typeof e.level === 'string' ? e.level : undefined,
       };
     });
   }, [leagueStandings]);
