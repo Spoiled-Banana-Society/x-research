@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const snap = await db.collection(USERS_COLLECTION).doc(userId).get();
 
     if (!snap.exists) {
-      return json({ wheelSpins: 0, freeDrafts: 0, jackpotEntries: 0, hofEntries: 0 });
+      return json({ wheelSpins: 0, freeDrafts: 0, jackpotEntries: 0, hofEntries: 0, draftPasses: 0, cardPurchaseCount: 0 });
     }
 
     const data = snap.data()!;
