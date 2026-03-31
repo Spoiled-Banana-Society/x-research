@@ -19,7 +19,7 @@ import type {
   WheelPrize,
   WheelSpin,
 } from '@/types';
-import { API_CONFIG } from '@/lib/api/config';
+import { API_CONFIG, getUsdcPaymentAddressOrThrow } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import type { DbSchema } from '@/lib/api/dbTypes';
 import { seedDb } from '@/lib/api/seed';
@@ -407,7 +407,7 @@ export async function createPurchase(userId: string, quantity: number, paymentMe
     db.purchases.push(purchase);
 
     const payment: PurchasePaymentInstructions = {
-      toAddress: API_CONFIG.purchases.usdc.toAddress,
+      toAddress: getUsdcPaymentAddressOrThrow(),
       chainId: API_CONFIG.purchases.usdc.chainId,
       tokenAddress: API_CONFIG.purchases.usdc.tokenAddress,
       amount: String(totalPrice),

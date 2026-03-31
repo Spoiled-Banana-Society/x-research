@@ -252,15 +252,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const walletAccounts = privy.user.linkedAccounts?.filter(
         (a: { type: string }) => a.type === 'wallet'
       );
-      console.log('[SBS Auth] Wallet accounts:', JSON.stringify(walletAccounts));
-      console.log('[SBS Auth] All linked accounts types:', privy.user.linkedAccounts?.map((a: { type: string; walletClientType?: string; walletClient?: string }) => `${a.type}/${a.walletClientType || a.walletClient || 'none'}`));
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
+        console.log('[SBS Auth] Wallet accounts:', JSON.stringify(walletAccounts));
+        console.log('[SBS Auth] All linked accounts types:', privy.user.linkedAccounts?.map((a: { type: string; walletClientType?: string; walletClient?: string }) => `${a.type}/${a.walletClientType || a.walletClient || 'none'}`));
+      }
       const hasExternalWallet = privy.user.linkedAccounts?.some(
         (a: { type: string; walletClientType?: string; walletClient?: string }) =>
           a.type === 'wallet' && a.walletClientType !== 'privy' && a.walletClient !== 'privy'
       );
-      console.log('[SBS Auth] hasExternalWallet:', hasExternalWallet);
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
+        console.log('[SBS Auth] hasExternalWallet:', hasExternalWallet);
+      }
       const loginMethod: 'wallet' | 'social' = hasExternalWallet ? 'wallet' : 'social';
-      console.log('[SBS Auth] loginMethod:', loginMethod);
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
+        console.log('[SBS Auth] loginMethod:', loginMethod);
+      }
 
       // Try to fetch real SBS profile from backend
       getOwnerUser(walletAddress)

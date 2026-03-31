@@ -41,7 +41,13 @@ export const socketMiddleware =
                 })
                 socket.on("message", (event: Event) => {
                     const message = event as MessageEvent
-                    const data = JSON.parse(message.data)
+                    let data: { type?: string; payload?: any }
+                    try {
+                        data = JSON.parse(message.data)
+                    } catch (error) {
+                        console.error("Failed to parse websocket message", error, message.data)
+                        return
+                    }
                     if (data.type === "countdown_update") {
                         console.log("countdown_update", data)
                         dispatch(setPreTimer(data.payload.timeRemaining))
@@ -79,7 +85,7 @@ export const socketMiddleware =
                 })
                 socket.on("close", (message) => {
                     console.log("Websocket disconnected: ", message)
-                    dispatch(setConnection(true))
+                    dispatch(setConnection(false))
                 })
                 socket.on("error", (error) => {
                     console.log("Websocket error: ", error)

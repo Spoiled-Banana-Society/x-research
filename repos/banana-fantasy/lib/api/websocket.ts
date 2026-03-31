@@ -186,23 +186,42 @@ export class DraftWebSocketClient {
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url);
       this.ws = ws;
+      let didOpen = false;
+      let settled = false;
+
+      const resolveOnce = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      const rejectOnce = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
 
       ws.onopen = () => {
+        didOpen = true;
         this.reconnectAttempt = 0;
         if (this.opts.debug) console.log('[DraftWS] open');
-        resolve();
+        resolveOnce();
       };
 
       ws.onerror = (evt) => {
         if (this.opts.debug) console.log('[DraftWS] error', evt);
-        // Some browsers also fire close after error; we reject here so callers know initial connect failed.
-        reject(new Error('WebSocket connection error'));
+        // Let close decide whether this was an initial connection failure or a post-open drop.
+        if (!didOpen) {
+          rejectOnce(new Error('WebSocket connection error'));
+        }
       };
 
       ws.onmessage = (event) => {
         let msg: DraftWsMessage;
         try {
-          msg = JSON.parse(event.data);
+          const data = JSON.parse(event.data) as DraftWsMessage & { type?: DraftWsEventType };
+          const eventType = data.eventType ?? data.type;
+          msg = { ...data, eventType };
         } catch {
           msg = { eventType: 'unknown', payload: event.data };
         }
@@ -230,11 +249,15 @@ export class DraftWebSocketClient {
 
       ws.onclose = async (event) => {
         if (this.opts.debug) console.log('[DraftWS] close', event.code, event.reason);
+        if (this.ws === ws) {
+          this.ws = null;
+        }
         // If connect() is waiting on open, allow it to reject if we close before opening.
-        if (ws.readyState !== WebSocket.OPEN) {
-          reject(new Error('WebSocket closed before opening'));
+        if (!didOpen) {
+          rejectOnce(new Error('WebSocket closed before opening'));
           return;
         }
+        resolveOnce();
         // Open socket closed: attempt reconnect if requested.
         if (this.shouldReconnect) {
           await this.reconnect();
@@ -244,21 +267,22 @@ export class DraftWebSocketClient {
   }
 
   private async reconnect(): Promise<void> {
-    this.reconnectAttempt += 1;
-    if (this.reconnectAttempt > this.opts.maxRetries) return;
+    while (this.shouldReconnect) {
+      this.reconnectAttempt += 1;
+      if (this.reconnectAttempt > this.opts.maxRetries) return;
 
-    const delay = computeBackoff(this.reconnectAttempt, this.opts.baseBackoffMs, this.opts.maxBackoffMs);
-    if (this.opts.debug) console.log(`[DraftWS] reconnect attempt ${this.reconnectAttempt} in ${delay}ms`);
-    await sleep(delay);
+      const delay = computeBackoff(this.reconnectAttempt, this.opts.baseBackoffMs, this.opts.maxBackoffMs);
+      if (this.opts.debug) console.log(`[DraftWS] reconnect attempt ${this.reconnectAttempt} in ${delay}ms`);
+      await sleep(delay);
 
-    if (!this.shouldReconnect) return;
+      if (!this.shouldReconnect) return;
 
-    try {
-      await this.openSocket();
-    } catch {
-      // Keep trying.
-      if (this.shouldReconnect) {
-        await this.reconnect();
+      try {
+        await this.openSocket();
+        return;
+      } catch (error) {
+        if (this.opts.debug) console.log('[DraftWS] reconnect failed', error);
+        // Continue looping until reconnect succeeds or reconnecting is disabled.
       }
     }
   }

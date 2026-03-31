@@ -51,3 +51,14 @@ export const API_CONFIG = {
     },
   },
 } as const;
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export function getUsdcPaymentAddressOrThrow(): string {
+  const address = API_CONFIG.purchases.usdc.toAddress;
+  // This MUST be replaced with the real treasury address before going live.
+  if (address.toLowerCase() === ZERO_ADDRESS) {
+    throw new Error('USDC payment address is still set to the zero address. Configure the production treasury address before attempting a transaction.');
+  }
+  return address;
+}

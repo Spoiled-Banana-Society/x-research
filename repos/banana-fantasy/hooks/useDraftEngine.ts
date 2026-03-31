@@ -84,6 +84,11 @@ export interface ServerFinalCardPayload {
   roster?: Record<string, unknown>;
 }
 
+type ProcessablePick = Pick<
+  ServerPickPayload,
+  'playerId' | 'team' | 'position' | 'ownerAddress' | 'pickNum' | 'round'
+>;
+
 // Server player data format (from REST API)
 export interface ServerPlayerData {
   playerId: string;
@@ -438,6 +443,72 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     setDraftPhase('live'); // First timer_update = draft has started, picks are happening
   }, []);
 
+  const processPick = useCallback((pickData: ProcessablePick) => {
+    const basePos = positionFromPlayerId(pickData.playerId);
+
+    const pick: DraftPick = {
+      pickNumber: pickData.pickNum,
+      round: pickData.round,
+      pickInRound: ((pickData.pickNum - 1) % 10) + 1,
+      ownerName: pickData.ownerAddress,
+      ownerIndex: getSnakeDrafterIndex(pickData.pickNum),
+      playerId: pickData.playerId,
+      position: pickData.position,
+      team: pickData.team,
+    };
+
+    setPicks(prev => [...prev, pick]);
+    setAvailablePlayers(prev => prev.filter(player => player.playerId !== pickData.playerId));
+    setMostRecentPick(pick);
+
+    setRosters(prev => {
+      const updated = { ...prev };
+      const ownerAddr = pickData.ownerAddress;
+      const roster = { ...(updated[ownerAddr] || createEmptyRoster()) };
+      const rosterKey = basePos as keyof PositionRoster;
+      if (roster[rosterKey] && !roster[rosterKey].includes(pickData.playerId)) {
+        roster[rosterKey] = [...roster[rosterKey], pickData.playerId];
+      }
+      updated[ownerAddr] = roster;
+      return updated;
+    });
+
+    setDraftSummary(prev => {
+      const updated = [...prev];
+      const idx = pickData.pickNum - 1;
+      if (updated[idx]) {
+        updated[idx] = {
+          ...updated[idx],
+          playerId: pickData.playerId,
+          position: pickData.position,
+          team: pickData.team,
+        };
+      }
+      return updated;
+    });
+
+    setQueuedPlayers(prev => prev.filter(player => player.playerId !== pickData.playerId));
+
+    const wallet = walletAddressRef.current;
+    if (wallet && pickData.ownerAddress.toLowerCase() === wallet) {
+      if (userPickedManuallyRef.current) {
+        consecutiveTimeoutsRef.current = 0;
+      } else {
+        consecutiveTimeoutsRef.current += 1;
+        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
+        if (consecutiveTimeoutsRef.current >= 2) {
+          console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
+          setAirplaneMode(true);
+        }
+      }
+      userPickedManuallyRef.current = false;
+    }
+
+    if (pickData.pickNum >= TOTAL_PICKS) {
+      setDraftStatus('completed');
+    }
+  }, []);
+
   const handleNewPick = useCallback((payload: ServerNewPickPayload) => {
     // Go server sends flat PlayerInfo: { playerId, displayName, team, position, ownerAddress, pickNum, round }
     const pickData = payload;
@@ -453,75 +524,8 @@ export function useDraftEngine(mode: DraftMode = 'local') {
       return;
     }
     lastPickRef.current = pickData.pickNum;
-
-    const basePos = positionFromPlayerId(pickData.playerId);
-
-    const pick: DraftPick = {
-      pickNumber: pickData.pickNum,
-      round: pickData.round,
-      pickInRound: ((pickData.pickNum - 1) % 10) + 1,
-      ownerName: pickData.ownerAddress,
-      ownerIndex: getSnakeDrafterIndex(pickData.pickNum),
-      playerId: pickData.playerId,
-      position: pickData.position,
-      team: pickData.team,
-    };
-
-    setPicks(prev => [...prev, pick]);
-    setAvailablePlayers(prev => prev.filter(p => p.playerId !== pickData.playerId));
-    setMostRecentPick(pick);
-
-    // Update roster (idempotent — check before adding)
-    setRosters(prev => {
-      const updated = { ...prev };
-      const ownerAddr = pickData.ownerAddress;
-      const roster = { ...(updated[ownerAddr] || createEmptyRoster()) };
-      const rosterKey = basePos as keyof PositionRoster;
-      if (roster[rosterKey] && !roster[rosterKey].includes(pickData.playerId)) {
-        roster[rosterKey] = [...roster[rosterKey], pickData.playerId];
-      }
-      updated[ownerAddr] = roster;
-      return updated;
-    });
-
-    // Update draft summary
-    setDraftSummary(prev => {
-      const updated = [...prev];
-      const idx = pickData.pickNum - 1;
-      if (updated[idx]) {
-        updated[idx] = { ...updated[idx], playerId: pickData.playerId, position: pickData.position, team: pickData.team };
-      }
-      return updated;
-    });
-
-    // Remove from queue if queued
-    setQueuedPlayers(prev => prev.filter(p => p.playerId !== pickData.playerId));
-
-    // Track consecutive auto-picks for airplane mode (live mode)
-    // Uses walletAddressRef (not walletAddress state) so this callback stays stable with [] deps
-    const wallet = walletAddressRef.current;
-    if (wallet && pickData.ownerAddress.toLowerCase() === wallet) {
-      if (userPickedManuallyRef.current) {
-        // User picked manually — reset counter
-        consecutiveTimeoutsRef.current = 0;
-      } else {
-        // Server auto-picked (timer expired) — increment counter
-        consecutiveTimeoutsRef.current += 1;
-        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
-        if (consecutiveTimeoutsRef.current >= 2) {
-          console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
-          setAirplaneMode(true);
-        }
-      }
-      // Reset for next turn
-      userPickedManuallyRef.current = false;
-    }
-
-    // Check completion
-    if (pickData.pickNum >= TOTAL_PICKS) {
-      setDraftStatus('completed');
-    }
-  }, []);
+    processPick(pickData);
+  }, [processPick]);
 
   const handleDraftInfoUpdate = useCallback((payload: ServerDraftInfoPayload) => {
     // Guard: never go backwards — stale/duplicate server messages can send lower pickNumber
@@ -599,71 +603,8 @@ export function useDraftEngine(mode: DraftMode = 'local') {
       return;
     }
     lastPickRef.current = pick.pickNum;
-
-    const basePos = positionFromPlayerId(pick.playerId);
-
-    const newPick: DraftPick = {
-      pickNumber: pick.pickNum,
-      round: pick.round,
-      pickInRound: ((pick.pickNum - 1) % 10) + 1,
-      ownerName: pick.ownerAddress,
-      ownerIndex: getSnakeDrafterIndex(pick.pickNum),
-      playerId: pick.playerId,
-      position: pick.position,
-      team: pick.team,
-    };
-
-    setPicks(prev => [...prev, newPick]);
-    setAvailablePlayers(prev => prev.filter(p => p.playerId !== pick.playerId));
-    setMostRecentPick(newPick);
-
-    // Update roster (idempotent)
-    setRosters(prev => {
-      const updated = { ...prev };
-      const ownerAddr = pick.ownerAddress;
-      const roster = { ...(updated[ownerAddr] || createEmptyRoster()) };
-      const rosterKey = basePos as keyof PositionRoster;
-      if (roster[rosterKey] && !roster[rosterKey].includes(pick.playerId)) {
-        roster[rosterKey] = [...roster[rosterKey], pick.playerId];
-      }
-      updated[ownerAddr] = roster;
-      return updated;
-    });
-
-    // Update draft summary
-    setDraftSummary(prev => {
-      const updated = [...prev];
-      const idx = pick.pickNum - 1;
-      if (updated[idx]) {
-        updated[idx] = { ...updated[idx], playerId: pick.playerId, position: pick.position, team: pick.team };
-      }
-      return updated;
-    });
-
-    // Remove from queue if queued
-    setQueuedPlayers(prev => prev.filter(p => p.playerId !== pick.playerId));
-
-    // Track consecutive auto-picks for airplane mode
-    const wallet = walletAddressRef.current;
-    if (wallet && pick.ownerAddress.toLowerCase() === wallet) {
-      if (userPickedManuallyRef.current) {
-        consecutiveTimeoutsRef.current = 0;
-      } else {
-        consecutiveTimeoutsRef.current += 1;
-        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
-        if (consecutiveTimeoutsRef.current >= 2) {
-          console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
-          setAirplaneMode(true);
-        }
-      }
-      userPickedManuallyRef.current = false;
-    }
-
-    // Check completion
-    if (pick.pickNum >= TOTAL_PICKS) {
-      setDraftStatus('completed');
-    }
-  }, []);
+    processPick(pick);
+  }, [processPick]);
 
   // ==================== LOCAL MODE: DRAFT A PLAYER ====================
   const draftPlayer = useCallback((playerId: string): ServerPickPayload | null => {
@@ -827,36 +768,57 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   // Re-populate draftSummary from REST summary data on reconnect
   // summaryData is array of { playerInfo: { playerId, position, team, ownerAddress, pickNum } }
   const refreshSummaryPicks = useCallback((summaryData: Array<{ playerInfo: { playerId: string; position: string; team: string; ownerAddress: string; pickNum: number } }>) => {
-    // Collect all picked player IDs from the summary
-    const pickedIds = new Set<string>();
+    const pickedEntries = summaryData
+      .map((entry) => entry.playerInfo)
+      .filter((pi) => pi.playerId && pi.pickNum > 0)
+      .sort((a, b) => a.pickNum - b.pickNum);
+    const pickedIds = new Set(pickedEntries.map((pi) => pi.playerId));
+
     setDraftSummary(prev => {
-      const updated = [...prev];
-      for (const entry of summaryData) {
-        const pi = entry.playerInfo;
-        if (pi.playerId && pi.pickNum > 0) {
-          const idx = pi.pickNum - 1;
-          if (updated[idx]) {
-            updated[idx] = { ...updated[idx], playerId: pi.playerId, position: pi.position, team: pi.team };
-          }
-          pickedIds.add(pi.playerId);
+      const updated = prev.map((slot) => ({
+        ...slot,
+        playerId: '',
+        position: '',
+        team: '',
+      }));
+      for (const pi of pickedEntries) {
+        const idx = pi.pickNum - 1;
+        if (updated[idx]) {
+          updated[idx] = { ...updated[idx], playerId: pi.playerId, position: pi.position, team: pi.team };
         }
       }
       return updated;
     });
 
-    // Rebuild available players — remove any that were picked
-    if (pickedIds.size > 0) {
-      setAvailablePlayers(prev => prev.filter(p => !pickedIds.has(p.playerId)));
-    }
+    setAvailablePlayers(prev => prev.filter(p => !pickedIds.has(p.playerId)));
 
-    // Also update lastPickRef to the highest ACTUAL pick in the summary
-    // (only count entries with a playerId — unpicked slots have pickNum set but empty playerId)
-    const highestPick = summaryData
-      .filter(e => e.playerInfo.playerId !== '')
-      .reduce((max, e) => e.playerInfo.pickNum > max ? e.playerInfo.pickNum : max, 0);
-    if (highestPick > lastPickRef.current) {
-      lastPickRef.current = highestPick;
+    const rebuiltPicks: DraftPick[] = pickedEntries.map((pi) => ({
+      pickNumber: pi.pickNum,
+      round: Math.ceil(pi.pickNum / 10),
+      pickInRound: ((pi.pickNum - 1) % 10) + 1,
+      ownerName: pi.ownerAddress,
+      ownerIndex: getSnakeDrafterIndex(pi.pickNum),
+      playerId: pi.playerId,
+      position: pi.position,
+      team: pi.team,
+    }));
+    setPicks(rebuiltPicks);
+
+    const rebuiltRosters: Record<string, PositionRoster> = {};
+    for (const pick of rebuiltPicks) {
+      const ownerKey = pick.ownerName;
+      const roster = rebuiltRosters[ownerKey] || createEmptyRoster();
+      const rosterKey = pick.position.replace(/[0-9]/g, '') as keyof PositionRoster;
+      if (!roster[rosterKey].includes(pick.playerId)) {
+        roster[rosterKey] = [...roster[rosterKey], pick.playerId];
+      }
+      rebuiltRosters[ownerKey] = roster;
     }
+    setRosters(rebuiltRosters);
+
+    const latestPick = rebuiltPicks[rebuiltPicks.length - 1] || null;
+    setMostRecentPick(latestPick);
+    lastPickRef.current = Math.max(lastPickRef.current, latestPick?.pickNumber ?? 0);
   }, []);
 
   const isInQueue = useCallback((playerId: string) => {

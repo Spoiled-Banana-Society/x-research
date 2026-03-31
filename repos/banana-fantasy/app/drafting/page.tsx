@@ -184,6 +184,9 @@ export default function DraftingPage() {
     setClaimedPromos(prev => new Set([...Array.from(prev), promo.id]));
     const fallbackCount = promo.claimCount || 1;
     const claimResult = await promosQuery.claimPromo(promo.id);
+    if (claimResult instanceof Error) {
+      return;
+    }
     if (!claimResult && user) {
       updateUser({ wheelSpins: (user.wheelSpins || 0) + fallbackCount });
     }

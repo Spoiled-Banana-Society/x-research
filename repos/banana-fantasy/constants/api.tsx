@@ -1,3 +1,7 @@
+/**
+ * @deprecated Use `lib/staging.ts` as the canonical source for draft API/server URLs.
+ * These constants remain only for legacy callers that have not been migrated yet.
+ */
 import { env } from "@/environment"
 
 // URI for draft server. Toggle between hosted and local draft server

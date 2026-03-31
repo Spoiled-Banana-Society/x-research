@@ -9,13 +9,13 @@ import { NextResponse } from 'next/server';
 const ALLOWED_ORIGINS = [
   'https://sbsfantasy.com',
   'https://www.sbsfantasy.com',
-  /^https:\/\/.*\.vercel\.app$/,
+  /^https:\/\/banana-fantasy-.*\.vercel\.app$/,
   'http://localhost:3000',
   'http://localhost:3001',
 ];
 
 function isOriginAllowed(origin: string | null): boolean {
-  if (!origin) return true; // same-origin or server-to-server
+  if (!origin) return false;
   return ALLOWED_ORIGINS.some((allowed) =>
     typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
   );

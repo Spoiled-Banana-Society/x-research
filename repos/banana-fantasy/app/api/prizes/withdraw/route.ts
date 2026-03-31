@@ -2,6 +2,7 @@ import { rateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireNumber, requireString } from '@/lib/api/routeUtils';
+import { getPrivyUser } from '@/lib/auth';
 import { createWithdrawal } from '@/lib/db';
 import type { PrizeWithdrawal, WithdrawalStatus } from '@/types';
 
@@ -32,18 +33,24 @@ export async function POST(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.prizes);
   if (rateLimited) return rateLimited;
   try {
+    const { userId: authenticatedUserId } = await getPrivyUser(req);
     const body = await parseBody(req);
-    const userId = requireString(body.userId, 'userId');
+    const bodyUserId = requireString(body.userId, 'userId');
     const draftId = requireString(body.draftId, 'draftId');
     const amount = requireNumber(body.amount, 'amount');
     const methodRaw = body.method;
 
-    if (!userId.trim()) {
+    if (!bodyUserId.trim()) {
       return jsonError('User id is required', 400);
     }
+    if (bodyUserId !== authenticatedUserId) {
+      return jsonError('Authenticated user does not match request userId', 403);
+    }
+    const userId = authenticatedUserId;
     if (amount <= 0) {
       return jsonError('Amount must be greater than 0', 400);
     }
+    // TODO: Validate `amount` against the user's actual prize records before creating a withdrawal.
     if (methodRaw !== 'usdc' && methodRaw !== 'bank') {
       return jsonError('Invalid withdrawal method', 400);
     }

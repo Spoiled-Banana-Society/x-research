@@ -10,7 +10,7 @@ import { reservePromoDraftType } from '@/lib/promoDraftType';
 interface PromoCarouselProps {
   promos: Promo[];
   autoPlay?: boolean;
-  claimPromo?: (promoId: string) => Promise<{ spinsAdded: number } | null>;
+  claimPromo?: (promoId: string) => Promise<{ spinsAdded: number } | Error | null>;
   onVerifyTweet?: (promoId: string) => Promise<{ verified: boolean; alreadyVerified?: boolean; hasReplied?: boolean; hasQuoted?: boolean; message?: string } | null>;
   onGenerateReferralCode?: () => Promise<{ code: string; link: string } | null>;
 }
@@ -174,6 +174,9 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
     // Use real backend claim if available
     if (claimPromo) {
       const result = await claimPromo(promo.id);
+      if (result instanceof Error) {
+        return;
+      }
       // claimPromo handles optimistic updates and user refresh internally
       if (!isModalOpen) {
         setClaimSuccess({ show: true, count: result?.spinsAdded ?? count, promoType: promo.type });

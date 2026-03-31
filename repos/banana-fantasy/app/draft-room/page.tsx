@@ -36,6 +36,17 @@ import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
 import { getDraftTokenLevel } from '@/lib/api/leagues';
 import { isFirebaseAvailable } from '@/lib/api/firebase';
 
+function correctSlowDraftTimestamp(
+  endTime: number | null | undefined,
+  pickLength: number | null | undefined,
+  speed: 'fast' | 'slow' | null,
+) {
+  if (!endTime || !pickLength) return endTime ?? null;
+  if (speed !== 'slow' || pickLength <= 0 || pickLength >= 3600) return endTime;
+  const startOfTurn = endTime - pickLength;
+  return startOfTurn + 28800;
+}
+
 function DraftRoomContent() {
   const searchParams = useSearchParams();
   const contestName = searchParams.get('name') || 'Draft Room';
@@ -81,6 +92,8 @@ function DraftRoomContent() {
   const [liveDataReady, setLiveDataReady] = useState(false);
   const [engineReady, setEngineReady] = useState(false);
   const liveRetryCountRef = useRef(0);
+  const loadLiveDataRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadLiveDataReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track whether we're waiting for server to create draft documents after filling
   // Initialize from stored state so re-entry renders correctly on first frame (no flash)
   const _isResumingRandomize = !!(storedForInit?.randomizingStartedAt && !storedForInit?.preSpinStartedAt);
@@ -113,19 +126,10 @@ function DraftRoomContent() {
 
     const rtdb = firebaseRtdb.data;
 
-    // Apply slow-draft pickLength fix (same workaround as for WS timer_update)
-    let correctedPickEndTime = rtdb.pickEndTime;
-    if (speedParam === 'slow' && rtdb.pickLength > 0 && rtdb.pickLength < 3600) {
-      // Backend bug: pickLength is 480s instead of 28800s.
-      // pickEndTime = startOfTurn + pickLength, so we recalculate it.
-      const startOfTurn = rtdb.pickEndTime - rtdb.pickLength;
-      correctedPickEndTime = startOfTurn + 28800;
-    }
-
     // Update engine state from Firebase
     engine.setFirebaseState({
       ...rtdb,
-      pickEndTime: correctedPickEndTime,
+      pickEndTime: correctSlowDraftTimestamp(rtdb.pickEndTime, rtdb.pickLength, speedParam) ?? rtdb.pickEndTime,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data]);
@@ -143,15 +147,11 @@ function DraftRoomContent() {
   // Firebase-based timer: use useTimeRemaining with timestamps from RTDB
   const firebaseEndOfTurn = firebaseRtdb.data?.pickEndTime ?? null;
   const firebaseDraftStart = firebaseRtdb.data?.draftStartTime ?? null;
-  // Apply slow-draft correction to the timer input too
-  const correctedFirebaseEndOfTurn = (() => {
-    if (!firebaseRtdb.data || !firebaseEndOfTurn) return firebaseEndOfTurn;
-    if (speedParam === 'slow' && firebaseRtdb.data.pickLength > 0 && firebaseRtdb.data.pickLength < 3600) {
-      const startOfTurn = firebaseEndOfTurn - firebaseRtdb.data.pickLength;
-      return startOfTurn + 28800;
-    }
-    return firebaseEndOfTurn;
-  })();
+  const correctedFirebaseEndOfTurn = correctSlowDraftTimestamp(
+    firebaseEndOfTurn,
+    firebaseRtdb.data?.pickLength,
+    speedParam,
+  );
   const firebaseTimeRemaining = useTimeRemaining(
     firebaseActive ? correctedFirebaseEndOfTurn : null,
     firebaseActive ? firebaseDraftStart : null,
@@ -364,6 +364,19 @@ function DraftRoomContent() {
   const preSpinStartedAtRef = useRef<number | null>(stored?.preSpinStartedAt ?? null);
   const animationOffsetRef = useRef(0); // ms offset for resuming slot animation mid-way
   const lastWsUpdateRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    return () => {
+      if (loadLiveDataRetryTimeoutRef.current) {
+        clearTimeout(loadLiveDataRetryTimeoutRef.current);
+        loadLiveDataRetryTimeoutRef.current = null;
+      }
+      if (loadLiveDataReadyTimeoutRef.current) {
+        clearTimeout(loadLiveDataReadyTimeoutRef.current);
+        loadLiveDataReadyTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // ==================== LOADING PHASE: Check server state before showing any UI ====================
   // When re-entering a live draft, we start in 'loading' phase to avoid replaying animations.
@@ -864,14 +877,16 @@ function DraftRoomContent() {
         pendingWsMessagesRef.current.push({ type: 'timer_update', payload });
         return;
       }
-      // Backend bug: slow draft pickLength is 480s (8 min) instead of 28800s (8 hr).
-      // Adjust endOfTurnTimestamp so the countdown shows the correct 8-hour window.
-      if (speedParam === 'slow' && payload.startOfTurnTimestamp && payload.endOfTurnTimestamp) {
-        const serverPickLen = payload.endOfTurnTimestamp - payload.startOfTurnTimestamp;
-        if (serverPickLen < 3600) {
-          payload = { ...payload, endOfTurnTimestamp: payload.startOfTurnTimestamp + 28800 };
-        }
-      }
+      payload = {
+        ...payload,
+        endOfTurnTimestamp: correctSlowDraftTimestamp(
+          payload.endOfTurnTimestamp,
+          payload.endOfTurnTimestamp && payload.startOfTurnTimestamp
+            ? payload.endOfTurnTimestamp - payload.startOfTurnTimestamp
+            : null,
+          speedParam,
+        ) ?? payload.endOfTurnTimestamp,
+      };
       engine.handleTimerUpdate(payload);
       lastWsUpdateRef.current = Date.now();
     },
@@ -999,14 +1014,17 @@ function DraftRoomContent() {
   useEffect(() => {
     if (!isLiveMode || !draftId) return;
     const key = `draft-room-ws:${draftId}`;
+    const ownerToken = Math.random().toString(36);
     // Write heartbeat immediately and every 3s
-    localStorage.setItem(key, String(Date.now()));
+    localStorage.setItem(key, ownerToken);
     const interval = setInterval(() => {
-      localStorage.setItem(key, String(Date.now()));
+      localStorage.setItem(key, ownerToken);
     }, 3_000);
     return () => {
       clearInterval(interval);
-      localStorage.removeItem(key);
+      if (localStorage.getItem(key) === ownerToken) {
+        localStorage.removeItem(key);
+      }
     };
   }, [isLiveMode, draftId]);
 
@@ -1123,6 +1141,14 @@ function DraftRoomContent() {
 
         liveInitializedRef.current = true;
         setEngineReady(true);
+        if (loadLiveDataRetryTimeoutRef.current) {
+          clearTimeout(loadLiveDataRetryTimeoutRef.current);
+          loadLiveDataRetryTimeoutRef.current = null;
+        }
+        if (loadLiveDataReadyTimeoutRef.current) {
+          clearTimeout(loadLiveDataReadyTimeoutRef.current);
+          loadLiveDataReadyTimeoutRef.current = null;
+        }
         // Airplane mode restored by dedicated effect (covers all phases)
 
         console.log('[Draft Room] Engine ready — draft data loaded successfully');
@@ -1137,7 +1163,16 @@ function DraftRoomContent() {
               case 'timer_update': {
                 // Match production: let timer_update through. Display logic uses
                 // mainCountdown during pre-draft phases regardless of engine state.
-                engine.handleTimerUpdate(msg.payload);
+                engine.handleTimerUpdate({
+                  ...msg.payload,
+                  endOfTurnTimestamp: correctSlowDraftTimestamp(
+                    msg.payload.endOfTurnTimestamp,
+                    msg.payload.endOfTurnTimestamp && msg.payload.startOfTurnTimestamp
+                      ? msg.payload.endOfTurnTimestamp - msg.payload.startOfTurnTimestamp
+                      : null,
+                    speedParam,
+                  ),
+                });
                 break;
               }
               case 'draft_info_update':
@@ -1179,10 +1214,16 @@ function DraftRoomContent() {
         } else {
           // Auto-retry: toggle liveDataReady after delay to re-trigger the effect
           console.log(`[Live Mode] Auto-retrying in 5s...`);
-          setTimeout(() => {
+          if (loadLiveDataRetryTimeoutRef.current) clearTimeout(loadLiveDataRetryTimeoutRef.current);
+          if (loadLiveDataReadyTimeoutRef.current) clearTimeout(loadLiveDataReadyTimeoutRef.current);
+          loadLiveDataRetryTimeoutRef.current = setTimeout(() => {
             liveInitializedRef.current = false;
             setLiveDataReady(false);
-            setTimeout(() => setLiveDataReady(true), 100);
+            loadLiveDataReadyTimeoutRef.current = setTimeout(() => {
+              setLiveDataReady(true);
+              loadLiveDataReadyTimeoutRef.current = null;
+            }, 100);
+            loadLiveDataRetryTimeoutRef.current = null;
           }, 5000);
         }
       }
@@ -1340,7 +1381,7 @@ function DraftRoomContent() {
   }, [engine.draftStatus, triggerOptIn]);
 
   // ==================== DRAFT PREFERENCES: Load + sync from REST API ====================
-  // Load auto-draft, sort preference, and missed picks count on init and after each pick
+  // Load auto-draft, sort preference, and missed picks count on init
   useEffect(() => {
     if (!isLiveMode || !draftId || !walletParam || phase !== 'drafting') return;
     let cancelled = false;
@@ -1369,7 +1410,7 @@ function DraftRoomContent() {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, walletParam, phase, engine.currentPickNumber]);
+  }, [isLiveMode, draftId, walletParam, phase]);
 
   // Auto-draft toggle handler
   const handleToggleAutoDraft = useCallback(async () => {
@@ -1436,12 +1477,16 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine.mostRecentPick?.pickNumber]);
 
-  // ==================== PLAYER RANKINGS: Refresh after new picks ====================
-  // Re-fetch player rankings after every pick to get updated available players list.
-  // This matches the dev's PlayerComponent.tsx behavior (lines 171-182).
+  const rankingsRefreshBucket = engine.mostRecentPick
+    ? Math.floor(engine.mostRecentPick.pickNumber / 5)
+    : 0;
+
+  // ==================== PLAYER RANKINGS: Refresh periodically during live draft ====================
+  // Re-fetch rankings every 5 picks to avoid a request on every single pick.
   useEffect(() => {
     if (!isLiveMode || !draftId || !walletParam || phase !== 'drafting') return;
     if (!engine.mostRecentPick) return;
+    if (engine.mostRecentPick.pickNumber % 5 !== 0) return;
 
     draftApi.getPlayerRankings(draftId, walletParam)
       .then((rankings) => {
@@ -1463,7 +1508,7 @@ function DraftRoomContent() {
         console.warn('[Rankings] Failed to refresh player rankings:', err);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, walletParam, phase, engine.mostRecentPick?.pickNumber]);
+  }, [isLiveMode, draftId, walletParam, phase, rankingsRefreshBucket]);
 
   // ==================== isDraftClosed: Fetch generated card ====================
   useEffect(() => {
@@ -2386,11 +2431,22 @@ function DraftRoomContent() {
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => {
+                  if (loadLiveDataRetryTimeoutRef.current) {
+                    clearTimeout(loadLiveDataRetryTimeoutRef.current);
+                    loadLiveDataRetryTimeoutRef.current = null;
+                  }
+                  if (loadLiveDataReadyTimeoutRef.current) {
+                    clearTimeout(loadLiveDataReadyTimeoutRef.current);
+                    loadLiveDataReadyTimeoutRef.current = null;
+                  }
                   liveRetryCountRef.current = 0;
                   liveInitializedRef.current = false;
                   setLiveError(null);
                   setLiveDataReady(false);
-                  setTimeout(() => setLiveDataReady(true), 100);
+                  loadLiveDataReadyTimeoutRef.current = setTimeout(() => {
+                    setLiveDataReady(true);
+                    loadLiveDataReadyTimeoutRef.current = null;
+                  }, 100);
                 }}
                 className="px-4 py-1.5 bg-banana text-black font-bold rounded-lg text-sm hover:bg-banana-light transition-all"
               >

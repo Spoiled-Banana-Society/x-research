@@ -329,13 +329,19 @@ export function getByeWeekExposure(exposure: UserExposure): ByeWeekExposure[] {
   });
 
   return Array.from(byeWeekMap.entries())
-    .map(([week, data]) => ({
-      week,
-      drafts: data.drafts.size,
-      totalDrafts: exposure.totalDrafts,
-      exposure: Math.round((data.drafts.size / exposure.totalDrafts) * 100),
-      teams: Array.from(data.teams),
-    }))
+    .map(([week, data]) => {
+      // Exposure entries can overlap the same draft, so never let simulated affected drafts
+      // exceed the real number of drafts in the user's portfolio.
+      const draftsAffected = Math.min(data.drafts.size, exposure.totalDrafts);
+
+      return {
+        week,
+        drafts: draftsAffected,
+        totalDrafts: exposure.totalDrafts,
+        exposure: Math.round((draftsAffected / exposure.totalDrafts) * 100),
+        teams: Array.from(data.teams),
+      };
+    })
     .filter((b) => b.drafts > 0)
     .sort((a, b) => b.exposure - a.exposure);
 }
@@ -359,7 +365,9 @@ export function computeStacks(exposures: ExposureEntry[]): TeamStack[] {
     if (entries.length < 2) continue;
     const positions = entries.map(e => e.position).sort();
     const hasQB = positions.some(p => p === 'QB');
-    const combinedExposure = Math.round(entries.reduce((s, e) => s + e.exposure, 0) / entries.length);
+    // A stack can only exist in drafts where every player overlaps, so use the
+    // minimum individual exposure as the best estimate of shared draft overlap.
+    const combinedExposure = Math.min(...entries.map(e => e.exposure));
     const avgDrafts = Math.round(entries.reduce((s, e) => s + e.drafts, 0) / entries.length);
 
     let stackType = 'Multi-Position';

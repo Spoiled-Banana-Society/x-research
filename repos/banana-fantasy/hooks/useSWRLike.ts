@@ -50,67 +50,51 @@ export function useSWRLike<T>(
   const [isValidating, setIsValidating] = useState<boolean>(false);
 
   const isFirstLoadRef = useRef(true);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const runFetch = useCallback(async () => {
     if (!enabled || !key) {
+      controllerRef.current?.abort();
+      controllerRef.current = null;
       setData(options.fallbackData);
       setError(null);
+      setIsValidating(false);
       return;
     }
 
+    controllerRef.current?.abort();
     const ctrl = new AbortController();
+    controllerRef.current = ctrl;
 
     setIsValidating(true);
     try {
       const next = await fetcher({ signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
       cache.set(key, { data: next, error: null, updatedAt: Date.now() });
       setData(next);
       setError(null);
     } catch (err) {
+      if (ctrl.signal.aborted) return;
       cache.set(key, { data: options.fallbackData, error: err, updatedAt: Date.now() });
       setData(options.fallbackData);
       setError(err);
     } finally {
-      setIsValidating(false);
+      if (controllerRef.current === ctrl) {
+        controllerRef.current = null;
+        setIsValidating(false);
+      }
     }
   }, [enabled, key, fetcher, options.fallbackData]);
 
   useEffect(() => {
-    // Always revalidate on mount when enabled.
-    // If we have cached data, keep it while validating.
-    if (!enabled || !key) {
-      setData(options.fallbackData);
-      setError(null);
-      return;
-    }
-
-    const ctrl = new AbortController();
-    let mounted = true;
-
-    (async () => {
-      setIsValidating(true);
-      try {
-        const next = await fetcher({ signal: ctrl.signal });
-        if (!mounted) return;
-        cache.set(key, { data: next, error: null, updatedAt: Date.now() });
-        setData(next);
-        setError(null);
-      } catch (err) {
-        if (!mounted) return;
-        cache.set(key, { data: options.fallbackData, error: err, updatedAt: Date.now() });
-        setData(options.fallbackData);
-        setError(err);
-      } finally {
-        if (mounted) setIsValidating(false);
-      }
-    })();
+    void runFetch();
 
     return () => {
-      mounted = false;
-      ctrl.abort();
+      controllerRef.current?.abort();
+      controllerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, enabled]);
+  }, [key, enabled, runFetch]);
 
   const isLoading = useMemo(() => {
     if (!enabled) return false;
