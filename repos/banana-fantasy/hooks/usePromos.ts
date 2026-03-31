@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Promo } from '@/types';
 import { AppApiError, fetchJson } from '@/lib/appApiClient';
 import { pushNotification } from '@/components/NotificationCenter';
@@ -12,6 +12,8 @@ type ClaimPromoResponse = {
   spinsAdded: number;
   user: unknown;
 };
+
+type ClaimPromoResult = ClaimPromoResponse | Error | null;
 
 export function usePromos(opts?: { userId?: string }) {
   const { user, updateUser } = useAuth();
@@ -25,6 +27,11 @@ export function usePromos(opts?: { userId?: string }) {
 
   // optimistic local update after claims
   const [localPromos, setLocalPromos] = useState<Promo[] | null>(null);
+  const mutateRef = useRef(swr.mutate);
+
+  useEffect(() => {
+    mutateRef.current = swr.mutate;
+  }, [swr.mutate]);
 
   useEffect(() => {
     // keep local promos in sync with SWR source when it changes
@@ -35,7 +42,7 @@ export function usePromos(opts?: { userId?: string }) {
   const promos = useMemo(() => localPromos ?? swr.data, [localPromos, swr.data]);
 
   const claimPromo = useCallback(
-    async (promoId: string): Promise<ClaimPromoResponse | null> => {
+    async (promoId: string): Promise<ClaimPromoResult> => {
       if (!userId) return null;
 
       try {
@@ -65,7 +72,7 @@ export function usePromos(opts?: { userId?: string }) {
         });
 
         // Revalidate in background (keeps everything consistent)
-        void swr.mutate();
+        void mutateRef.current();
 
         // Notify user of claimed reward
         if (res.spinsAdded > 0) {
@@ -79,21 +86,11 @@ export function usePromos(opts?: { userId?: string }) {
         }
 
         return res;
-      } catch {
-        // Fallback: mark promo as claimed locally so UI never looks broken.
-        setLocalPromos((prev) => {
-          const base = prev ?? swr.data ?? [];
-          return base.map((p) =>
-            p.id === promoId
-              ? { ...p, claimable: false, claimCount: 0 }
-              : p,
-          );
-        });
-
-        return null;
+      } catch (err) {
+        return err instanceof Error ? err : new Error('Failed to claim promo.');
       }
     },
-    [userId, swr, updateUser],
+    [userId, swr.data, updateUser],
   );
 
   const verifyTweetEngagement = useCallback(
@@ -116,7 +113,7 @@ export function usePromos(opts?: { userId?: string }) {
               p.id === promoId ? { ...p, claimable: true, claimCount: 1 } : p,
             );
           });
-          void swr.mutate();
+          void mutateRef.current();
         }
 
         return res;
@@ -125,7 +122,7 @@ export function usePromos(opts?: { userId?: string }) {
         return { verified: false, message: msg };
       }
     },
-    [userId, user?.xHandle, swr],
+    [userId, user?.xHandle, swr.data],
   );
 
   const generateReferralCode = useCallback(
@@ -140,30 +137,28 @@ export function usePromos(opts?: { userId?: string }) {
           },
         );
         // Refresh promos so the referral link appears
-        void swr.mutate();
+        void mutateRef.current();
         return res;
       } catch {
         return null;
       }
     },
-    [userId, user?.username, swr],
+    [userId, user?.username],
   );
 
-  const refreshPromos = useCallback(() => swr.mutate(), [swr]);
+  const refreshPromos = useCallback(() => mutateRef.current(), []);
 
-  // Refetch promos on window focus + poll every 10s for live updates
+  // Refetch promos when the tab becomes visible and poll every 60s for updates.
   useEffect(() => {
-    const refetch = () => { swr.mutate(); };
+    const refetch = () => { void mutateRef.current(); };
     const onVisibility = () => { if (document.visibilityState === 'visible') refetch(); };
-    window.addEventListener('focus', refetch);
     document.addEventListener('visibilitychange', onVisibility);
-    const interval = setInterval(refetch, 10_000);
+    const interval = setInterval(refetch, 60_000);
     return () => {
-      window.removeEventListener('focus', refetch);
       document.removeEventListener('visibilitychange', onVisibility);
       clearInterval(interval);
     };
-  }, [swr]);
+  }, []);
 
   return {
     ...swr,

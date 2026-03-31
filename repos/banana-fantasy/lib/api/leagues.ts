@@ -186,8 +186,8 @@ export interface BatchProgress {
  *
  * Backend endpoint: `GET /league/batchProgress`
  */
-export async function getBatchProgress(): Promise<BatchProgress> {
-  const res = await draftsApi().get<BatchProgress>('/league/batchProgress');
+export async function getBatchProgress(signal?: AbortSignal): Promise<BatchProgress> {
+  const res = await draftsApi().get<BatchProgress>('/league/batchProgress', { signal });
   return res;
 }
 

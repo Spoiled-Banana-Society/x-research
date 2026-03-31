@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface UseCountdownOptions {
   initialSeconds: number;
@@ -25,6 +25,16 @@ export function useCountdown({
 }: UseCountdownOptions): UseCountdownReturn {
   const [seconds, setSeconds] = useState(initialSeconds);
   const [isRunning, setIsRunning] = useState(autoStart);
+  const onCompleteRef = useRef(onComplete);
+  const onTickRef = useRef(onTick);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    onTickRef.current = onTick;
+  }, [onTick]);
 
   const isComplete = seconds <= 0;
 
@@ -35,22 +45,26 @@ export function useCountdown({
   })();
 
   useEffect(() => {
-    if (!isRunning || seconds <= 0) return;
+    if (!isRunning) return;
 
     const interval = setInterval(() => {
       setSeconds(prev => {
+        if (prev <= 0) {
+          return 0;
+        }
+
         const next = prev - 1;
-        if (onTick) onTick(next);
+        onTickRef.current?.(next);
         if (next <= 0) {
           setIsRunning(false);
-          if (onComplete) onComplete();
+          onCompleteRef.current?.();
         }
         return Math.max(0, next);
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, seconds, onComplete, onTick]);
+  }, [isRunning]);
 
   const start = useCallback(() => setIsRunning(true), []);
   const pause = useCallback(() => setIsRunning(false), []);

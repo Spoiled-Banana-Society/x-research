@@ -12,7 +12,8 @@ import { CROSS_CHAIN_SEAPORT_V1_6_ADDRESS } from '@opensea/seaport-js/lib/consta
 import { ethers } from 'ethers';
 import { BBB4_CONTRACT, USDC_BASE } from '@/lib/opensea';
 
-const OPENSEA_API_KEY = process.env.NEXT_PUBLIC_OPENSEA_API_KEY || '';
+// Server-side only. Keep this on `process.env.OPENSEA_API_KEY`, never `NEXT_PUBLIC_*`.
+const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY || '';
 const OPENSEA_CONDUIT_KEY = '0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000';
 const OPENSEA_CONDUIT_ADDRESS = '0x1e0049783f008a0085193e00003d00cd54003c71';
 const OPENSEA_FEE_RECIPIENT = '0x0000a26b00c1f0df003000390027140000faa719';
@@ -45,7 +46,8 @@ export async function createListing(
   });
 
   // Convert USD price to USDC wei (6 decimals)
-  const priceWei = ethers.parseUnits(priceUsd.toString(), 6);
+  const normalizedPriceUsd = priceUsd.toFixed(2);
+  const priceWei = ethers.parseUnits(normalizedPriceUsd, 6);
   const feeAmount = (priceWei * BigInt(OPENSEA_FEE_BPS)) / BigInt(10000);
   const sellerAmount = priceWei - feeAmount;
 

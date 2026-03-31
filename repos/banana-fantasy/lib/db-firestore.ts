@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
-import { API_CONFIG } from '@/lib/api/config';
+import { API_CONFIG, getUsdcPaymentAddressOrThrow } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { seedDb } from '@/lib/api/seed';
 import type {
@@ -529,7 +529,7 @@ export async function createPurchase(
   await db.collection(PURCHASES_COLLECTION).doc(purchase.id).set(stripUndefined(purchase));
 
   const payment: PurchasePaymentInstructions = {
-    toAddress: API_CONFIG.purchases.usdc.toAddress,
+    toAddress: getUsdcPaymentAddressOrThrow(),
     chainId: API_CONFIG.purchases.usdc.chainId,
     tokenAddress: API_CONFIG.purchases.usdc.tokenAddress,
     amount: String(totalPrice),

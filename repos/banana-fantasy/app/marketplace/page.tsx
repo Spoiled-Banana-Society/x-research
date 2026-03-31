@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -109,6 +109,14 @@ export default function MarketplacePage() {
   const [sweepStep, setSweepStep] = useState<'confirm' | 'processing' | 'complete'>('confirm');
   const [sweepProgress, setSweepProgress] = useState<Record<string, 'pending' | 'processing' | 'done' | 'failed'>>({});
   const [sweepPaymentMethod, setSweepPaymentMethod] = useState<'card' | 'usdc'>('card');
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   // Real data hooks
   const { data: collectionStats, isLoading: statsLoading } = useCollectionStats();
@@ -296,11 +304,12 @@ export default function MarketplacePage() {
         // Wait for funds
         const requiredUsdc = BigInt(Math.ceil(sweepTotal * 1e6));
         const startTime = Date.now();
-        while (Date.now() - startTime < 300_000) {
+        while (!cancelledRef.current && Date.now() - startTime < 300_000) {
           const balance = await getUsdcBalance(walletAddress as Address);
           if (balance >= requiredUsdc) break;
           await new Promise(r => setTimeout(r, 3000));
         }
+        if (cancelledRef.current) return;
       } catch (err) {
         console.error('[Sweep] Fund failed:', err);
         setSweepStep('confirm');
@@ -517,11 +526,12 @@ export default function MarketplacePage() {
         const startTime = Date.now();
         const maxWait = 300_000;
 
-        while (Date.now() - startTime < maxWait) {
+        while (!cancelledRef.current && Date.now() - startTime < maxWait) {
           const balance = await getUsdcBalance(walletAddress as Address);
           if (balance >= requiredUsdc) break;
           await new Promise(r => setTimeout(r, 3000));
         }
+        if (cancelledRef.current) return;
 
         // Execute Seaport buy
         setCardFlowStep('buying');

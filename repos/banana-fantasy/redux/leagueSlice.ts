@@ -72,29 +72,18 @@ export const leagueSlice = createSlice({
         },
         setEndOfTurnTimestamp: (state, action: PayloadAction<number>) => {
             state.endOfTurnTimestamp = action.payload
-            console.log(`setEndOfTurnTimestamp ${action.payload}`)
             if (state.startOfTurnTimestamp !== null) {
-                console.log(
-                    `setStartOfTurnTimestamp: Setting timeRemaining to ${
-                        state.endOfTurnTimestamp - state.startOfTurnTimestamp
-                    }`
-                )
                 state.timeRemaining = state.endOfTurnTimestamp - state.startOfTurnTimestamp
             }
         },
         setStartOfTurnTimestamp: (state, action: PayloadAction<number>) => {
             state.startOfTurnTimestamp = action.payload
-            console.log(`setStartOfTurnTimestamp ${action.payload}`)
             if (state.endOfTurnTimestamp !== null) {
-                console.log(
-                    `setStartOfTurnTimestamp: Setting timeRemaining to ${
-                        state.endOfTurnTimestamp - state.startOfTurnTimestamp
-                    }`
-                )
                 state.timeRemaining = state.endOfTurnTimestamp - state.startOfTurnTimestamp
             }
         },
         tickTime: (state, action: PayloadAction<number>) => {
+            if (state.timeRemaining === null) return
             state.timeRemaining = state.timeRemaining! - action.payload
         },
         setMostRecentPlayerDrafted: (state, action: PayloadAction<mostRecentPlayerProps>) => {
@@ -131,11 +120,14 @@ export const leagueSlice = createSlice({
             state.leagueId = null
             state.leagueName = null
             state.tutorialMode = false
+            state.leagueLevel = "Pro"
             state.currentRound = null
             state.currentPickNumber = null
             state.currentDrafter = null
             state.queuedPlayers = []
             state.timeRemaining = null
+            state.endOfTurnTimestamp = null
+            state.startOfTurnTimestamp = null
             state.mostRecentPlayerDrafted = null
             state.leagueStatus = null
             state.autopick = false

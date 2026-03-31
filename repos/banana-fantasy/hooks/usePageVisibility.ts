@@ -3,6 +3,10 @@
 
 import { useState, useEffect } from "react"
 
+/**
+ * Mirrors `document.hidden` for the current tab only.
+ * Cross-tab coordination is handled separately via the localStorage heartbeat in `draft-room/page.tsx`.
+ */
 export default function usePageVisibility() {
     const [isHidden, setIsHidden] = useState<boolean>(
         typeof document !== "undefined" ? document.hidden : false

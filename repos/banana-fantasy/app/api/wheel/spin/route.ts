@@ -12,8 +12,15 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
 const USERS_COLLECTION = 'v2_users';
+const JWKS_CACHE_TTL_MS = 60 * 60 * 1000;
 
-let cachedKeys: Map<string, crypto.KeyObject> = new Map();
+const jwksCache: {
+  keys: Map<string, crypto.KeyObject>;
+  cachedAt: number;
+} = {
+  keys: new Map(),
+  cachedAt: 0,
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -26,22 +33,27 @@ function getPrivyAppId(): string {
 }
 
 async function getPrivyVerificationKey(kid: string): Promise<crypto.KeyObject> {
-  const cached = cachedKeys.get(kid);
+  const cacheExpired = jwksCache.cachedAt === 0 || (Date.now() - jwksCache.cachedAt) > JWKS_CACHE_TTL_MS;
+  const cached = !cacheExpired ? jwksCache.keys.get(kid) : undefined;
   if (cached) return cached;
+  await refreshPrivyVerificationKeys();
+  const key = jwksCache.keys.get(kid);
+  if (!key) throw new ApiError(401, 'Unknown signing key');
+  return key;
+}
 
+async function refreshPrivyVerificationKeys(): Promise<void> {
   const appId = getPrivyAppId();
   const res = await fetch(`https://auth.privy.io/api/v1/apps/${appId}/jwks.json`);
   if (!res.ok) throw new ApiError(500, 'Failed to fetch Privy JWKS');
   const jwks = await res.json() as { keys: Array<{ kid: string; kty: string; crv: string; x: string; y: string }> };
 
+  jwksCache.keys = new Map();
   for (const jwk of jwks.keys) {
     const key = crypto.createPublicKey({ key: jwk, format: 'jwk' });
-    cachedKeys.set(jwk.kid, key);
+    jwksCache.keys.set(jwk.kid, key);
   }
-
-  const key = cachedKeys.get(kid);
-  if (!key) throw new ApiError(401, 'Unknown signing key');
-  return key;
+  jwksCache.cachedAt = Date.now();
 }
 
 function base64UrlDecode(input: string): Buffer {
@@ -75,15 +87,35 @@ async function verifyPrivyJwt(token: string): Promise<string> {
   const kid = typeof header.kid === 'string' ? header.kid : '';
   if (!kid) throw new ApiError(401, 'Missing key ID in token header');
 
-  const key = await getPrivyVerificationKey(kid);
-  const verifier = crypto.createVerify('SHA256');
-  verifier.update(signingInput);
-  verifier.end();
+  const verifySignature = async (forceRefresh: boolean): Promise<boolean> => {
+    const key = forceRefresh
+      ? (await refreshPrivyVerificationKeys(), jwksCache.keys.get(kid))
+      : await getPrivyVerificationKey(kid);
 
-  const isValid = verifier.verify(
-    alg.startsWith('ES') ? { key, dsaEncoding: 'ieee-p1363' } : key,
-    signature,
-  );
+    if (!key) throw new ApiError(401, 'Unknown signing key');
+
+    const verifier = crypto.createVerify('SHA256');
+    verifier.update(signingInput);
+    verifier.end();
+
+    return verifier.verify(
+      alg.startsWith('ES') ? { key, dsaEncoding: 'ieee-p1363' } : key,
+      signature,
+    );
+  };
+
+  let isValid = false;
+  try {
+    isValid = await verifySignature(false);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401) {
+      throw error;
+    }
+  }
+
+  if (!isValid) {
+    isValid = await verifySignature(true);
+  }
 
   if (!isValid) throw new ApiError(401, 'Token signature verification failed');
 
@@ -91,14 +123,13 @@ async function verifyPrivyJwt(token: string): Promise<string> {
     throw new ApiError(401, 'Auth token expired');
   }
 
-  if (payload.aud) {
-    const aud = payload.aud;
-    const ok = Array.isArray(aud) ? aud.includes(appId) : aud === appId;
-    if (!ok) throw new ApiError(401, 'Invalid auth token');
-  }
+  const aud = payload.aud;
+  if (aud == null) throw new ApiError(401, 'Invalid auth token');
+  const audienceMatches = Array.isArray(aud) ? aud.includes(appId) : aud === appId;
+  if (!audienceMatches) throw new ApiError(401, 'Invalid auth token');
 
-  const expectedIssuer = process.env.PRIVY_JWT_ISSUER;
-  if (expectedIssuer && payload.iss && payload.iss !== expectedIssuer) {
+  const expectedIssuer = process.env.PRIVY_JWT_ISSUER?.trim();
+  if (expectedIssuer && payload.iss !== expectedIssuer) {
     throw new ApiError(401, 'Invalid auth token');
   }
 
@@ -119,28 +150,22 @@ export async function POST(req: Request) {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (!token) throw new ApiError(401, 'Missing authorization token');
 
-    // JWT proves authentication; userId from body matches frontend's user.id
-    await verifyPrivyJwt(token);
+    const authenticatedUserId = await verifyPrivyJwt(token);
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-    const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
-    if (!userId) throw new ApiError(400, 'Missing userId');
+    const bodyUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
+    if (!bodyUserId) throw new ApiError(400, 'Missing userId');
+    if (bodyUserId !== authenticatedUserId) throw new ApiError(403, 'Authenticated user does not match request userId');
+    const userId = authenticatedUserId;
 
     const db = getAdminFirestore();
-
-    // Check that user has spins remaining
-    const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
-    const userData = userDoc.data();
-    const spinsLeft = userData?.wheelSpins ?? 0;
-    if (spinsLeft <= 0) {
-      throw new ApiError(429, 'No spins remaining');
-    }
 
     const { segments, segmentAngle } = await getWheelConfig();
     const seed = generateSeed();
     const nonce = generateNonce();
 
-    // Staging: allow forcing a specific result for testing
-    const forceResult = typeof body.forceResult === 'string' ? body.forceResult : null;
+    const allowForcedResult = process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging';
+    const forceResult =
+      allowForcedResult && typeof body.forceResult === 'string' ? body.forceResult : null;
     let segment: typeof segments[number];
     let index: number;
 
@@ -172,33 +197,39 @@ export async function POST(req: Request) {
     };
     const timestamp = nowIso();
 
-    // Write spin record and update user balance atomically
-    const batch = db.batch();
-
-    batch.set(db.collection(WHEEL_SPINS_COLLECTION).doc(spinId), {
-      userId,
-      spinId,
-      result: segment.id,
-      prize,
-      timestamp,
-      seed,
-      nonce,
-    });
-
     const userRef = db.collection(USERS_COLLECTION).doc(userId);
-    const balanceUpdate: Record<string, FieldValue | number> = {
-      wheelSpins: FieldValue.increment(-1),
-    };
-    if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
-      balanceUpdate.freeDrafts = FieldValue.increment(segment.prizeValue);
-    } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
-      balanceUpdate.jackpotEntries = FieldValue.increment(1);
-    } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
-      balanceUpdate.hofEntries = FieldValue.increment(1);
-    }
-    batch.set(userRef, balanceUpdate, { merge: true });
+    const spinRef = db.collection(WHEEL_SPINS_COLLECTION).doc(spinId);
 
-    await batch.commit();
+    await db.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+      const userData = userDoc.data();
+      const spinsLeft = userData?.wheelSpins ?? 0;
+      if (spinsLeft <= 0) {
+        throw new ApiError(429, 'No spins remaining');
+      }
+
+      tx.set(spinRef, {
+        userId,
+        spinId,
+        result: segment.id,
+        prize,
+        timestamp,
+        seed,
+        nonce,
+      });
+
+      const balanceUpdate: Record<string, FieldValue | number> = {
+        wheelSpins: FieldValue.increment(-1),
+      };
+      if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
+        balanceUpdate.freeDrafts = FieldValue.increment(segment.prizeValue);
+      } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
+        balanceUpdate.jackpotEntries = FieldValue.increment(1);
+      } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
+        balanceUpdate.hofEntries = FieldValue.increment(1);
+      }
+      tx.set(userRef, balanceUpdate, { merge: true });
+    });
 
     // Auto-queue for Jackpot/HOF — happens server-side so it can't be interrupted
     if (segment.prizeType === 'custom' && (segment.prizeValue === 'jackpot' || segment.prizeValue === 'hof')) {

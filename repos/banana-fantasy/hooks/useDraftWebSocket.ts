@@ -287,6 +287,8 @@ export function useDraftWebSocket(options: UseDraftWebSocketOptions): UseDraftWe
         // If disconnected while tab was hidden, reconnect
         if (wsRef.current?.readyState !== WebSocket.OPEN && !intentionalCloseRef.current) {
           backoffRef.current = INITIAL_BACKOFF_MS;
+          // Cancel any pending reconnect before starting a new visible-tab reconnect.
+          clearTimers();
           connect();
         }
       }
@@ -317,7 +319,9 @@ export function useDraftWebSocket(options: UseDraftWebSocketOptions): UseDraftWe
 
   const forceReconnect = useCallback(() => {
     clearTimers();
+    intentionalCloseRef.current = true;
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+    intentionalCloseRef.current = false;
     setIsConnected(false);
     backoffRef.current = INITIAL_BACKOFF_MS;
     reconnectTimerRef.current = setTimeout(() => {

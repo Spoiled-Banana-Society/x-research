@@ -41,7 +41,14 @@ function isWheelSegment(value: unknown): value is WheelSegment {
 }
 
 function isValidSegments(segments: unknown): segments is WheelSegment[] {
-  return Array.isArray(segments) && segments.length > 0 && segments.every(isWheelSegment);
+  if (!Array.isArray(segments) || segments.length === 0 || !segments.every(isWheelSegment)) {
+    return false;
+  }
+
+  const sum = segments.reduce((s, seg) => s + seg.probability, 0);
+  if (Math.abs(sum - 1) > 0.001) return false;
+
+  return true;
 }
 
 export async function getWheelConfig(): Promise<WheelConfigResult> {

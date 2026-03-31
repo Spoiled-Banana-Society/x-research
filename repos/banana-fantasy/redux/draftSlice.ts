@@ -6,6 +6,7 @@ const initialState: draftSliceProps = {
     draftSummary: null,
     draftRosters: null,
     draftPlayerRankings: null,
+    liveDraftPicks: [],
     sortBy: SortState.ADP
 }
 
@@ -16,13 +17,13 @@ export const draftSlice = createSlice({
         setDraftInfo: (state, action: PayloadAction<DraftInfoProps>) => {
             state.draftInfo = action.payload
         },
-        setDraftSummary: (state, action) => {
+        setDraftSummary: (state, action: PayloadAction<draftSliceProps["draftSummary"]>) => {
             state.draftSummary = action.payload
         },
-        setDraftRosters: (state, action) => {
+        setDraftRosters: (state, action: PayloadAction<draftSliceProps["draftRosters"]>) => {
             state.draftRosters = action.payload
         },
-        setDraftRankings: (state, action) => {
+        setDraftRankings: (state, action: PayloadAction<draftSliceProps["draftPlayerRankings"]>) => {
             state.draftPlayerRankings = action.payload
         },
         clearDraft: (state) => {
@@ -31,7 +32,7 @@ export const draftSlice = createSlice({
             state.draftRosters = null
             state.draftPlayerRankings = null
         },
-        setDraftSort: (state, action) => {
+        setDraftSort: (state, action: PayloadAction<draftSliceProps["sortBy"]>) => {
             state.sortBy = action.payload
         }
     },
