@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
-import { createPurchase, verifyPurchase } from '@/lib/db';
+import { isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { getStagingApiUrl } from '@/lib/staging';
 
 export async function POST(req: Request) {
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     //    /owner/{wallet}/draftToken/mint endpoint with high numeric IDs instead.
     const goApiUrl = getStagingApiUrl();
     const baseId = Date.now();
+    const mintedTokens: number[] = [];
     for (let i = 0; i < quantity; i++) {
       const tokenId = baseId + i;
       const mintRes = await fetch(`${goApiUrl}/owner/${userId}/draftToken/mint`, {
@@ -32,16 +33,23 @@ export async function POST(req: Request) {
         const mintErr = await mintRes.text().catch(() => 'Unknown error');
         return jsonError(`Go API mint failed (token ${i + 1}/${quantity}): ${mintErr}`, 502);
       }
+      mintedTokens.push(tokenId);
     }
 
-    // 2. Create purchase record
-    const { purchase } = await createPurchase(userId, quantity, 'usdc');
+    // 2. Optionally create purchase record if Firestore is available
+    if (isFirestoreConfigured()) {
+      try {
+        const { createPurchase, verifyPurchase } = await import('@/lib/db');
+        const { purchase } = await createPurchase(userId, quantity, 'usdc');
+        const txHash = `staging-${Date.now()}`;
+        await verifyPurchase(purchase.id, txHash);
+      } catch (dbErr) {
+        // Firestore record is optional for staging mint — Go API mint is what matters
+        console.warn('staging-mint: Firestore record failed (non-fatal):', dbErr);
+      }
+    }
 
-    // 3. Verify immediately to trigger promo update
-    const txHash = `staging-${Date.now()}`;
-    const result = await verifyPurchase(purchase.id, txHash);
-
-    return json(result, 200);
+    return json({ success: true, minted: quantity, tokenIds: mintedTokens }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     console.error('staging-mint error:', err);
