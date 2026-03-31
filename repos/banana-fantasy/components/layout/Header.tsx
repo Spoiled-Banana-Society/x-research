@@ -33,7 +33,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
     ...(isAdminWallet ? [{ href: '/admin', label: 'Admin', tooltip: 'Admin dashboard', auth: true }] : []),
   ].filter((item) => !item.auth || isLoading || isLoggedIn);
 
-  const isActive = (href: string) => href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
+  const isActive = (href: string) => href === '/' ? pathname === '/' : pathname === href || (pathname ?? '').startsWith(href + '/');
 
   return (
     <header className="bg-bg-secondary/80 backdrop-blur-md border-b border-bg-tertiary sticky top-0 z-30">

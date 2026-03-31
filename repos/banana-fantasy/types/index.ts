@@ -222,7 +222,7 @@ export interface EligibilityStatus {
 }
 
 // Promo types
-export type PromoType = 'daily-drafts' | 'pick-10' | 'referral' | 'jackpot' | 'mint' | 'new-user' | 'buy-bonus' | 'tweet-engagement' | 'add-to-home-screen';
+export type PromoType = 'daily-drafts' | 'pick-10' | 'referral' | 'jackpot' | 'hof' | 'mint' | 'new-user' | 'buy-bonus' | 'tweet-engagement' | 'add-to-home-screen';
 
 export interface ReferralReward {
   milestone: string;

@@ -225,7 +225,7 @@ export function generateReelResults(): DraftType[] {
   // Ensure at least one non-pro symbol for visual interest
   if (results.every(r => r === 'pro')) {
     const randomIndex = Math.floor(Math.random() * 3);
-    results[randomIndex] = Math.random() < 0.17 ? 'jackpot' : 'hof';
+    (results as DraftType[])[randomIndex] = Math.random() < 0.17 ? 'jackpot' : 'hof';
   }
   return results;
 }

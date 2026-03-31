@@ -106,6 +106,7 @@ export function mapOwnerProfileToUser(walletAddress: string, owner: ApiOwnerProf
     wheelSpins: 0,
     jackpotEntries: 0,
     hofEntries: 0,
+    cardPurchaseCount: 0,
     isVerified: true,
     blueCheckEmail: typeof owner.blueCheckEmail === 'string' ? owner.blueCheckEmail : undefined,
     isBlueCheckVerified: blueCheckVerified,

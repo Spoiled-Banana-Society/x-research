@@ -23,15 +23,15 @@ import {
   setTutorialMode,
   setViewState,
 } from "@/redux/leagueSlice"
-import { PlayerDataProps, SortState, ViewState } from "@/utils/types/types"
+import { DraftRosterProps, PlayerDataProps, SortState, ViewState } from "@/utils/types/types"
 
 const MOCK_WALLET = "0xabc123def456"
 
 function mockPlayer(team: string, pos: string, adp: number, rank: number, bye: number) {
   return {
     playerId: `${team}-${pos}`,
-    ranking: { playerId: `${team}-${pos}`, rank },
-    stats: { playerId: `${team}-${pos}`, adp, byeWeek: bye, playersFromTeam: [] },
+    ranking: { playerId: `${team}-${pos}`, rank, score: 0 },
+    stats: { playerId: `${team}-${pos}`, averageScore: 0, highestScore: 0, top5Finishes: 0, adp, byeWeek: bye, playersFromTeam: [] },
     playerStateInfo: {
       playerId: `${team}-${pos}`,
       displayName: `${team}-${pos}`,
@@ -65,6 +65,7 @@ function mockSummaryItem(
     },
     pfpInfo: {
       imageUrl: "",
+      nftContract: "",
       displayName: owner === MOCK_WALLET ? "You" : `Team ${pickNum}`,
     },
   }
@@ -184,7 +185,7 @@ export default function TestTutorialPage() {
       draftOrder: [],
     }))
     dispatch(setDraftSummary(summary))
-    dispatch(setDraftRosters(rosters))
+    dispatch(setDraftRosters(rosters as unknown as DraftRosterProps[]))
     dispatch(setDraftRankings(rankings))
     dispatch(setDraftSort(SortState.ADP))
   }, [dispatch, activeWallet])

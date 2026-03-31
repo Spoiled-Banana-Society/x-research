@@ -24,6 +24,7 @@ import {
   setDraftRosters,
   setDraftSummary,
 } from '@/redux/draftSlice';
+import type { DraftRosterProps } from '@/utils/types/types';
 
 type SummaryLike = {
   playerInfo: {
@@ -160,7 +161,7 @@ export function useDraftRoomBridge(draftId: string | null) {
     dispatch(setDraftSummary(summary));
 
     const normalizedRosters = normalizeRosters(draftRoom.draftRostersRaw);
-    if (normalizedRosters) dispatch(setDraftRosters(normalizedRosters));
+    if (normalizedRosters) dispatch(setDraftRosters(normalizedRosters as DraftRosterProps[]));
 
     if (Array.isArray(draftRoom.draftRankingsRaw)) {
       dispatch(setDraftRankings(draftRoom.draftRankingsRaw));
