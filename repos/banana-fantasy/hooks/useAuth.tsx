@@ -612,9 +612,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       <MobileLoginModal
         isOpen={showMobileLoginModal}
         onClose={() => setShowMobileLoginModal(false)}
-        onEmailLogin={() => privy.login({ loginMethods: ['email'] })}
-        onGoogleLogin={() => privy.login({ loginMethods: ['google'] })}
-        onTwitterLogin={() => privy.login({ loginMethods: ['twitter'] })}
       />
     </AuthContext.Provider>
   );
