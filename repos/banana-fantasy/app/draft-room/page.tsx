@@ -49,15 +49,15 @@ function correctSlowDraftTimestamp(
 
 function DraftRoomContent() {
   const searchParams = useSearchParams();
-  const contestName = searchParams.get('name') || 'Draft Room';
-  const initialPlayers = parseInt(searchParams.get('players') || '1', 10);
-  const urlDraftId = searchParams.get('draftId') || searchParams.get('id') || '';
-  const walletParam = searchParams.get('wallet') || '';
-  const modeParam = searchParams.get('mode') as DraftMode | null;
-  const speedParam = searchParams.get('speed') as 'fast' | 'slow' | null;
-  const passTypeParam = searchParams.get('passType') as 'paid' | 'free' | null;
+  const contestName = searchParams?.get('name') || 'Draft Room';
+  const initialPlayers = parseInt(searchParams?.get('players') || '1', 10);
+  const urlDraftId = searchParams?.get('draftId') || searchParams?.get('id') || '';
+  const walletParam = searchParams?.get('wallet') || '';
+  const modeParam = searchParams?.get('mode') as DraftMode | null;
+  const speedParam = searchParams?.get('speed') as 'fast' | 'slow' | null;
+  const passTypeParam = searchParams?.get('passType') as 'paid' | 'free' | null;
   const isPaidDraft = passTypeParam !== 'free'; // Default to paid if not specified
-  const specialTypeParam = searchParams.get('specialType') as 'jackpot' | 'hof' | null; // Forces slot machine result for special drafts
+  const specialTypeParam = searchParams?.get('specialType') as 'jackpot' | 'hof' | null; // Forces slot machine result for special drafts
 
   // draftId is stateful — starts empty when navigating before joinDraft completes
   const [draftId, setDraftId] = useState(urlDraftId);
@@ -1171,7 +1171,7 @@ function DraftRoomContent() {
                       ? msg.payload.endOfTurnTimestamp - msg.payload.startOfTurnTimestamp
                       : null,
                     speedParam,
-                  ),
+                  ) ?? msg.payload.endOfTurnTimestamp,
                 });
                 break;
               }
@@ -1239,7 +1239,6 @@ function DraftRoomContent() {
   useEffect(() => {
     if (!draftId) return;
     if (draftStore.getDraft(draftId)) return; // already exists
-    const speedParam = searchParams.get('speed') as 'fast' | 'slow' | null;
     draftStore.addDraft({
       id: draftId,
       contestName,

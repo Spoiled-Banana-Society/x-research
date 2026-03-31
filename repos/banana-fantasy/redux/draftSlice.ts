@@ -31,6 +31,8 @@ export const draftSlice = createSlice({
             state.draftSummary = null
             state.draftRosters = null
             state.draftPlayerRankings = null
+            state.liveDraftPicks = []
+            state.sortBy = SortState.ADP
         },
         setDraftSort: (state, action: PayloadAction<draftSliceProps["sortBy"]>) => {
             state.sortBy = action.payload
