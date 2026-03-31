@@ -9,6 +9,7 @@ export const mockUser: User = {
   nflTeam: 'Chiefs',
   xHandle: '@BananaKing99',
   draftPasses: 0,
+  usdcBalance: 0,
   freeDrafts: 0,
   wheelSpins: 0,
   jackpotEntries: 0,
