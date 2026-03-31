@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { useLoginWithOAuth, useLoginWithEmail } from '@privy-io/react-auth';
-import { useWalletConnectLogin } from '@/hooks/useWalletConnectLogin';
+import { useLoginWithOAuth, useLoginWithEmail, usePrivy } from '@privy-io/react-auth';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
@@ -11,12 +10,12 @@ interface MobileLoginModalProps {
 }
 
 const WALLETS = [
-  { id: 'metamask', name: 'MetaMask' },
-  { id: 'coinbase', name: 'Coinbase Wallet' },
+  { id: 'metamask', name: 'MetaMask', privyId: 'metamask' },
+  { id: 'coinbase', name: 'Coinbase Wallet', privyId: 'coinbase_wallet' },
 ];
 
 export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
-  const { connectWithWallet, status: walletStatus, error: walletError, reset: resetWallet } = useWalletConnectLogin();
+  const privy = usePrivy();
   const { initOAuth } = useLoginWithOAuth();
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
 
@@ -27,12 +26,10 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
   if (!isOpen) return null;
 
-  const isWalletConnecting = walletStatus === 'connecting' || walletStatus === 'approving' || walletStatus === 'signing';
   const isEmailSending = emailState.status === 'sending-code';
   const isOtpSubmitting = emailState.status === 'submitting-code';
 
   const handleClose = () => {
-    resetWallet();
     setView('main');
     setEmail('');
     setOtpCode('');
@@ -105,7 +102,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         {/* Content */}
         <div className="px-5 pb-3">
           {/* Main view */}
-          {view === 'main' && !isWalletConnecting && !walletError && (
+          {view === 'main' && (
             <div className="space-y-2">
               {/* Email */}
               <button
@@ -144,11 +141,14 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
-              {/* Wallets */}
+              {/* Wallets — close our modal, let Privy handle the WC flow */}
               {WALLETS.map(wallet => (
                 <button
                   key={wallet.id}
-                  onClick={() => connectWithWallet(wallet.id)}
+                  onClick={() => {
+                    onClose();
+                    privy.connectWallet({ walletList: [wallet.privyId as any] });
+                  }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
                 >
                   <Image
@@ -214,41 +214,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 className="w-full py-2 text-[#7b8491] text-[13px]"
               >
                 Resend code
-              </button>
-            </div>
-          )}
-
-          {/* Wallet connecting */}
-          {isWalletConnecting && (
-            <div className="py-10 text-center">
-              <div className="w-12 h-12 mx-auto mb-4 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
-              <p className="text-white font-medium text-[15px] mb-1">
-                {walletStatus === 'connecting' && 'Initializing...'}
-                {walletStatus === 'approving' && 'Approve in your wallet'}
-                {walletStatus === 'signing' && 'Signing in...'}
-              </p>
-              <p className="text-[#7b8491] text-[13px]">
-                {walletStatus === 'approving' && 'Check your wallet app'}
-                {walletStatus === 'signing' && 'Almost there'}
-              </p>
-            </div>
-          )}
-
-          {/* Wallet error */}
-          {walletError && (
-            <div className="py-8 text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center bg-red-500/10">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </div>
-              <p className="text-white font-medium text-[15px] mb-1">Connection failed</p>
-              <p className="text-[#7b8491] text-[13px] mb-4">{walletError}</p>
-              <button
-                onClick={resetWallet}
-                className="px-6 py-2 rounded-lg text-[13px] font-medium bg-[#f59e0b] text-black"
-              >
-                Try again
               </button>
             </div>
           )}
