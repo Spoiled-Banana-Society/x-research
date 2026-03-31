@@ -51,12 +51,16 @@ export function useSWRLike<T>(
 
   const isFirstLoadRef = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+  const fallbackRef = useRef(options.fallbackData);
+  fallbackRef.current = options.fallbackData;
 
   const runFetch = useCallback(async () => {
     if (!enabled || !key) {
       controllerRef.current?.abort();
       controllerRef.current = null;
-      setData(options.fallbackData);
+      setData(fallbackRef.current);
       setError(null);
       setIsValidating(false);
       return;
@@ -68,15 +72,15 @@ export function useSWRLike<T>(
 
     setIsValidating(true);
     try {
-      const next = await fetcher({ signal: ctrl.signal });
+      const next = await fetcherRef.current({ signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       cache.set(key, { data: next, error: null, updatedAt: Date.now() });
       setData(next);
       setError(null);
     } catch (err) {
       if (ctrl.signal.aborted) return;
-      cache.set(key, { data: options.fallbackData, error: err, updatedAt: Date.now() });
-      setData(options.fallbackData);
+      cache.set(key, { data: fallbackRef.current, error: err, updatedAt: Date.now() });
+      setData(fallbackRef.current);
       setError(err);
     } finally {
       if (controllerRef.current === ctrl) {
@@ -84,7 +88,7 @@ export function useSWRLike<T>(
         setIsValidating(false);
       }
     }
-  }, [enabled, key, fetcher, options.fallbackData]);
+  }, [enabled, key]);
 
   useEffect(() => {
     void runFetch();
@@ -93,7 +97,6 @@ export function useSWRLike<T>(
       controllerRef.current?.abort();
       controllerRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled, runFetch]);
 
   const isLoading = useMemo(() => {
