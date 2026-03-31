@@ -5,6 +5,13 @@ import type { Promo } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
+function ensureStagingOnly() {
+  if (process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
+  return null;
+}
+
 /**
  * GET /api/debug/test-referral?action=track&code=XXX&friendId=YYY&friendName=ZZZ
  * GET /api/debug/test-referral?action=verify&friendId=YYY
@@ -13,6 +20,9 @@ export const dynamic = 'force-dynamic';
  * STAGING ONLY — delete before prod.
  */
 export async function GET(req: NextRequest) {
+  const stagingOnlyResponse = ensureStagingOnly();
+  if (stagingOnlyResponse) return stagingOnlyResponse;
+
   const action = req.nextUrl.searchParams.get('action');
   const code = req.nextUrl.searchParams.get('code');
   const friendId = req.nextUrl.searchParams.get('friendId') || 'test-friend-001';

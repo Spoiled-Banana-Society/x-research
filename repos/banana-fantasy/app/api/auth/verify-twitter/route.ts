@@ -2,9 +2,20 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 export const dynamic = 'force-dynamic';
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
+import { getPrivyUser } from '@/lib/auth';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 
 const TWITTER_LINKS_COLLECTION = 'v2_twitter_links';
+
+async function requireAuthenticatedWallet(req: Request, walletAddress: string) {
+  const { walletAddress: authenticatedWalletAddress } = await getPrivyUser(req);
+  if (!authenticatedWalletAddress) {
+    throw new ApiError(401, 'Authenticated wallet address missing from token');
+  }
+  if (authenticatedWalletAddress !== walletAddress) {
+    throw new ApiError(403, 'Authenticated wallet does not match request walletAddress');
+  }
+}
 
 export async function POST(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.general);
@@ -19,6 +30,7 @@ export async function POST(req: Request) {
     const twitterId = requireString(body.twitterId, 'twitterId');
     const twitterHandle = requireString(body.twitterHandle, 'twitterHandle');
     const walletAddress = requireString(body.walletAddress, 'walletAddress').toLowerCase();
+    await requireAuthenticatedWallet(req, walletAddress);
 
     const db = getAdminFirestore();
     const linkRef = db.collection(TWITTER_LINKS_COLLECTION).doc(twitterId);
@@ -126,6 +138,7 @@ export async function PATCH(req: Request) {
 
     const body = await parseBody(req);
     const walletAddress = requireString(body.walletAddress, 'walletAddress').toLowerCase();
+    await requireAuthenticatedWallet(req, walletAddress);
 
     const db = getAdminFirestore();
     const snapshot = await db

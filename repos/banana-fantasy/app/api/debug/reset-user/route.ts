@@ -3,6 +3,13 @@ import { getAdminFirestore } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
+function ensureStagingOnly() {
+  if (process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
+  return null;
+}
+
 async function resetUser(userId: string) {
   try {
     const db = getAdminFirestore();
@@ -40,6 +47,9 @@ async function resetUser(userId: string) {
  * Also lists all v2_users doc IDs if no userId provided.
  */
 export async function GET(req: NextRequest) {
+  const stagingOnlyResponse = ensureStagingOnly();
+  if (stagingOnlyResponse) return stagingOnlyResponse;
+
   const userId = req.nextUrl.searchParams.get('userId');
   if (!userId) {
     const db = getAdminFirestore();
@@ -52,6 +62,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const stagingOnlyResponse = ensureStagingOnly();
+  if (stagingOnlyResponse) return stagingOnlyResponse;
+
   const { userId } = await req.json();
   if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
   const result = await resetUser(userId);

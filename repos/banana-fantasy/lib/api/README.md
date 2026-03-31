@@ -1,14 +1,8 @@
 # SBS Frontend API Service Layer
 
-This folder contains a thin, typed service layer for the SBS Drafts backend(s).
+This folder contains the typed frontend service layer used to call the SBS drafting backend and related realtime services.
 
-It is **not wired into the UI yet** (the UI still uses `lib/mockData.ts`). The purpose of these modules is to provide a consistent place to call real APIs when we start replacing mock data.
-
-## How to switch from mock data → real APIs
-
-1. Ensure `.env.local` is set (copy from `.env.example`).
-2. In components/pages that currently import mock data (ex: `mockContests`, `mockDraftRooms`, `mockUser`), replace those usages with calls to these services.
-3. Prefer adding *hooks* (e.g. `useOwner`, `useDraftRoom`, `useLeaderboard`) that wrap these services and expose `{ data, isLoading, error }` for React UI state.
+It is in active use. The app talks to real APIs from the UI, with staging traffic pointed at the staging backend and draft server helpers in `lib/staging.ts`.
 
 Example (owner profile):
 
@@ -27,13 +21,19 @@ const room = await joinDraft(walletAddress, 'fast', 1);
 // room is mapped to the UI DraftRoom type (best-effort)
 ```
 
+## Runtime behavior
+
+- `client.ts` attaches JSON headers and can attach `Authorization: Bearer <token>` for authenticated requests.
+- Base URLs come from environment variables and staging helpers rather than local mock files.
+- The app can override staging API and WebSocket URLs at runtime for tunnel-based testing.
+
 ## Modules
 
 ### `client.ts`
 Fetch-based HTTP client:
 - JSON serialization
 - consistent `ApiError`
-- optional `Authorization: Bearer <token>` support (future Web3Auth integration)
+- optional `Authorization: Bearer <token>` support for Privy-authenticated routes
 
 ### `owner.ts`
 Owner endpoints:
@@ -74,7 +74,7 @@ Firebase Realtime Database helpers:
 
 ## Environment variables
 
-All URLs/keys are sourced from **public** Next.js env vars (must be prefixed with `NEXT_PUBLIC_`).
+All URLs/keys are sourced from public Next.js env vars or the staging helpers in `lib/staging.ts`.
 
 Required:
 - `NEXT_PUBLIC_DRAFTS_API_URL`
@@ -92,15 +92,8 @@ Firebase (for realtime player counts):
 
 See root `.env.example` for the full list.
 
-## Backend gaps / not yet implemented
+## Backend integration status
 
-The current public drafts APIs cover drafting + leaderboards. These frontend features still rely on mock data because there are **no documented endpoints yet** for:
-
-- Promos / referrals / Pick-10 tracking
-- Banana wheel spins / prize claiming
-- Marketplace / trading
-- Contest listing metadata (the home contest cards)
-- Eligibility / W9 workflows
-- Exposure dashboards
-
-When those endpoints become available, add new modules under `lib/api/` (e.g. `promos.ts`, `wheel.ts`, `marketplace.ts`).
+- The UI is already integrated with live API flows for drafting, owner/profile data, standings, and websocket-driven draft state.
+- Staging runs against the real staging backend by default, including runtime overrides for temporary API and WebSocket endpoints.
+- Some product areas still call app-local API routes or other modules directly, so `lib/api/` is one integration layer, not the entire data-access surface.
