@@ -8,6 +8,7 @@
 
 import { normalizeWalletAddress } from './client';
 import { getDraftServerUrl } from '@/lib/staging';
+import { logger } from '@/lib/logger';
 
 export type DraftWsEventType =
   | 'countdown_update'
@@ -89,7 +90,7 @@ export class DraftWebSocketClient {
       debug: options.debug ?? false,
     };
 
-    console.log('[DraftWS] constructor:', {
+    logger.debug('[DraftWS] constructor:', {
       serverUrl: this.opts.serverUrl,
       walletAddress: this.opts.walletAddress?.slice(0, 10) + '...',
       draftId: this.opts.draftId,
@@ -181,7 +182,7 @@ export class DraftWebSocketClient {
   private async openSocket(): Promise<void> {
     const url = buildWsUrl(this.opts.serverUrl, this.opts.walletAddress, this.opts.draftId);
 
-    if (this.opts.debug) console.log('[DraftWS] connecting', url);
+    if (this.opts.debug) logger.debug('[DraftWS] connecting', url);
 
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url);
@@ -204,12 +205,12 @@ export class DraftWebSocketClient {
       ws.onopen = () => {
         didOpen = true;
         this.reconnectAttempt = 0;
-        if (this.opts.debug) console.log('[DraftWS] open');
+        if (this.opts.debug) logger.debug('[DraftWS] open');
         resolveOnce();
       };
 
       ws.onerror = (evt) => {
-        if (this.opts.debug) console.log('[DraftWS] error', evt);
+        if (this.opts.debug) logger.debug('[DraftWS] error', evt);
         // Let close decide whether this was an initial connection failure or a post-open drop.
         if (!didOpen) {
           rejectOnce(new Error('WebSocket connection error'));
@@ -248,7 +249,7 @@ export class DraftWebSocketClient {
       };
 
       ws.onclose = async (event) => {
-        if (this.opts.debug) console.log('[DraftWS] close', event.code, event.reason);
+        if (this.opts.debug) logger.debug('[DraftWS] close', event.code, event.reason);
         if (this.ws === ws) {
           this.ws = null;
         }
@@ -272,7 +273,7 @@ export class DraftWebSocketClient {
       if (this.reconnectAttempt > this.opts.maxRetries) return;
 
       const delay = computeBackoff(this.reconnectAttempt, this.opts.baseBackoffMs, this.opts.maxBackoffMs);
-      if (this.opts.debug) console.log(`[DraftWS] reconnect attempt ${this.reconnectAttempt} in ${delay}ms`);
+      if (this.opts.debug) logger.debug(`[DraftWS] reconnect attempt ${this.reconnectAttempt} in ${delay}ms`);
       await sleep(delay);
 
       if (!this.shouldReconnect) return;
@@ -281,7 +282,7 @@ export class DraftWebSocketClient {
         await this.openSocket();
         return;
       } catch (error) {
-        if (this.opts.debug) console.log('[DraftWS] reconnect failed', error);
+        if (this.opts.debug) logger.debug('[DraftWS] reconnect failed', error);
         // Continue looping until reconnect succeeds or reconnecting is disabled.
       }
     }

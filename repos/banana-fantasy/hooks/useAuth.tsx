@@ -6,6 +6,7 @@ import { User } from '@/types';
 import { getOwnerUser, getOwnerDraftTokens, updateOwnerDisplayName, updateOwnerPfpImage } from '@/lib/api/owner';
 import { ApiError as ClientApiError } from '@/lib/api/client';
 import { MobileLoginModal } from '@/components/modals/MobileLoginModal';
+import { logger } from '@/lib/logger';
 
 const USER_PROFILE_KEY = 'banana-fantasy-user-profile';
 const USER_BALANCE_KEY = 'banana-fantasy-user-balance';
@@ -255,19 +256,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (a: { type: string }) => a.type === 'wallet'
       );
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
-        console.log('[SBS Auth] Wallet accounts:', JSON.stringify(walletAccounts));
-        console.log('[SBS Auth] All linked accounts types:', privy.user.linkedAccounts?.map((a: { type: string; walletClientType?: string; walletClient?: string }) => `${a.type}/${a.walletClientType || a.walletClient || 'none'}`));
+        logger.debug('[SBS Auth] Wallet accounts:', JSON.stringify(walletAccounts));
+        logger.debug('[SBS Auth] All linked accounts types:', privy.user.linkedAccounts?.map((a: { type: string; walletClientType?: string; walletClient?: string }) => `${a.type}/${a.walletClientType || a.walletClient || 'none'}`));
       }
       const hasExternalWallet = privy.user.linkedAccounts?.some(
         (a: { type: string; walletClientType?: string; walletClient?: string }) =>
           a.type === 'wallet' && a.walletClientType !== 'privy' && a.walletClient !== 'privy'
       );
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
-        console.log('[SBS Auth] hasExternalWallet:', hasExternalWallet);
+        logger.debug('[SBS Auth] hasExternalWallet:', hasExternalWallet);
       }
       const loginMethod: 'wallet' | 'social' = hasExternalWallet ? 'wallet' : 'social';
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
-        console.log('[SBS Auth] loginMethod:', loginMethod);
+        logger.debug('[SBS Auth] loginMethod:', loginMethod);
       }
 
       // Try to fetch real SBS profile from backend

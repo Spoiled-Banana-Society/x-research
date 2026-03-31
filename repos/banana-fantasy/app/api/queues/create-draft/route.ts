@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString, requireNumber } from '@/lib/api/routeUtils';
 import { updateQueueRoundDraftId, fillQueueRoundWithBots } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 const STAGING_API_URL = 'https://sbs-drafts-api-staging-652484219017.us-central1.run.app';
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
         if (checkRes.ok) {
           const info = await checkRes.json();
           if (info.draftOrder?.length >= 10) {
-            console.log('[create-draft] Reusing existing draftId:', existingRound.draftId);
+            logger.debug('[create-draft] Reusing existing draftId:', existingRound.draftId);
             return json({ draftId: String(existingRound.draftId) }, 200);
           }
         }
@@ -79,13 +80,13 @@ export async function POST(req: Request) {
     const updatedQueues = await getQS();
     const updatedRound = updatedQueues[queueType]?.rounds?.find((r: { roundId: number }) => r.roundId === roundId);
     const actualDraftId = updatedRound?.draftId || draftId;
-    console.log('[create-draft] JoinLeagues returned:', draftId, '| Queue stored:', actualDraftId);
+    logger.debug('[create-draft] JoinLeagues returned:', draftId, '| Queue stored:', actualDraftId);
 
     // 4. Fill with 9 bots on Go API (use the actual stored draftId)
     const fillRes = await fetch(`${STAGING_API_URL}/staging/fill-bots/slow?count=9&leagueId=${actualDraftId}`, {
       method: 'POST',
     }).catch(() => null);
-    console.log('[create-draft] fill-bots result:', fillRes?.status, fillRes?.ok);
+    logger.debug('[create-draft] fill-bots result:', fillRes?.status, fillRes?.ok);
 
     // 5. Wait for draft state to be created (fill-bots triggers CreateLeagueDraftStateUponFilling)
     // Give the Go backend time to process before polling
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
           const info = await infoRes.json();
           if (info.draftOrder && info.draftOrder.length >= 10) {
             stateReady = true;
-            console.log('[create-draft] Draft state ready after', attempt + 1, 'attempts');
+            logger.debug('[create-draft] Draft state ready after', attempt + 1, 'attempts');
             break;
           }
         }

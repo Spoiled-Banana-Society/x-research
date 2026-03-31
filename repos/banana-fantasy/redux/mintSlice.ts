@@ -1,11 +1,11 @@
 import { createSlice } from "@reduxjs/toolkit"
 import { mintProps } from "../utils/types/types"
-import { env } from "@/environment"
+import { isStagingMode } from "@/lib/staging"
 
 // TODO: Replace price in production
 const initialState: mintProps = {
     count: 1,
-    price: env === 'dev' ? 0.0001 : 0.01,
+    price: isStagingMode() ? 0.0001 : 0.01,
 }
 
 export const mintSlice = createSlice({

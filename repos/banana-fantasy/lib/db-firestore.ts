@@ -4,6 +4,7 @@ import { getAdminFirestore } from '@/lib/firebaseAdmin';
 import { API_CONFIG, getUsdcPaymentAddressOrThrow } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { seedDb } from '@/lib/api/seed';
+import { logger } from '@/lib/logger';
 import type {
   CompletedDraft,
   Contest,
@@ -989,11 +990,11 @@ export async function resetQueue(type: 'jackpot' | 'hof'): Promise<void> {
 // TODO: implement real promo tracking logic once backend is ready.
 
 export async function recordDraftCompletion(userId: string, draftId: string): Promise<Promo | null> {
-  console.log(`[db] recordDraftCompletion stub: userId=${userId}, draftId=${draftId}`);
+  logger.debug(`[db] recordDraftCompletion stub: userId=${userId}, draftId=${draftId}`);
   return null;
 }
 
 export async function recordPick10(userId: string, draftId: string, _draftName: string): Promise<Promo | null> {
-  console.log(`[db] recordPick10 stub: userId=${userId}, draftId=${draftId}`);
+  logger.debug(`[db] recordPick10 stub: userId=${userId}, draftId=${draftId}`);
   return null;
 }

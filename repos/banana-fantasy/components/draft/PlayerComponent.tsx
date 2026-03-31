@@ -15,6 +15,7 @@ import { MdAudiotrack } from "react-icons/md"
 import { useAudioYourTurn } from "@/hooks/useAudioYourTurn"
 import { PlayerDataProps, SummaryProps } from "@/utils/types/types"
 import { setDraftRosters } from "@/redux/draftSlice"
+import { logger } from '@/lib/logger';
 
 type PlayerComponentProps = {
     availablePlayers: PlayerDataProps[]
@@ -127,7 +128,7 @@ const PlayerComponent: React.FC<PlayerComponentProps> = (props) => {
         if (tutorialMode) return
         // TODO: Update 3 to 30 in prod
         if (idleCount >= 2 && canDraft && timeRemaining! < 27) {
-            console.log("init auotpick")
+            logger.debug("init auotpick")
             // @ts-expect-error roster map value typing
             const myRoster = Object.entries(roster[walletAddress!]).map(([key, value]) => ({
                 key,
@@ -135,7 +136,7 @@ const PlayerComponent: React.FC<PlayerComponentProps> = (props) => {
                 length: value.length,
             }))
             if (queuedPlayers.length > 0) {
-                console.log("autopick: choosing from queued players")
+                logger.debug("autopick: choosing from queued players")
                 makePick({
                     playerId: queuedPlayers[0].playerId,
                     displayName: queuedPlayers[0].displayName,
@@ -144,42 +145,42 @@ const PlayerComponent: React.FC<PlayerComponentProps> = (props) => {
                 })
                 // if within the first 12 rounds, then draft highest ADP players
             } else if (currentRound! < 12) {
-                console.log("currentRound < 12")
+                logger.debug("currentRound < 12")
                 submitPick(bestADPPlayers[0])
             } else {
                 if (myRoster.some((item) => item.key === "RB" && item.length < 1)) {
-                    console.log("choosing rb")
+                    logger.debug("choosing rb")
                     const bestAvailable = availablePlayers.find(
                         (position) => position.stats.playerId.indexOf("-RB") >= 1
                     )
                     submitPick(bestAvailable)
                 } else if (myRoster.some((item) => item.key === "WR" && item.length < 1)) {
-                    console.log("choosing wr")
+                    logger.debug("choosing wr")
                     const bestAvailable = availablePlayers.find(
                         (position) => position.stats.playerId.indexOf("-WR") >= 1
                     )
                     submitPick(bestAvailable)
                 } else if (myRoster.some((item) => item.key === "QB" && item.length < 1)) {
-                    console.log("choosing qb")
+                    logger.debug("choosing qb")
                     const bestAvailable = availablePlayers.find(
                         (position) => position.stats.playerId.indexOf("-QB") >= 1
                     )
                     submitPick(bestAvailable)
                 } else if (myRoster.some((item) => item.key === "TE" && item.length < 1)) {
-                    console.log("choosing te")
+                    logger.debug("choosing te")
                     const bestAvailable = availablePlayers.find(
                         (position) => position.stats.playerId.indexOf("-TE") >= 1
                     )
                     submitPick(bestAvailable)
                 } else if (myRoster.some((item) => item.key === "DST" && item.length < 1)) {
-                    console.log("choosing dst")
+                    logger.debug("choosing dst")
                     const bestAvailable = availablePlayers.find(
                         (position) => position.stats.playerId.indexOf("-DST") >= 1
                     )
                     submitPick(bestAvailable)
                     // if all min positions are filled, then go back to highest adp
                 } else {
-                    console.log("choosing whomever")
+                    logger.debug("choosing whomever")
                     submitPick(bestADPPlayers[0])
                 }
             }

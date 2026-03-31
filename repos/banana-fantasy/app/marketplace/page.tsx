@@ -12,6 +12,7 @@ import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
 import type { MarketplaceTeam } from '@/lib/opensea';
 import { isDraftingOpen } from '@/lib/draftTypes';
+import { logger } from '@/lib/logger';
 
 function CardSkeleton() {
   return (
@@ -415,7 +416,7 @@ export default function MarketplacePage() {
     );
 
     const txHash = (receipt as Record<string, unknown>).transactionHash ?? (receipt as Record<string, unknown>).hash;
-    console.log('[Marketplace] Buy tx:', txHash);
+    logger.debug('[Marketplace] Buy tx:', txHash);
 
     if (selectedTeam.ownerAddress) {
       notifySeller({
@@ -607,7 +608,7 @@ export default function MarketplacePage() {
           { to: BBB4_CONTRACT as `0x${string}`, data: approvalData as `0x${string}`, chainId: 8453 },
           { sponsor: true, uiOptions: { description: 'Approve marketplace to list your NFTs — no cost to you, fees covered by SBS' } },
         );
-        console.log('[Marketplace] Approval tx:', receipt.hash);
+        logger.debug('[Marketplace] Approval tx:', receipt.hash);
       }
 
       const provider = new ethers.BrowserProvider(ethereum);
@@ -618,7 +619,7 @@ export default function MarketplacePage() {
         provider,
       );
 
-      console.log('[Marketplace] Listed with orderHash:', result.orderHash);
+      logger.debug('[Marketplace] Listed with orderHash:', result.orderHash);
 
       logActivity({
         type: 'list',
@@ -674,7 +675,7 @@ export default function MarketplacePage() {
         { sponsor: true, uiOptions: { description: 'Cancel your listing — fees covered by SBS' } },
       );
 
-      console.log('[Marketplace] Cancelled listing for token:', team.tokenId);
+      logger.debug('[Marketplace] Cancelled listing for token:', team.tokenId);
 
       logActivity({
         type: 'cancel',

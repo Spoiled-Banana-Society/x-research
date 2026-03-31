@@ -7,6 +7,7 @@ import DraftItemComponent from "./DraftItemComponent"
 import { Draft, Queue } from "@/utils/api"
 import { setDraftRankings, setDraftSort } from "@/redux/draftSlice"
 import { setQueue } from "@/redux/leagueSlice"
+import { logger } from '@/lib/logger';
 
 type DraftComponentProps = {
     availablePlayers: PlayerDataProps[]
@@ -131,7 +132,7 @@ const DraftComponent: React.FC<DraftComponentProps> = ({ makePick, ..._props }) 
                     ...filteredAndSortedArray,
                     ...players.filter((player) => player.stats.playerId.includes(position)),
                 ]
-                console.log(filteredAndSortedArray)
+                logger.debug(filteredAndSortedArray)
             })
             return filteredAndSortedArray.sort(customSort)
         }

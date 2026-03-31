@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/notifications/subscribe
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     // TODO: Store in Firestore — notificationSubscriptions/{walletAddress}
     // For now, log subscription for backend wiring
-    console.log(`[notifications/subscribe] wallet=${walletAddress} playerId=${playerId}`);
+    logger.debug(`[notifications/subscribe] wallet=${walletAddress} playerId=${playerId}`);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

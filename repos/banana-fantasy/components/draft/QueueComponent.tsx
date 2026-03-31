@@ -6,6 +6,7 @@ import { DragDropContext, Draggable, Droppable, type DropResult } from "react-be
 import QueueItemComponent from "./QueueItemComponent"
 import { PlayerDataProps } from "@/utils/types/types"
 import { Queue } from "@/utils/api"
+import { logger } from '@/lib/logger';
 
 type DraftQueueComponentProps = {
     availablePlayers: PlayerDataProps[],
@@ -44,7 +45,7 @@ const QueueComponent: React.FC<DraftQueueComponentProps> = (props) => {
         return undefined
     }
 
-    console.log("queuedPlayers", queuedPlayers)
+    logger.debug("queuedPlayers", queuedPlayers)
 
     return (
         <div>

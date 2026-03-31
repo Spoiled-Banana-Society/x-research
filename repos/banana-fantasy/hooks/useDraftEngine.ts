@@ -10,6 +10,7 @@ import {
 } from '@/lib/draftRoomConstants';
 import type { PlayerData, DraftPick, PositionRoster } from '@/lib/draftRoomConstants';
 import type { RealTimeDraftInfo, LastPickInfo } from '@/hooks/useRealTimeDraftInfo';
+import { logger } from '@/lib/logger';
 
 export type DraftPlayer = typeof DRAFT_PLAYERS[number];
 export type DraftMode = 'local' | 'live';
@@ -495,9 +496,9 @@ export function useDraftEngine(mode: DraftMode = 'local') {
         consecutiveTimeoutsRef.current = 0;
       } else {
         consecutiveTimeoutsRef.current += 1;
-        console.log('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
+        logger.debug('[Airplane] Consecutive timeouts:', consecutiveTimeoutsRef.current);
         if (consecutiveTimeoutsRef.current >= 2) {
-          console.log('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
+          logger.debug('[Airplane] 2 consecutive server auto-picks — enabling airplane mode');
           setAirplaneMode(true);
         }
       }
@@ -512,7 +513,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   const handleNewPick = useCallback((payload: ServerNewPickPayload) => {
     // Go server sends flat PlayerInfo: { playerId, displayName, team, position, ownerAddress, pickNum, round }
     const pickData = payload;
-    console.log('[handleNewPick] Received:', pickData.playerId, 'pick#', pickData.pickNum, 'lastPickRef:', lastPickRef.current);
+    logger.debug('[handleNewPick] Received:', pickData.playerId, 'pick#', pickData.pickNum, 'lastPickRef:', lastPickRef.current);
     if (!pickData.playerId) {
       console.warn('[handleNewPick] Empty playerId, skipping');
       return;
@@ -630,7 +631,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
         pickNum: currentPickNumber,
         round: currentRound,
       };
-      console.log('[Draft] Sending pick:', payload);
+      logger.debug('[Draft] Sending pick:', payload);
       return payload;
     }
 
@@ -869,7 +870,7 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     // Track consecutive timeouts for airplane mode
     consecutiveTimeoutsRef.current += 1;
     if (consecutiveTimeoutsRef.current >= 2 && !airplaneMode) {
-      console.log('[Airplane] 2 consecutive timeouts — enabling airplane mode');
+      logger.debug('[Airplane] 2 consecutive timeouts — enabling airplane mode');
       setAirplaneMode(true);
     }
 

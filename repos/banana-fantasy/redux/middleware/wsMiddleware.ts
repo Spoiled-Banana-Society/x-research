@@ -1,6 +1,7 @@
 import { Socket } from "@/utils/webSocket"
-import { DRAFT_SERVER_API_URL } from "@/constants/api"
+import { getDraftServerUrl } from "@/lib/staging"
 import type { Middleware } from "@reduxjs/toolkit"
+import { logger } from '@/lib/logger';
 import {
     setConnection,
     setCurrentDrafter,
@@ -33,10 +34,10 @@ export const socketMiddleware =
                 const connectPayload = payload as { walletAddress: string; leagueName: string }
                 socket.disconnect()
                 socket.connect(
-                    `${DRAFT_SERVER_API_URL}/ws?address=${connectPayload.walletAddress}&draftName=${connectPayload.leagueName}`
+                    `${getDraftServerUrl()}/ws?address=${connectPayload.walletAddress}&draftName=${connectPayload.leagueName}`
                 )
                 socket.on("open", () => {
-                    console.log("Websocket connected successfully!")
+                    logger.debug("Websocket connected successfully!")
                     dispatch(setLeagueStatus("ongoing"))
                 })
                 socket.on("message", (event: Event) => {
@@ -49,12 +50,12 @@ export const socketMiddleware =
                         return
                     }
                     if (data.type === "countdown_update") {
-                        console.log("countdown_update", data)
+                        logger.debug("countdown_update", data)
                         dispatch(setPreTimer(data.payload.timeRemaining))
                         dispatch(setCurrentDrafter(data.payload.currentDrafter))
                     }
                     if (data.type === "timer_update") {
-                        console.log("timer_update", data)
+                        logger.debug("timer_update", data)
                         dispatch(setEndOfTurnTimestamp(data.payload.endOfTurnTimestamp))
                         dispatch(setStartOfTurnTimestamp(data.payload.startOfTurnTimestamp))
                         dispatch(setCurrentDrafter(data.payload.currentDrafter))
@@ -71,28 +72,28 @@ export const socketMiddleware =
                         dispatch(setCurrentRound(data.payload.roundNum))
                     }
                     if (data.type === "final_card") {
-                        console.log("final card", data.payload)
+                        logger.debug("final card", data.payload)
                         dispatch(setGeneratedCard(data.payload._imageUrl))
                         socket.disconnect()
                         dispatch(setLeagueStatus("completed"))
                     }
                     if (data.type === "draft_complete") {
                         // init close experience
-                        console.log("draft complete", data.payload)
+                        logger.debug("draft complete", data.payload)
                         socket.disconnect()
                         dispatch(setLeagueStatus("completed"))
                     }
                 })
                 socket.on("close", (message) => {
-                    console.log("Websocket disconnected: ", message)
+                    logger.debug("Websocket disconnected: ", message)
                     dispatch(setConnection(false))
                 })
                 socket.on("error", (error) => {
-                    console.log("Websocket error: ", error)
+                    logger.debug("Websocket error: ", error)
                 })
                 break
             case "socket/send":
-                console.log(payload)
+                logger.debug(payload)
                 socket.send(payload as JSON)
                 break
             case "socket/disconnect":

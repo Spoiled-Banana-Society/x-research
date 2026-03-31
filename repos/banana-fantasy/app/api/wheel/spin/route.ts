@@ -9,6 +9,7 @@ import { generateNonce, generateSeed, pickWeighted } from '@/lib/rng';
 import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 
 import { FieldValue } from 'firebase-admin/firestore';
+import { logger } from '@/lib/logger';
 
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
 const USERS_COLLECTION = 'v2_users';
@@ -236,7 +237,7 @@ export async function POST(req: Request) {
       try {
         const { joinQueue } = await import('@/lib/db');
         await joinQueue(userId, segment.prizeValue as 'jackpot' | 'hof');
-        console.log(`[wheel/spin] Auto-queued ${userId} for ${segment.prizeValue}`);
+        logger.debug(`[wheel/spin] Auto-queued ${userId} for ${segment.prizeValue}`);
       } catch (qErr) {
         // Don't fail the spin if queue join fails — entry is already awarded
         console.warn(`[wheel/spin] Auto-queue failed (entry still awarded):`, qErr);

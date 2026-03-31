@@ -23,6 +23,7 @@ import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
 
 import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue } from '@/types';
+import { logger } from '@/lib/logger';
 
 type Draft = DraftState;
 
@@ -137,12 +138,12 @@ export default function DraftingPage() {
   const [queueDrafts, setQueueDrafts] = useState<Draft[]>([]);
   useEffect(() => {
     if (!user?.id) {
-      console.log('[Queue] No user.id, skipping queue poll');
+      logger.debug('[Queue] No user.id, skipping queue poll');
       return;
     }
     const userId = user.id;
     const walletAddr = user.walletAddress;
-    console.log('[Queue] Starting poll, userId:', userId, 'walletAddr:', walletAddr);
+    logger.debug('[Queue] Starting poll, userId:', userId, 'walletAddr:', walletAddr);
     const poll = () => {
       fetchJson<Record<string, DraftQueue>>('/api/queues')
         .then(queues => {
@@ -157,7 +158,7 @@ export default function DraftingPage() {
                 m.wallet?.toLowerCase() === userId?.toLowerCase() ||
                 m.wallet?.toLowerCase() === walletAddr?.toLowerCase()
               );
-              console.log('[Queue]', q.type, 'round', r.roundId, ':', isMember ? 'MATCH' : 'no match', 'wallets:', memberWallets.join(','));
+              logger.debug('[Queue]', q.type, 'round', r.roundId, ':', isMember ? 'MATCH' : 'no match', 'wallets:', memberWallets.join(','));
               if (!isMember) continue;
               drafts.push({
                 // Always use queue-type-roundId as unique key (draftIds can overlap between queue types)
@@ -178,7 +179,7 @@ export default function DraftingPage() {
               });
             }
           }
-          console.log('[Queue] Found', drafts.length, 'matching queue drafts out of', totalRounds, 'total rounds');
+          logger.debug('[Queue] Found', drafts.length, 'matching queue drafts out of', totalRounds, 'total rounds');
           setQueueDrafts(drafts);
         })
         .catch((e) => { console.error('[Queue] Poll failed:', e); });
@@ -620,7 +621,7 @@ export default function DraftingPage() {
         let pingInterval: ReturnType<typeof setInterval> | null = null;
 
         ws.onopen = () => {
-          console.log(`[Drafting WS] connected to ${draft.id}`);
+          logger.debug(`[Drafting WS] connected to ${draft.id}`);
           pingInterval = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'ping', payload: {} }));
@@ -1822,7 +1823,7 @@ export default function DraftingPage() {
         onClose={() => setSelectedPromo(null)}
         promo={selectedPromo}
         onClaim={(promoId) => {
-          console.log('Claiming promo:', promoId);
+          logger.debug('Claiming promo:', promoId);
           setSelectedPromo(null);
         }}
         onVerifyTweet={promosQuery.verifyTweetEngagement}

@@ -8,12 +8,11 @@ import {
     UpdatedRankings,
     generatedCardProps,
 } from "./types/types"
-import { HTTP_DRAFT_API_URL } from "@/constants/api"
 import { getDraftsApiUrl } from "@/lib/staging"
 axios.defaults.headers.post["Content-Type"] = "application/json"
 
 const getEnv = () => {
-    return getDraftsApiUrl() || HTTP_DRAFT_API_URL
+    return getDraftsApiUrl()
 }
 
 const api = axios.create({

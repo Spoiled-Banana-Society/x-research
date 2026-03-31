@@ -11,6 +11,7 @@ import { useNotifications } from '@/components/NotificationCenter';
 import { BASE_SEPOLIA, getUsdcBalance } from '@/lib/contracts/bbb4';
 import type { Address } from 'viem';
 import type { DraftType, OfferData } from '@/lib/opensea';
+import { logger } from '@/lib/logger';
 
 interface NftTrait {
   trait_type: string;
@@ -394,7 +395,7 @@ export default function NftDetailPage() {
         offerExpiration,
       );
 
-      console.log('[NFT Detail] Offer created:', result.orderHash);
+      logger.debug('[NFT Detail] Offer created:', result.orderHash);
 
       // Notify the NFT owner that they received an offer
       const ownerAddr = nft?.owner || nft?.listing?.protocol_data?.parameters?.offerer;
@@ -481,7 +482,7 @@ export default function NftDetailPage() {
         { sponsor: true, uiOptions: { description: 'Accept offer — gas fees covered by SBS' } },
       );
 
-      console.log('[NFT Detail] Offer accepted:', offer.orderHash);
+      logger.debug('[NFT Detail] Offer accepted:', offer.orderHash);
 
       logActivity({
         type: 'offer_accepted',
@@ -537,7 +538,7 @@ export default function NftDetailPage() {
         { sponsor: true, uiOptions: { description: 'Cancel your offer — fees covered by SBS' } },
       );
 
-      console.log('[NFT Detail] Cancelled offer:', offer.orderHash);
+      logger.debug('[NFT Detail] Cancelled offer:', offer.orderHash);
 
       logActivity({
         type: 'cancel',

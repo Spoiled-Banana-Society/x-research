@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { getDraftServerUrl } from '@/lib/staging';
+import { logger } from '@/lib/logger';
 
 // ==================== PAYLOAD TYPES ====================
 
@@ -205,7 +206,7 @@ export function useDraftWebSocket(options: UseDraftWebSocketOptions): UseDraftWe
 
         // Log all non-timer messages (timer is too frequent)
         if (type !== 'timer_update') {
-          console.log(`[WS raw] type=${type}`, payload ? JSON.stringify(payload).slice(0, 120) : 'no payload');
+          logger.debug(`[WS raw] type=${type}`, payload ? JSON.stringify(payload).slice(0, 120) : 'no payload');
         }
 
         switch (type) {

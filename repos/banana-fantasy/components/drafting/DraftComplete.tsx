@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as draftStore from '@/lib/draftStore';
+import { logger } from '@/lib/logger';
 
 interface DraftCompleteProps {
   draftId?: string;
@@ -47,7 +48,7 @@ export function DraftComplete({ draftId, generatedCardUrl: initialCardUrl, walle
           // Check for the card image URL in the response
           const imageUrl = data?.card?._imageUrl || data?.card?.imageUrl || data?.imageUrl;
           if (imageUrl) {
-            console.log('[DraftComplete] Generated card fetched:', imageUrl);
+            logger.debug('[DraftComplete] Generated card fetched:', imageUrl);
             setCardUrl(imageUrl);
             setCardLoading(false);
             return;

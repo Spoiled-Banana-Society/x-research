@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await response.json();
-    console.log(`[draft-reminder] Sent to wallet=${walletAddress} draftId=${draftId} recipients=${result.recipients}`);
+    logger.debug(`[draft-reminder] Sent to wallet=${walletAddress} draftId=${draftId} recipients=${result.recipients}`);
 
     return NextResponse.json({ ok: true, recipients: result.recipients ?? 0 });
   } catch (err) {

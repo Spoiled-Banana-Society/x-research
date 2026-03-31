@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { subscribeValue, isFirebaseAvailable } from '@/lib/api/firebase';
+import { logger } from '@/lib/logger';
 
 // ==================== TYPES ====================
 
@@ -85,7 +86,7 @@ export function useRealTimeDraftInfo(
     }
 
     const path = `drafts/${draftId}/realTimeDraftInfo`;
-    console.log('[Firebase RTDB] Subscribing to', path);
+    logger.debug('[Firebase RTDB] Subscribing to', path);
     setIsListening(true);
     setHasError(false);
 
@@ -122,7 +123,7 @@ export function useRealTimeDraftInfo(
             lastPickNumberRef.current === null ||
             currentPickNum > lastPickNumberRef.current
           ) {
-            console.log(
+            logger.debug(
               '[Firebase RTDB] New pick detected: pickNumber',
               currentPickNum,
               'player',
@@ -148,7 +149,7 @@ export function useRealTimeDraftInfo(
 
     return () => {
       clearTimeout(timeoutId);
-      console.log('[Firebase RTDB] Unsubscribing from', path);
+      logger.debug('[Firebase RTDB] Unsubscribing from', path);
       unsub();
       setIsListening(false);
       lastPickNumberRef.current = null;

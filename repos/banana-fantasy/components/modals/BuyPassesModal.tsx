@@ -13,6 +13,7 @@ import { isStagingMode, getStagingApiUrl, getDraftsApiUrl } from '@/lib/staging'
 import { pushNotification } from '@/components/NotificationCenter';
 import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType';
 import { fetchJson } from '@/lib/appApiClient';
+import { logger } from '@/lib/logger';
 
 type FlowStep = 'idle' | 'funding' | 'waiting-for-usdc' | 'minting' | 'success' | 'error';
 type ModalPhase = 'purchase' | 'pick-speed' | 'joining' | 'error';
@@ -33,7 +34,7 @@ export function BuyPassesModal({
   const { mint, isApproving, isMinting, error: mintError, txHash, tokenPrice, mintActive } = useMintDraftPass();
   const { fundWallet } = useFundWallet({
     onUserExited: ({ balance, fundingMethod }) => {
-      console.log('[BuyModal] Fund wallet exited:', { balance: balance?.toString(), fundingMethod });
+      logger.debug('[BuyModal] Fund wallet exited:', { balance: balance?.toString(), fundingMethod });
     },
   });
 
@@ -235,7 +236,7 @@ export function BuyPassesModal({
       // Join a draft
       const apiBase = getDraftsApiUrl();
       const forcedDraftType = peekPromoDraftType();
-      console.log('[BuyModal] Joining draft:', { apiBase, speed, addr, forcedDraftType });
+      logger.debug('[BuyModal] Joining draft:', { apiBase, speed, addr, forcedDraftType });
       const joinRes = await fetch(`${apiBase}/league/${speed}/owner/${addr}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -248,12 +249,12 @@ export function BuyPassesModal({
       }
 
       const joinData = await joinRes.json();
-      console.log('[BuyModal] Join response:', JSON.stringify(joinData));
+      logger.debug('[BuyModal] Join response:', JSON.stringify(joinData));
       // API returns an array of joined cards
       const card = Array.isArray(joinData) ? joinData[0] : joinData;
       const draftId = String(card?._leagueId ?? card?.draftId ?? card?.leagueId ?? card?.id ?? '');
       const contestName = String(card?._leagueDisplayName ?? card?.displayName ?? `Draft ${draftId}`);
-      console.log('[BuyModal] Parsed:', { draftId, contestName });
+      logger.debug('[BuyModal] Parsed:', { draftId, contestName });
 
       if (!draftId) throw new Error('No draft ID returned from join API');
 
@@ -285,7 +286,7 @@ export function BuyPassesModal({
         try {
           const { stagingFillBots } = await import('@/lib/api/leagues');
           await stagingFillBots(speed, 9);
-          console.log('[BuyModal] Staging bots filled');
+          logger.debug('[BuyModal] Staging bots filled');
         } catch (fillErr) {
           console.warn('[BuyModal] Bot fill failed (continuing anyway):', fillErr);
         }
@@ -312,7 +313,7 @@ export function BuyPassesModal({
         if (wsUrl) params.set('wsUrl', wsUrl);
       }
       const lobbyUrl = `/draft-room?${params.toString()}`;
-      console.log('[BuyModal] Navigating to:', lobbyUrl);
+      logger.debug('[BuyModal] Navigating to:', lobbyUrl);
       window.location.href = lobbyUrl;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to join draft';
