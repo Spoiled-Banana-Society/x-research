@@ -77,6 +77,17 @@ function formatRelativeTime(timestamp: number): string {
   return `${days} day${days > 1 ? 's' : ''} ago`;
 }
 
+/** Format seconds into a readable countdown: "25s", "2:30", or "2:24:13" */
+function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  if (s < 60) return `${s}s`;
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
 // Window-level timer for randomizing bar — survives React re-renders AND module reloads.
 // Once a draft starts randomizing, the timer sticks until the bar finishes.
 function getBarTimers(): Map<string, number> {
@@ -1382,7 +1393,7 @@ export default function DraftingPage() {
                       ) : effectiveLive.displayPhase === 'draft-starting' ? (
                         <span className="text-white/50 text-sm">{effectiveLive.countdown != null ? `Starts in ${effectiveLive.countdown}s` : 'Starting...'}</span>
                       ) : isYourTurn ? (
-                        <span className="text-banana font-bold">{draft.pickEndTimestamp ? Math.max(0, Math.ceil(draft.pickEndTimestamp - Date.now() / 1000)) : (draft.timeRemaining ?? 30)}s</span>
+                        <span className="text-banana font-bold">{formatCountdown(draft.pickEndTimestamp ? Math.max(0, draft.pickEndTimestamp - Date.now() / 1000) : (draft.timeRemaining ?? 30))}</span>
                       ) : draft.currentPick != null ? (
                         <span className="text-white/50 text-sm">{draft.currentPick === 0 ? 'Next up' : `${draft.currentPick} pick${draft.currentPick !== 1 ? 's' : ''} away`}</span>
                       ) : (
