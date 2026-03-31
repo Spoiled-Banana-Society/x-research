@@ -13,8 +13,8 @@ interface MobileLoginModalProps {
 }
 
 const WALLETS = [
-  { id: 'metamask', name: 'MetaMask', bg: '#F6851B', letter: 'M' },
-  { id: 'coinbase', name: 'Coinbase Wallet', bg: '#0052FF', letter: 'C' },
+  { id: 'metamask', name: 'MetaMask' },
+  { id: 'coinbase', name: 'Coinbase Wallet' },
 ];
 
 export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin, onTwitterLogin }: MobileLoginModalProps) {
@@ -103,9 +103,13 @@ export function MobileLoginModal({ isOpen, onClose, onEmailLogin, onGoogleLogin,
                   onClick={() => connectWithWallet(wallet.id)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: wallet.bg }}>
-                    <span className="text-white font-bold text-sm">{wallet.letter}</span>
-                  </div>
+                  <Image
+                    src={wallet.id === 'metamask' ? '/metamask.png' : '/coinbase-wallet.png'}
+                    alt={wallet.name}
+                    width={32}
+                    height={32}
+                    className="rounded-lg"
+                  />
                   <span className="text-white text-[14px] font-medium">{wallet.name}</span>
                 </button>
               ))}
