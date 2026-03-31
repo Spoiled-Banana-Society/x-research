@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError } from '@/lib/api/routeUtils';
-import { getAdminFirestore } from '@/lib/firebaseAdmin';
+import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 
 const USERS_COLLECTION = 'v2_users';
 
@@ -22,6 +22,11 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     if (!userId) return jsonError('Missing userId', 400);
+
+    // If Firestore isn't configured (e.g. local dev / test), return defaults
+    if (!isFirestoreConfigured()) {
+      return json({ wheelSpins: 0, freeDrafts: 0, jackpotEntries: 0, hofEntries: 0, draftPasses: 0, cardPurchaseCount: 0 });
+    }
 
     const db = getAdminFirestore();
     const snap = await db.collection(USERS_COLLECTION).doc(userId).get();
