@@ -35,7 +35,6 @@
 
 html {
   scroll-behavior: smooth;
-  overflow-x: hidden;
 }
 
 body {
@@ -43,7 +42,6 @@ body {
   background: var(--bg-primary);
   font-family: 'Inter', system-ui, sans-serif;
   min-height: 100vh;
-  overflow-x: hidden;
 }
 
 /* Custom scrollbar */
