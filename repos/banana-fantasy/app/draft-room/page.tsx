@@ -30,7 +30,7 @@ function DraftRoomContent() {
   // During filling phase, don't show a numbered name — drafts only get a batch number after starting.
   // The backend assigns the real name (e.g., "League #2024-fast-draft-30") after 10/10 fill.
   const urlName = searchParams?.get('name');
-  const [contestName, setContestName] = useState(urlName || 'Draft Room');
+  const [contestName, _setContestName] = useState(urlName || 'Draft Room');
   const initialPlayers = parseInt(searchParams?.get('players') || '1', 10);
   const urlDraftId = searchParams?.get('draftId') || searchParams?.get('id') || '';
   const walletParam = searchParams?.get('wallet') || '';
