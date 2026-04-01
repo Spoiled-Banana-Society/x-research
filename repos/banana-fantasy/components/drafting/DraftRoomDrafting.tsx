@@ -245,71 +245,154 @@ export function DraftRoomDrafting({
             walletAddress={walletParam}
           />
         ) : (
-          <>
-            {activeTab === 'draft' && (
-              <DraftPlayerList
-                availablePlayers={engine.availablePlayers}
-                isUserTurn={phase === 'drafting' && engine.isUserTurn}
-                onDraft={onDraftPlayer}
-                onAddToQueue={(player) => {
-                  engine.addToQueue(player);
-                  const newQueue = [...engine.queuedPlayers, player];
-                  if (phase === 'drafting') onQueueSync(newQueue);
-                }}
-                onRemoveFromQueue={(playerId) => {
-                  engine.removeFromQueue(playerId);
-                  const newQueue = engine.queuedPlayers.filter(p => p.playerId !== playerId);
-                  if (phase === 'drafting') onQueueSync(newQueue);
-                }}
-                isInQueue={engine.isInQueue}
-                onSortChange={onSortChange}
-              />
-            )}
-            {activeTab === 'queue' && (
-              <DraftQueue
-                queuedPlayers={engine.queuedPlayers}
-                availablePlayers={engine.availablePlayers}
-                isUserTurn={phase === 'drafting' && engine.isUserTurn}
-                onDraft={onDraftPlayer}
-                onRemoveFromQueue={(playerId) => {
-                  engine.removeFromQueue(playerId);
-                  const newQueue = engine.queuedPlayers.filter(p => p.playerId !== playerId);
-                  if (phase === 'drafting') onQueueSync(newQueue);
-                }}
-                onReorderQueue={(newOrder) => {
-                  engine.reorderQueue(newOrder);
-                  if (phase === 'drafting') onQueueSync(newOrder);
-                }}
-              />
-            )}
-            {activeTab === 'board' && (
-              <DraftBoardGrid
-                draftOrder={engine.draftOrder}
-                draftSummary={engine.draftSummary}
-                currentPickNumber={engine.currentPickNumber}
-                userDraftPosition={engine.userDraftPosition}
-                onViewRoster={onViewRoster}
-              />
-            )}
-            {activeTab === 'roster' && (
-              <DraftRoster
-                draftOrder={engine.draftOrder}
-                rosters={engine.rosters}
-                picks={engine.picks}
-                userDraftPosition={engine.userDraftPosition}
-                initialPlayer={rosterViewPlayer}
-                userProfilePicture={user?.profilePicture ?? undefined}
-                userName={user?.username ?? undefined}
-              />
-            )}
-            {activeTab === 'chat' && (
-              <DraftRoomChat
-                playerCount={playerCount}
-                phase={phase}
-                username={user?.username ?? undefined}
-              />
-            )}
-          </>
+          <div className="flex flex-1 overflow-hidden">
+            {/* Main tab content (left) */}
+            <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+              {activeTab === 'draft' && (
+                <DraftPlayerList
+                  availablePlayers={engine.availablePlayers}
+                  isUserTurn={phase === 'drafting' && engine.isUserTurn}
+                  onDraft={onDraftPlayer}
+                  onAddToQueue={(player) => {
+                    engine.addToQueue(player);
+                    const newQueue = [...engine.queuedPlayers, player];
+                    if (phase === 'drafting') onQueueSync(newQueue);
+                  }}
+                  onRemoveFromQueue={(playerId) => {
+                    engine.removeFromQueue(playerId);
+                    const newQueue = engine.queuedPlayers.filter(p => p.playerId !== playerId);
+                    if (phase === 'drafting') onQueueSync(newQueue);
+                  }}
+                  isInQueue={engine.isInQueue}
+                  onSortChange={onSortChange}
+                />
+              )}
+              {activeTab === 'queue' && (
+                <DraftQueue
+                  queuedPlayers={engine.queuedPlayers}
+                  availablePlayers={engine.availablePlayers}
+                  isUserTurn={phase === 'drafting' && engine.isUserTurn}
+                  onDraft={onDraftPlayer}
+                  onRemoveFromQueue={(playerId) => {
+                    engine.removeFromQueue(playerId);
+                    const newQueue = engine.queuedPlayers.filter(p => p.playerId !== playerId);
+                    if (phase === 'drafting') onQueueSync(newQueue);
+                  }}
+                  onReorderQueue={(newOrder) => {
+                    engine.reorderQueue(newOrder);
+                    if (phase === 'drafting') onQueueSync(newOrder);
+                  }}
+                />
+              )}
+              {activeTab === 'board' && (
+                <DraftBoardGrid
+                  draftOrder={engine.draftOrder}
+                  draftSummary={engine.draftSummary}
+                  currentPickNumber={engine.currentPickNumber}
+                  userDraftPosition={engine.userDraftPosition}
+                  onViewRoster={onViewRoster}
+                />
+              )}
+              {activeTab === 'roster' && (
+                <DraftRoster
+                  draftOrder={engine.draftOrder}
+                  rosters={engine.rosters}
+                  picks={engine.picks}
+                  userDraftPosition={engine.userDraftPosition}
+                  initialPlayer={rosterViewPlayer}
+                  userProfilePicture={user?.profilePicture ?? undefined}
+                  userName={user?.username ?? undefined}
+                />
+              )}
+              {activeTab === 'chat' && (
+                <DraftRoomChat
+                  playerCount={playerCount}
+                  phase={phase}
+                  username={user?.username ?? undefined}
+                />
+              )}
+            </div>
+
+            {/* Right sidebar: Queue + My Team previews (desktop only) */}
+            <div className="hidden xl:flex flex-col w-72 flex-shrink-0 border-l border-white/[0.06] overflow-hidden">
+              {/* Queue preview */}
+              <div className="flex-1 min-h-0 flex flex-col border-b border-white/[0.06]">
+                <button
+                  onClick={() => onTabChange('queue')}
+                  className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors flex-shrink-0"
+                >
+                  <span>Queue {engine.queuedPlayers.length > 0 ? `(${engine.queuedPlayers.length})` : ''}</span>
+                  <span className="text-[10px] text-white/30">View full →</span>
+                </button>
+                <div className="flex-1 overflow-y-auto px-2 pb-2">
+                  {engine.queuedPlayers.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-white/20 text-xs text-center px-4">
+                      <span className="text-2xl mb-2">⭐</span>
+                      <p>Add players from the list to set your pick order</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {engine.queuedPlayers.map((player, i) => (
+                        <div
+                          key={player.playerId}
+                          className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors cursor-pointer text-xs"
+                          onClick={() => onTabChange('queue')}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-white/30 w-4 text-center flex-shrink-0">{i + 1}</span>
+                            <span className="text-white/80 font-medium truncate">{player.playerId}</span>
+                          </div>
+                          <span className="text-white/30 flex-shrink-0 ml-2">#{player.rank}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* My Team preview */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                <button
+                  onClick={() => onTabChange('roster')}
+                  className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors flex-shrink-0"
+                >
+                  <span>My Team ({engine.picks.filter(p => p.ownerIndex === engine.userDraftPosition).length}/15)</span>
+                  <span className="text-[10px] text-white/30">View full →</span>
+                </button>
+                <div className="flex-1 overflow-y-auto px-2 pb-2">
+                  {(() => {
+                    const userRoster = engine.rosters[engine.draftOrder[engine.userDraftPosition]?.name || ''];
+                    if (!userRoster) return (
+                      <div className="flex items-center justify-center h-full text-white/20 text-xs">
+                        No picks yet
+                      </div>
+                    );
+                    const positionKeys = ['QB', 'RB', 'WR', 'TE', 'DST'] as const;
+                    return (
+                      <div className="space-y-2">
+                        {positionKeys.map(pos => {
+                          const players = (userRoster as unknown as Record<string, string[]>)[pos] || [];
+                          const posColor = POSITION_COLORS[pos] || '#888';
+                          return (
+                            <div key={pos}>
+                              <div className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: posColor }}>{pos}</div>
+                              {players.length === 0 ? (
+                                <div className="text-white/15 text-xs pl-2">--</div>
+                              ) : (
+                                players.map(playerId => (
+                                  <div key={playerId} className="text-xs text-white/70 pl-2 py-0.5 truncate">{playerId}</div>
+                                ))
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>
