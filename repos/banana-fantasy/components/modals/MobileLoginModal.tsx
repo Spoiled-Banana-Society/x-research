@@ -1,28 +1,28 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Image from 'next/image';
-import { useLoginWithOAuth, useLoginWithEmail, usePrivy } from '@privy-io/react-auth';
+import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe, usePrivy } from '@privy-io/react-auth';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const WALLETS = [
-  { id: 'metamask', name: 'MetaMask', privyId: 'metamask' as const },
-  { id: 'coinbase', name: 'Coinbase Wallet', privyId: 'coinbase_wallet' as const },
-];
-
 export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const privy = usePrivy();
   const { initOAuth } = useLoginWithOAuth();
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
+  const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
 
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [emailError, setEmailError] = useState('');
   const [view, setView] = useState<'main' | 'email-input' | 'otp'>('main');
+  const [walletStatus, setWalletStatus] = useState<'idle' | 'connecting' | 'signing' | 'error'>('idle');
+  const [walletError, setWalletError] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mmSdkRef = useRef<Record<string, any> | null>(null);
 
   if (!isOpen) return null;
 
@@ -34,6 +34,8 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     setEmail('');
     setOtpCode('');
     setEmailError('');
+    setWalletStatus('idle');
+    setWalletError('');
     onClose();
   };
 
@@ -57,6 +59,83 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     } catch {
       setEmailError('Invalid code. Please try again.');
     }
+  };
+
+  const handleMetaMaskLogin = async () => {
+    setWalletStatus('connecting');
+    setWalletError('');
+
+    try {
+      // Lazy-load MetaMask SDK (avoid SSR issues)
+      const { default: MetaMaskSDK } = await import('@metamask/sdk');
+
+      if (!mmSdkRef.current) {
+        const sdk = new MetaMaskSDK({
+          dappMetadata: {
+            name: 'Banana Fantasy',
+            url: typeof window !== 'undefined' ? window.location.origin : 'https://banana-fantasy-sbs.vercel.app',
+          },
+          useDeeplink: true,
+          preferDesktop: false,
+        });
+        // Must init before using the SDK
+        await sdk.init();
+        mmSdkRef.current = sdk;
+      }
+
+      const sdk = mmSdkRef.current;
+
+      // connect() handles deep-link on mobile and returns accounts
+      const accounts = await sdk.connect() as string[];
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts returned from MetaMask');
+      }
+
+      const address = accounts[0];
+      setWalletStatus('signing');
+
+      // Get provider AFTER connect (guaranteed to exist now)
+      const provider = sdk.getProvider();
+      if (!provider) {
+        throw new Error('MetaMask provider not available after connect');
+      }
+
+      // Generate SIWE message via Privy
+      const message = await generateSiweMessage({
+        address,
+        chainId: 'eip155:8453', // Base
+      });
+
+      // Sign with MetaMask — may deep-link again for the signature
+      const signature = await provider.request({
+        method: 'personal_sign',
+        params: [message, address],
+      }) as string;
+
+      // Complete Privy login
+      await loginWithSiwe({
+        signature,
+        message,
+        walletClientType: 'metamask',
+        connectorType: 'wallet_connect_v2',
+      });
+
+      handleClose();
+    } catch (err: unknown) {
+      const msg = (err instanceof Error ? err.message : null) || 'Connection failed';
+      if (msg.includes('rejected') || msg.includes('denied') || msg.includes('User rejected')) {
+        setWalletStatus('idle');
+      } else {
+        setWalletError(msg);
+        setWalletStatus('error');
+      }
+    }
+  };
+
+  const handleCoinbaseLogin = () => {
+    onClose();
+    privy.login({ loginMethods: ['wallet'] });
   };
 
   return (
@@ -102,7 +181,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         {/* Content */}
         <div className="px-5 pb-3">
           {/* Main view */}
-          {view === 'main' && (
+          {view === 'main' && walletStatus === 'idle' && (
             <div className="space-y-2">
               {/* Email */}
               <button
@@ -116,7 +195,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-[#7b8491] text-[14px]">your@email.com</span>
               </button>
 
-              {/* Google — direct OAuth redirect */}
+              {/* Google */}
               <button
                 onClick={() => initOAuth({ provider: 'google' })}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
@@ -130,7 +209,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">Google</span>
               </button>
 
-              {/* Twitter — direct OAuth redirect */}
+              {/* Twitter */}
               <button
                 onClick={() => initOAuth({ provider: 'twitter' })}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
@@ -141,26 +220,55 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
-              {/* Wallets — close our modal, let Privy handle the WC flow */}
-              {WALLETS.map(wallet => (
-                <button
-                  key={wallet.id}
-                  onClick={() => {
-                    onClose();
-                    privy.connectWallet({ walletList: [wallet.privyId] });
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
-                >
-                  <Image
-                    src={wallet.id === 'metamask' ? '/metamask.png' : '/coinbase-wallet.png'}
-                    alt={wallet.name}
-                    width={32}
-                    height={32}
-                    className="rounded-lg"
-                  />
-                  <span className="text-white text-[14px] font-medium">{wallet.name}</span>
-                </button>
-              ))}
+              {/* MetaMask — uses MetaMask SDK for direct mobile deep-link */}
+              <button
+                onClick={handleMetaMaskLogin}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
+              >
+                <Image src="/metamask.png" alt="MetaMask" width={32} height={32} className="rounded-lg" />
+                <span className="text-white text-[14px] font-medium">MetaMask</span>
+              </button>
+
+              {/* Coinbase Wallet — uses Privy's login flow */}
+              <button
+                onClick={handleCoinbaseLogin}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
+              >
+                <Image src="/coinbase-wallet.png" alt="Coinbase Wallet" width={32} height={32} className="rounded-lg" />
+                <span className="text-white text-[14px] font-medium">Coinbase Wallet</span>
+              </button>
+            </div>
+          )}
+
+          {/* Wallet connecting/signing state */}
+          {(walletStatus === 'connecting' || walletStatus === 'signing') && (
+            <div className="py-10 text-center">
+              <div className="w-12 h-12 mx-auto mb-4 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
+              <p className="text-white font-medium text-[15px] mb-1">
+                {walletStatus === 'connecting' ? 'Opening MetaMask...' : 'Signing in...'}
+              </p>
+              <p className="text-[#7b8491] text-[13px]">
+                {walletStatus === 'connecting' ? 'Approve the connection in MetaMask' : 'Confirm the signature in MetaMask'}
+              </p>
+            </div>
+          )}
+
+          {/* Wallet error */}
+          {walletStatus === 'error' && (
+            <div className="py-8 text-center">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center bg-red-500/10">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </div>
+              <p className="text-white font-medium text-[15px] mb-1">Connection failed</p>
+              <p className="text-[#7b8491] text-[13px] mb-4">{walletError}</p>
+              <button
+                onClick={() => { setWalletStatus('idle'); setWalletError(''); }}
+                className="px-6 py-2 rounded-lg text-[13px] font-medium bg-[#f59e0b] text-black"
+              >
+                Try again
+              </button>
             </div>
           )}
 
