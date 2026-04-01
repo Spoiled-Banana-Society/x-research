@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ActiveDraftsList } from '@/components/drafting/ActiveDraftsList';
-import { CompletedDraftsList } from '@/components/drafting/CompletedDraftsList';
+// CompletedDraftsList moved to Standings page
 import { PromosSidebar } from '@/components/drafting/PromosSidebar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { PromoModal } from '@/components/modals/PromoModal';
@@ -70,13 +70,9 @@ const INFO_TOPICS: Record<string, { title: string; items: { q: string; a: string
   },
 };
 
-type DraftingTab = 'active' | 'completed';
-
 export default function DraftingPage() {
   const router = useRouter();
-  const historyQuery = useHistory();
-  const completedDrafts = historyQuery.data ?? [];
-  const [activeTab, setActiveTab] = useState<DraftingTab>('active');
+  const _historyQuery = useHistory(); // kept for future use on standings page
   const {
     contest,
     promosQuery,
@@ -167,29 +163,12 @@ export default function DraftingPage() {
       </div>
 
       <div className="mb-6">
-        <div className="inline-flex rounded-xl bg-white/[0.04] p-1 border border-white/[0.06]">
-          <button
-            onClick={() => setActiveTab('active')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'active' ? 'bg-banana text-black' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            Active ({activeDrafts.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('completed')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'completed' ? 'bg-banana text-black' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            Completed ({completedDrafts.length})
-          </button>
-        </div>
+        <div />
       </div>
 
       <div className="flex gap-6">
         <div className="flex-1 min-w-0">
-          {activeTab === 'active' ? (
+          {true ? (
             <>
               <ActiveDraftsList
                 regularDrafts={regularDrafts}
@@ -303,12 +282,7 @@ export default function DraftingPage() {
                 </div>
               )}
             </>
-          ) : (
-            <CompletedDraftsList
-              drafts={completedDrafts}
-              isLoading={historyQuery.isLoading || historyQuery.isValidating}
-            />
-          )}
+          ) : null}
         </div>
 
         <PromosSidebar
