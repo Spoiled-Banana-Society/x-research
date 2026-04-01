@@ -54,7 +54,14 @@ export function DraftPlayerList({
     }
 
     // Apply sort
-    players.sort((a, b) => sortField === 'adp' ? a.adp - b.adp : a.rank - b.rank);
+    players.sort((a, b) => {
+      if (sortField === 'adp') {
+        const aVal = a.adp || a.rank || 999;
+        const bVal = b.adp || b.rank || 999;
+        return aVal - bVal;
+      }
+      return (a.rank || 999) - (b.rank || 999);
+    });
 
     return players;
   }, [availablePlayers, filter, sortField, searchQuery]);
