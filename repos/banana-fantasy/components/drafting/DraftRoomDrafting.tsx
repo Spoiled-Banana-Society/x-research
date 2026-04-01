@@ -372,11 +372,6 @@ export function DraftRoomDrafting({
                 <div className="flex-1 overflow-y-auto px-2 pb-2">
                   {(() => {
                     const userRoster = engine.rosters[engine.draftOrder[engine.userDraftPosition]?.name || ''];
-                    if (!userRoster) return (
-                      <div className="flex items-center justify-center h-full text-white/20 text-xs">
-                        No picks yet
-                      </div>
-                    );
                     const positionKeys = ['QB', 'RB', 'WR', 'TE', 'DST'] as const;
                     // Build a lookup for pick details (bye, adp, pick#) from engine data
                     const pickLookup: Record<string, { bye: number; adp: number; pick: number }> = {};
@@ -401,7 +396,7 @@ export function DraftRoomDrafting({
                           <span className="w-7 text-center">Pick</span>
                         </div>
                         {positionKeys.map(pos => {
-                          const players = (userRoster as unknown as Record<string, string[]>)[pos] || [];
+                          const players = userRoster ? ((userRoster as unknown as Record<string, string[]>)[pos] || []) : [];
                           const posColor = POSITION_COLORS[pos] || '#888';
                           return (
                             <div key={pos}>
