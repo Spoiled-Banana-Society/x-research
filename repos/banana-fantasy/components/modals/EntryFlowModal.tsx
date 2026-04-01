@@ -28,20 +28,14 @@ export function EntryFlowModal({
   const hasFree = freePasses > 0;
   const hasBoth = hasPaid && hasFree;
 
-  // Auto-skip pass type step if user has only one type
+  // Reset state when modal opens/closes — always show pass type step
+  // so user explicitly chooses paid vs free (avoids race with balance loading)
   useEffect(() => {
     if (!isOpen) {
       setStep('pass-type');
       setSelectedPassType(null);
-      return;
     }
-
-    if (!hasBoth) {
-      const autoType = hasPaid ? 'paid' : 'free';
-      setSelectedPassType(autoType);
-      setStep('speed');
-    }
-  }, [isOpen, hasBoth, hasPaid]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
