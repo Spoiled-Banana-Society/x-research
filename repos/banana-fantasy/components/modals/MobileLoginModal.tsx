@@ -229,6 +229,18 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
+              {/* Coinbase Wallet — opens site in CB Wallet's in-app browser */}
+              <button
+                onClick={() => {
+                  const appUrl = encodeURIComponent(window.location.origin);
+                  window.location.href = `cbwallet://dapp?url=${appUrl}`;
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
+              >
+                <Image src="/coinbase-wallet.png" alt="Coinbase Wallet" width={32} height={32} className="rounded-lg" />
+                <span className="text-white text-[14px] font-medium">Coinbase Wallet</span>
+              </button>
+
               {/* MetaMask — uses MetaMask SDK for direct mobile deep-link */}
               <button
                 onClick={handleMetaMaskLogin}
