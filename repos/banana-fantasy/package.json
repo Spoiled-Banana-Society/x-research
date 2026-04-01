@@ -39,7 +39,8 @@
     "react-redux": "^9.2.0",
     "react-tooltip": "^5.30.0",
     "styled-components": "^6.1.0",
-    "viem": "^2.0.0"
+    "viem": "^2.0.0",
+    "@metamask/sdk": "^0.31.0"
   },
   "devDependencies": {
     "@openzeppelin/contracts": "^5.4.0",
