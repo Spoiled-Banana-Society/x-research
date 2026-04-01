@@ -9,7 +9,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { PromoModal } from '@/components/modals/PromoModal';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
-import { useHistory } from '@/hooks/useHistory';
+// useHistory moved to Standings page
 import { logger } from '@/lib/logger';
 import { formatCountdown, formatRelativeTime, useDraftingPageState } from '@/hooks/useDraftingPageState';
 
@@ -279,12 +279,7 @@ export default function DraftingPage() {
                 </div>
               )}
             </>
-          ) : (
-            <CompletedDraftsList
-              drafts={completedDrafts}
-              isLoading={historyQuery.isLoading || historyQuery.isValidating}
-            />
-          )}
+          ) : null}
         </div>
 
         <PromosSidebar

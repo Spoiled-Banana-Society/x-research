@@ -41,10 +41,24 @@ function DraftRoomContent() {
   const specialTypeParam = searchParams?.get('specialType') as 'jackpot' | 'hof' | null;
   const isPaidDraft = passTypeParam !== 'free';
 
-  const [draftId, setDraftId] = useState(urlDraftId);
+  const [draftId, _setDraftId] = useState(urlDraftId);
   const draftIdRef = useRef(draftId);
   draftIdRef.current = draftId;
   const isLiveMode = modeParam === 'live' && !!walletParam;
+
+  // Wrap setDraftId to also update the URL so refresh rejoins the same draft
+  const setDraftId = useCallback((id: string | ((prev: string) => string)) => {
+    const resolved = typeof id === 'function' ? id(draftIdRef.current) : id;
+    _setDraftId(resolved);
+    draftIdRef.current = resolved;
+    if (typeof window !== 'undefined' && resolved && resolved !== urlDraftId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('id', resolved);
+      // Remove passType so refresh doesn't consume another pass
+      url.searchParams.delete('passType');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [urlDraftId]);
 
   const { user } = useAuth();
   const {
