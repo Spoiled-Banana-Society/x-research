@@ -219,9 +219,11 @@ export function useDraftingPageState() {
   };
 
   const buildDraftRoomUrl = (draft: Draft) => {
+    // Don't pass a numbered name for filling drafts — batch number only assigned after start
+    const isFilling = draft.status === 'filling' || (draft.players || 0) < 10;
     const params = new URLSearchParams({
       id: draft.queueDraftId || draft.id,
-      name: draft.contestName,
+      name: isFilling ? 'Draft Room' : draft.contestName,
       speed: draft.draftSpeed,
       players: String(draft.players),
     });
