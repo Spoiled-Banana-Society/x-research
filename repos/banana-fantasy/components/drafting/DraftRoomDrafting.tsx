@@ -370,8 +370,28 @@ export function DraftRoomDrafting({
                       </div>
                     );
                     const positionKeys = ['QB', 'RB', 'WR', 'TE', 'DST'] as const;
+                    // Build a lookup for pick details (bye, adp, pick#) from engine data
+                    const pickLookup: Record<string, { bye: number; adp: number; pick: number }> = {};
+                    for (const p of engine.picks) {
+                      if (p.ownerIndex === engine.userDraftPosition) {
+                        const player = engine.availablePlayers.find(ap => ap.playerId === p.playerId)
+                          || (engine as unknown as { allPlayers?: { playerId: string; byeWeek?: number; adp?: number; rank?: number }[] }).allPlayers?.find((ap: { playerId: string }) => ap.playerId === p.playerId);
+                        pickLookup[p.playerId] = {
+                          bye: (player as { byeWeek?: number } | undefined)?.byeWeek || 0,
+                          adp: (player as { adp?: number; rank?: number } | undefined)?.adp || (player as { rank?: number } | undefined)?.rank || 0,
+                          pick: p.pickNumber || 0,
+                        };
+                      }
+                    }
                     return (
                       <div className="space-y-2">
+                        {/* Column headers */}
+                        <div className="flex items-center text-[9px] text-white/30 uppercase tracking-wider px-2">
+                          <span className="flex-1">Player</span>
+                          <span className="w-7 text-center">Bye</span>
+                          <span className="w-7 text-center">ADP</span>
+                          <span className="w-7 text-center">Pick</span>
+                        </div>
                         {positionKeys.map(pos => {
                           const players = (userRoster as unknown as Record<string, string[]>)[pos] || [];
                           const posColor = POSITION_COLORS[pos] || '#888';
@@ -381,9 +401,17 @@ export function DraftRoomDrafting({
                               {players.length === 0 ? (
                                 <div className="text-white/15 text-xs pl-2">--</div>
                               ) : (
-                                players.map(playerId => (
-                                  <div key={playerId} className="text-xs text-white/70 pl-2 py-0.5 truncate">{playerId}</div>
-                                ))
+                                players.map(playerId => {
+                                  const info = pickLookup[playerId];
+                                  return (
+                                    <div key={playerId} className="flex items-center text-xs py-0.5 pl-2">
+                                      <span className="text-white/70 truncate flex-1">{playerId}</span>
+                                      <span className="text-white/30 w-7 text-center text-[10px]">{info?.bye || '-'}</span>
+                                      <span className="text-white/30 w-7 text-center text-[10px]">{info?.adp || '-'}</span>
+                                      <span className="text-white/40 w-7 text-center text-[10px] font-medium">{info?.pick || '-'}</span>
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
                           );
