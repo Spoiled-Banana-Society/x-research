@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe, usePrivy } from '@privy-io/react-auth';
+import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe, useConnectWallet } from '@privy-io/react-auth';
+import { useSafePrivy } from '@/providers/PrivyProvider';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
@@ -10,10 +11,10 @@ interface MobileLoginModalProps {
 }
 
 export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
-  const privy = usePrivy();
   const { initOAuth } = useLoginWithOAuth();
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
+  const privy = useSafePrivy();
 
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -23,6 +24,31 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const [walletError, setWalletError] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mmSdkRef = useRef<Record<string, any> | null>(null);
+  const [connectingWallet, setConnectingWallet] = useState<'metamask' | 'base' | null>(null);
+
+  // Track if Base Account login was initiated — close modal when auth completes
+  const wasAuthenticatedRef = useRef(privy.authenticated);
+  useEffect(() => {
+    if (!wasAuthenticatedRef.current && privy.authenticated && connectingWallet === 'base') {
+      handleClose();
+    }
+    wasAuthenticatedRef.current = privy.authenticated;
+  }, [privy.authenticated, connectingWallet]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Base Account connect via Privy — uses passkeys (Face ID / Touch ID), works in mobile Safari
+  const { connectWallet } = useConnectWallet({
+    onSuccess: () => {
+      // For already-authenticated users connecting a wallet
+      handleClose();
+    },
+    onError: () => {
+      if (connectingWallet === 'base') {
+        setWalletError('Connection failed. Please try again.');
+        setWalletStatus('error');
+        setConnectingWallet(null);
+      }
+    },
+  });
 
   if (!isOpen) return null;
 
@@ -36,6 +62,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     setEmailError('');
     setWalletStatus('idle');
     setWalletError('');
+    setConnectingWallet(null);
     onClose();
   };
 
@@ -63,13 +90,15 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
   const handleMetaMaskLogin = async () => {
     setWalletStatus('connecting');
+    setConnectingWallet('metamask');
     setWalletError('');
 
     try {
-      // Lazy-load MetaMask SDK (avoid SSR issues)
+      console.log('[MM Login] Step 1: Loading MetaMask SDK...');
       const { default: MetaMaskSDK } = await import('@metamask/sdk');
 
       if (!mmSdkRef.current) {
+        console.log('[MM Login] Step 2: Initializing SDK...');
         const sdk = new MetaMaskSDK({
           dappMetadata: {
             name: 'Banana Fantasy',
@@ -77,49 +106,60 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
           },
           useDeeplink: true,
           preferDesktop: false,
+          logging: { developerMode: true },
         });
-        // Must init before using the SDK
         await sdk.init();
         mmSdkRef.current = sdk;
+        console.log('[MM Login] SDK initialized successfully');
       }
 
       const sdk = mmSdkRef.current;
 
-      // connect() handles deep-link on mobile and returns accounts
+      console.log('[MM Login] Step 3: Calling sdk.connect()...');
       const accounts = await sdk.connect() as string[];
+      console.log('[MM Login] Step 3 complete. Accounts:', accounts);
 
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts returned from MetaMask');
       }
 
-      const address = accounts[0];
+      // Checksum the address (EIP-55) — Privy requires it
+      const { getAddress } = await import('ethers');
+      const address = getAddress(accounts[0]);
+      console.log('[MM Login] Step 4: Connected. Address:', address);
       setWalletStatus('signing');
 
-      // Get provider AFTER connect (guaranteed to exist now)
       const provider = sdk.getProvider();
       if (!provider) {
         throw new Error('MetaMask provider not available after connect');
       }
 
-      // Generate SIWE message via Privy
+      // Get the chain MetaMask is actually connected to
+      const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
+      const chainIdNum = parseInt(chainIdHex, 16);
+      const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
+      console.log('[MM Login] Step 5: Provider acquired. Chain:', siweChainId);
+
+      console.log('[MM Login] Step 5b: Generating SIWE message...');
       const message = await generateSiweMessage({
         address,
-        chainId: 'eip155:8453', // Base
+        chainId: siweChainId,
       });
+      console.log('[MM Login] Step 6: SIWE message generated. Requesting signature...');
 
-      // Sign with MetaMask — may deep-link again for the signature
       const signature = await provider.request({
         method: 'personal_sign',
         params: [message, address],
       }) as string;
+      console.log('[MM Login] Step 7: Signature received. Logging in with Privy...');
 
-      // Complete Privy login
       await loginWithSiwe({
         signature,
         message,
         walletClientType: 'metamask',
         connectorType: 'wallet_connect_v2',
       });
+      console.log('[MM Login] Step 8: Privy login complete!');
 
       handleClose();
     } catch (err: unknown) {
@@ -130,12 +170,18 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         setWalletError(msg);
         setWalletStatus('error');
       }
+    } finally {
+      setConnectingWallet(null);
     }
   };
 
-  const handleCoinbaseLogin = () => {
-    onClose();
-    privy.login({ loginMethods: ['wallet'] });
+  // Base Account — passkey-based login (Face ID / Touch ID in-browser)
+  const handleBaseLogin = () => {
+    setWalletStatus('connecting');
+    setConnectingWallet('base');
+    setWalletError('');
+    console.log('[Base Login] Triggering Base Account connect via Privy...');
+    connectWallet({ walletList: ['base_account'], walletChainType: 'ethereum-only' });
   };
 
   return (
@@ -220,6 +266,15 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
+              {/* Base Account — passkey login (Face ID / Touch ID) */}
+              <button
+                onClick={handleBaseLogin}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#0052FF]/10 border border-[#0052FF]/20 active:bg-[#0052FF]/20 transition-colors"
+              >
+                <Image src="/base-logo.png" alt="Base" width={32} height={32} className="rounded-lg" />
+                <span className="text-white text-[14px] font-medium">Sign in with Base</span>
+              </button>
+
               {/* MetaMask — uses MetaMask SDK for direct mobile deep-link */}
               <button
                 onClick={handleMetaMaskLogin}
@@ -227,15 +282,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
               >
                 <Image src="/metamask.png" alt="MetaMask" width={32} height={32} className="rounded-lg" />
                 <span className="text-white text-[14px] font-medium">MetaMask</span>
-              </button>
-
-              {/* Coinbase Wallet — uses Privy's login flow */}
-              <button
-                onClick={handleCoinbaseLogin}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
-              >
-                <Image src="/coinbase-wallet.png" alt="Coinbase Wallet" width={32} height={32} className="rounded-lg" />
-                <span className="text-white text-[14px] font-medium">Coinbase Wallet</span>
               </button>
             </div>
           )}
@@ -245,10 +291,16 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
             <div className="py-10 text-center">
               <div className="w-12 h-12 mx-auto mb-4 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
               <p className="text-white font-medium text-[15px] mb-1">
-                {walletStatus === 'connecting' ? 'Opening MetaMask...' : 'Signing in...'}
+                {walletStatus === 'connecting'
+                  ? `Opening ${connectingWallet === 'base' ? 'Base' : 'MetaMask'}...`
+                  : 'Signing in...'}
               </p>
               <p className="text-[#7b8491] text-[13px]">
-                {walletStatus === 'connecting' ? 'Approve the connection in MetaMask' : 'Confirm the signature in MetaMask'}
+                {connectingWallet === 'base'
+                  ? 'Authenticate with Face ID or passkey'
+                  : walletStatus === 'connecting'
+                    ? 'Approve the connection in MetaMask'
+                    : 'Confirm the signature in MetaMask'}
               </p>
             </div>
           )}
