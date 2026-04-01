@@ -70,21 +70,23 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
       const { default: MetaMaskSDK } = await import('@metamask/sdk');
 
       if (!mmSdkRef.current) {
-        mmSdkRef.current = new MetaMaskSDK({
+        const sdk = new MetaMaskSDK({
           dappMetadata: {
             name: 'Banana Fantasy',
             url: typeof window !== 'undefined' ? window.location.origin : 'https://banana-fantasy-sbs.vercel.app',
           },
-          // Don't show QR modal on mobile — use deep-link
+          useDeeplink: true,
           preferDesktop: false,
         });
+        // Must init before using the SDK
+        await sdk.init();
+        mmSdkRef.current = sdk;
       }
 
       const sdk = mmSdkRef.current;
-      const provider = sdk.getProvider();
 
-      // Connect to MetaMask — triggers deep-link on mobile
-      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+      // connect() handles deep-link on mobile and returns accounts
+      const accounts = await sdk.connect() as string[];
 
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts returned from MetaMask');
@@ -93,13 +95,19 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
       const address = accounts[0];
       setWalletStatus('signing');
 
+      // Get provider AFTER connect (guaranteed to exist now)
+      const provider = sdk.getProvider();
+      if (!provider) {
+        throw new Error('MetaMask provider not available after connect');
+      }
+
       // Generate SIWE message via Privy
       const message = await generateSiweMessage({
         address,
         chainId: 'eip155:8453', // Base
       });
 
-      // Sign with MetaMask
+      // Sign with MetaMask — may deep-link again for the signature
       const signature = await provider.request({
         method: 'personal_sign',
         params: [message, address],
