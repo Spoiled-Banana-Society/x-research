@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { DraftRoomChat } from '@/components/drafting/DraftRoomChat';
 import { DraftTabs } from '@/components/drafting/DraftTabs';
 import type { DraftTab } from '@/components/drafting/DraftTabs';
@@ -70,6 +70,8 @@ export function DraftRoomDrafting({
   onSortChange,
   showBanner = true,
 }: DraftRoomDraftingProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const getPositionCountsForPlayer = (playerName: string) => {
     const roster = engine.rosters[playerName];
     if (!roster) return { QB: 0, RB: 0, WR: 0, TE: 0, DST: 0 };
@@ -316,7 +318,15 @@ export function DraftRoomDrafting({
             </div>
 
             {/* Right sidebar: Queue + My Team previews (desktop only) */}
-            <div className="hidden xl:flex flex-col w-72 flex-shrink-0 border-l border-white/[0.06] overflow-hidden">
+            {/* Toggle button (always visible) */}
+            <button
+              onClick={() => setSidebarOpen(prev => !prev)}
+              className="hidden xl:flex items-center justify-center w-5 flex-shrink-0 bg-white/[0.03] hover:bg-white/[0.08] text-white/30 hover:text-white/60 text-xs transition-colors border-l border-white/[0.06] cursor-pointer"
+              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              {sidebarOpen ? '›' : '‹'}
+            </button>
+            <div className={`hidden xl:flex flex-col flex-shrink-0 border-l border-white/[0.06] overflow-hidden transition-all duration-200 ${sidebarOpen ? 'w-72' : 'w-0 border-l-0'}`}>
               {/* Queue preview — compact, just enough for the list */}
               <div className="flex flex-col border-b border-white/[0.06]" style={{ maxHeight: '30%' }}>
                 <button
