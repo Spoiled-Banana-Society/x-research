@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import Image from 'next/image';
 import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe } from '@privy-io/react-auth';
-import { useSafePrivy } from '@/providers/PrivyProvider';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
@@ -14,7 +13,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const { initOAuth } = useLoginWithOAuth();
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
-  const privy = useSafePrivy();
 
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -24,16 +22,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const [walletError, setWalletError] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mmSdkRef = useRef<Record<string, any> | null>(null);
-  const [connectingWallet, setConnectingWallet] = useState<'metamask' | 'base' | null>(null);
-
-  // Track if Base Account login was initiated — close modal when auth completes
-  const wasAuthenticatedRef = useRef(privy.authenticated);
-  useEffect(() => {
-    if (!wasAuthenticatedRef.current && privy.authenticated && connectingWallet === 'base') {
-      handleClose();
-    }
-    wasAuthenticatedRef.current = privy.authenticated;
-  }, [privy.authenticated, connectingWallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 
@@ -47,7 +35,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     setEmailError('');
     setWalletStatus('idle');
     setWalletError('');
-    setConnectingWallet(null);
     onClose();
   };
 
@@ -75,7 +62,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
   const handleMetaMaskLogin = async () => {
     setWalletStatus('connecting');
-    setConnectingWallet('metamask');
+
     setWalletError('');
 
     try {
@@ -156,19 +143,8 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         setWalletStatus('error');
       }
     } finally {
-      setConnectingWallet(null);
-    }
-  };
 
-  // Base Account — passkey-based login (Face ID / Touch ID in-browser)
-  const handleBaseLogin = () => {
-    setWalletStatus('connecting');
-    setConnectingWallet('base');
-    setWalletError('');
-    console.log('[Base Login] Triggering Base Account connect via Privy...');
-    // Use privy.connectWallet directly (SSR-safe via useSafePrivy fallback)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (privy as any).connectWallet?.({ walletList: ['base_account'], walletChainType: 'ethereum-only' });
+    }
   };
 
   return (
@@ -253,15 +229,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
-              {/* Base Account — passkey login (Face ID / Touch ID) */}
-              <button
-                onClick={handleBaseLogin}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#0052FF]/10 border border-[#0052FF]/20 active:bg-[#0052FF]/20 transition-colors"
-              >
-                <Image src="/base-logo.png" alt="Base" width={32} height={32} className="rounded-lg" />
-                <span className="text-white text-[14px] font-medium">Sign in with Base</span>
-              </button>
-
               {/* MetaMask — uses MetaMask SDK for direct mobile deep-link */}
               <button
                 onClick={handleMetaMaskLogin}
@@ -278,16 +245,12 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
             <div className="py-10 text-center">
               <div className="w-12 h-12 mx-auto mb-4 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
               <p className="text-white font-medium text-[15px] mb-1">
-                {walletStatus === 'connecting'
-                  ? `Opening ${connectingWallet === 'base' ? 'Base' : 'MetaMask'}...`
-                  : 'Signing in...'}
+                {walletStatus === 'connecting' ? 'Opening MetaMask...' : 'Signing in...'}
               </p>
               <p className="text-[#7b8491] text-[13px]">
-                {connectingWallet === 'base'
-                  ? 'Authenticate with Face ID or passkey'
-                  : walletStatus === 'connecting'
-                    ? 'Approve the connection in MetaMask'
-                    : 'Confirm the signature in MetaMask'}
+                {walletStatus === 'connecting'
+                  ? 'Approve the connection in MetaMask'
+                  : 'Confirm the signature in MetaMask'}
               </p>
             </div>
           )}
