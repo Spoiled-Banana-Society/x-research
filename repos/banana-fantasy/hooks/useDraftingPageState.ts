@@ -289,6 +289,14 @@ export function useDraftingPageState() {
       updateUser({ freeDrafts: Math.max(0, (user.freeDrafts || 0) - 1) });
     }
 
+    // Also decrement in Firestore so the count persists across refreshes
+    // (Go API consumes tokens but doesn't update our Firestore counter)
+    fetch('/api/owner/use-pass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
+    }).catch(() => { /* best-effort — local state already updated */ });
+
     const params = new URLSearchParams({
       speed,
       mode: 'live',
