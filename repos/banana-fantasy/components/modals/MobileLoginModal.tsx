@@ -147,7 +147,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                   key={wallet.id}
                   onClick={() => {
                     onClose();
-                    privy.connectWallet({ walletList: [wallet.privyId] });
+                    privy.login({ loginMethods: ['wallet'], walletList: [wallet.privyId] });
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
                 >
