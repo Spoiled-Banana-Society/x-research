@@ -47,18 +47,18 @@ export function DraftRow({
   return (
     <div
       onClick={() => onDraftClick(draft)}
-      className={`group cursor-pointer transition-all overflow-hidden rounded-lg hover:bg-white/[0.03] border-2 ${
-        isYourTurn ? 'border-banana bg-banana/10' : isCreating ? 'border-banana/50 bg-banana/5' : 'border-transparent'
+      className={`group cursor-pointer transition-all overflow-hidden rounded-xl hover:bg-white/[0.04] border ${
+        isYourTurn ? 'border-banana bg-banana/10' : isCreating ? 'border-banana/50 bg-banana/5' : 'border-white/[0.08] bg-white/[0.02]'
       }`}
     >
       <div className="flex items-center justify-between px-5 py-3">
         <div className="w-20 flex-shrink-0 flex items-center gap-1">
           {draft.joinedAt ? (
             <Tooltip content={`Joined ${formatRelativeTime(draft.joinedAt)}`}>
-              <span className="text-white/80 font-medium cursor-default">{draft.contestName}</span>
+              <span className="text-white/80 font-medium cursor-default">{effectiveLive.isFilling ? 'Draft Room' : draft.contestName}</span>
             </Tooltip>
           ) : (
-            <span className="text-white/80 font-medium">{draft.contestName}</span>
+            <span className="text-white/80 font-medium">{effectiveLive.isFilling ? 'Draft Room' : draft.contestName}</span>
           )}
           {draft.airplaneMode && (!isSpecial || draft.status === 'drafting') && (
             <Tooltip content="Auto-pick enabled">

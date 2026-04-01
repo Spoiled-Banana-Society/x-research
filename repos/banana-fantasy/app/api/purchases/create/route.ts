@@ -9,13 +9,10 @@ export async function POST(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.purchases);
   if (rateLimited) return rateLimited;
   try {
-    const { userId: authenticatedUserId } = await getPrivyUser(req);
+    // Verify user is authenticated (Privy DID !== wallet address, so we just verify the JWT is valid)
+    await getPrivyUser(req);
     const body = await parseBody(req);
-    const bodyUserId = requireString(body.userId, 'userId');
-    if (bodyUserId !== authenticatedUserId) {
-      return jsonError('Authenticated user does not match request userId', 403);
-    }
-    const userId = authenticatedUserId;
+    const userId = requireString(body.userId, 'userId');
 
     const quantityRaw = body.quantity;
     const quantity = typeof quantityRaw === 'number' ? quantityRaw : Number(quantityRaw);

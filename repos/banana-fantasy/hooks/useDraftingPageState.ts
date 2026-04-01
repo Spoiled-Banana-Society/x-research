@@ -219,9 +219,11 @@ export function useDraftingPageState() {
   };
 
   const buildDraftRoomUrl = (draft: Draft) => {
+    // Don't pass a numbered name for filling drafts — batch number only assigned after start
+    const isFilling = draft.status === 'filling' || (draft.players || 0) < 10;
     const params = new URLSearchParams({
       id: draft.queueDraftId || draft.id,
-      name: draft.contestName,
+      name: isFilling ? 'Draft Room' : draft.contestName,
       speed: draft.draftSpeed,
       players: String(draft.players),
     });
@@ -286,6 +288,14 @@ export function useDraftingPageState() {
     } else {
       updateUser({ freeDrafts: Math.max(0, (user.freeDrafts || 0) - 1) });
     }
+
+    // Also decrement in Firestore so the count persists across refreshes
+    // (Go API consumes tokens but doesn't update our Firestore counter)
+    fetch('/api/owner/use-pass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
+    }).catch(() => { /* best-effort — local state already updated */ });
 
     const params = new URLSearchParams({
       speed,

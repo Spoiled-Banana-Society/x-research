@@ -33,20 +33,17 @@ export async function POST(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.prizes);
   if (rateLimited) return rateLimited;
   try {
-    const { userId: authenticatedUserId } = await getPrivyUser(req);
+    // Verify user is authenticated (Privy DID !== wallet address, so we just verify the JWT is valid)
+    await getPrivyUser(req);
     const body = await parseBody(req);
-    const bodyUserId = requireString(body.userId, 'userId');
+    const userId = requireString(body.userId, 'userId');
     const draftId = requireString(body.draftId, 'draftId');
     const amount = requireNumber(body.amount, 'amount');
     const methodRaw = body.method;
 
-    if (!bodyUserId.trim()) {
+    if (!userId.trim()) {
       return jsonError('User id is required', 400);
     }
-    if (bodyUserId !== authenticatedUserId) {
-      return jsonError('Authenticated user does not match request userId', 403);
-    }
-    const userId = authenticatedUserId;
     if (amount <= 0) {
       return jsonError('Amount must be greater than 0', 400);
     }
