@@ -82,21 +82,47 @@ function generateAllPositions(): PlayerData[] {
     }
   }
 
-  // Sort by a realistic ADP ranking: key positions first, DST last
-  const positionPriority: Record<string, number> = {
-    QB: 2, RB1: 1, RB2: 4, WR1: 1, WR2: 3, TE: 5, DST: 6,
-  };
+  // Realistic ADP order: interleave positions like a real draft board
+  // SF-RB1 (1), DAL-WR1 (2), BUF-QB (3), MIA-WR1 (4), CIN-RB1 (5)...
+  // Each position group uses a different team offset so same team doesn't cluster
+  const posGroups: { pos: string; teamOffset: number }[] = [
+    { pos: 'RB1', teamOffset: 0 },
+    { pos: 'WR1', teamOffset: 3 },
+    { pos: 'QB', teamOffset: 7 },
+    { pos: 'WR2', teamOffset: 11 },
+    { pos: 'RB2', teamOffset: 15 },
+    { pos: 'TE', teamOffset: 19 },
+    { pos: 'DST', teamOffset: 23 },
+  ];
 
-  // Generate a deterministic but varied ADP order
-  // Top teams' key positions get low ADPs
-  const teamTier: Record<string, number> = {};
-  TEAMS.forEach((t, i) => { teamTier[t] = i; });
+  // Build interleaved order: round-robin through position groups
+  // Each group starts at a different team index for variety
+  const grouped: Record<string, typeof adpOrder> = {};
+  for (const { pos, teamOffset } of posGroups) {
+    grouped[pos] = [];
+    for (let i = 0; i < TEAMS.length; i++) {
+      const team = TEAMS[(i + teamOffset) % TEAMS.length];
+      grouped[pos].push({ team, pos });
+    }
+  }
 
-  adpOrder.sort((a, b) => {
-    const aPri = (positionPriority[a.pos] || 6) * 32 + (teamTier[a.team] || 0);
-    const bPri = (positionPriority[b.pos] || 6) * 32 + (teamTier[b.team] || 0);
-    return aPri - bPri;
-  });
+  const interleaved: typeof adpOrder = [];
+  const posKeys = posGroups.map(g => g.pos);
+  const indices: Record<string, number> = Object.fromEntries(posKeys.map(k => [k, 0]));
+  let hasMore = true;
+  while (hasMore) {
+    hasMore = false;
+    for (const pk of posKeys) {
+      if (indices[pk] < (grouped[pk]?.length || 0)) {
+        interleaved.push(grouped[pk][indices[pk]]);
+        indices[pk]++;
+        hasMore = true;
+      }
+    }
+  }
+
+  adpOrder.length = 0;
+  adpOrder.push(...interleaved);
 
   for (const entry of adpOrder) {
     const playerId = `${entry.team}-${entry.pos}`;
