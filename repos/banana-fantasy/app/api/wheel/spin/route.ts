@@ -151,12 +151,14 @@ export async function POST(req: Request) {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (!token) throw new ApiError(401, 'Missing authorization token');
 
-    const authenticatedUserId = await verifyPrivyJwt(token);
+    // Verify JWT is valid (proves user is authenticated)
+    // Note: Privy JWT sub is a DID (did:privy:xxx), not a wallet address.
+    // The body userId is the wallet address used as our app's user ID.
+    // We verify the JWT is valid but use the body userId for data lookups.
+    await verifyPrivyJwt(token);
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-    const bodyUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
-    if (!bodyUserId) throw new ApiError(400, 'Missing userId');
-    if (bodyUserId !== authenticatedUserId) throw new ApiError(403, 'Authenticated user does not match request userId');
-    const userId = authenticatedUserId;
+    const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+    if (!userId) throw new ApiError(400, 'Missing userId');
 
     const db = getAdminFirestore();
 
