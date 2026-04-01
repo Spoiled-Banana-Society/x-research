@@ -166,7 +166,12 @@ export async function POST(req: Request) {
     const seed = generateSeed();
     const nonce = generateNonce();
 
-    const allowForcedResult = process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging';
+    // Allow forced results in staging — check multiple env signals
+    const allowForcedResult =
+      process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging' ||
+      process.env.VERCEL_ENV === 'preview' ||
+      (process.env.VERCEL_URL || '').includes('banana-fantasy') ||
+      process.env.NODE_ENV === 'development';
     const forceResult =
       allowForcedResult && typeof body.forceResult === 'string' ? body.forceResult : null;
     let segment: typeof segments[number];
