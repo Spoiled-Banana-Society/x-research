@@ -315,8 +315,8 @@ export function DraftRoomDrafting({
 
             {/* Right sidebar: Queue + My Team previews (desktop only) */}
             <div className="hidden xl:flex flex-col w-72 flex-shrink-0 border-l border-white/[0.06] overflow-hidden">
-              {/* Queue preview */}
-              <div className="flex-1 min-h-0 flex flex-col border-b border-white/[0.06]">
+              {/* Queue preview — compact, just enough for the list */}
+              <div className="flex flex-col border-b border-white/[0.06]" style={{ maxHeight: '30%' }}>
                 <button
                   onClick={() => onTabChange('queue')}
                   className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors flex-shrink-0"
