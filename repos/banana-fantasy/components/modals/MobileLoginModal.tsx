@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe, useConnectWallet } from '@privy-io/react-auth';
+import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe } from '@privy-io/react-auth';
 import { useSafePrivy } from '@/providers/PrivyProvider';
 
 interface MobileLoginModalProps {
@@ -34,21 +34,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     }
     wasAuthenticatedRef.current = privy.authenticated;
   }, [privy.authenticated, connectingWallet]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Base Account connect via Privy — uses passkeys (Face ID / Touch ID), works in mobile Safari
-  const { connectWallet } = useConnectWallet({
-    onSuccess: () => {
-      // For already-authenticated users connecting a wallet
-      handleClose();
-    },
-    onError: () => {
-      if (connectingWallet === 'base') {
-        setWalletError('Connection failed. Please try again.');
-        setWalletStatus('error');
-        setConnectingWallet(null);
-      }
-    },
-  });
 
   if (!isOpen) return null;
 
@@ -181,7 +166,9 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     setConnectingWallet('base');
     setWalletError('');
     console.log('[Base Login] Triggering Base Account connect via Privy...');
-    connectWallet({ walletList: ['base_account'], walletChainType: 'ethereum-only' });
+    // Use privy.connectWallet directly (SSR-safe via useSafePrivy fallback)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (privy as any).connectWallet?.({ walletList: ['base_account'], walletChainType: 'ethereum-only' });
   };
 
   return (
