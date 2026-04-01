@@ -27,7 +27,7 @@ export function ActiveDraftsList({
   return (
     <>
       {regularDrafts.length > 0 && (
-        <div className="divide-y divide-white/[0.06]">
+        <div className="space-y-2">
           {regularDrafts.map((draft) => (
             <DraftRow
               key={draft.id}
@@ -46,7 +46,7 @@ export function ActiveDraftsList({
       {specialDrafts.length > 0 && (
         <div className="mt-16 mb-4">
           <h2 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-3 px-2">Special Drafts</h2>
-          <div className="divide-y divide-white/10 border-y border-white/10">
+          <div className="space-y-2">
             {specialDrafts.map((draft) => (
               <DraftRow
                 key={draft.id}
