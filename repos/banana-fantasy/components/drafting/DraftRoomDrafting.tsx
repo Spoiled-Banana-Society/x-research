@@ -236,18 +236,20 @@ export function DraftRoomDrafting({
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <DraftTabs activeTab={activeTab} onTabChange={onTabChange} queueCount={engine.queuedPlayers.length} />
-
         {phase === 'drafting' && engine.draftStatus === 'completed' ? (
-          <DraftComplete
-            draftId={draftId || urlDraftId}
-            generatedCardUrl={generatedCardUrl}
-            walletAddress={walletParam}
-          />
+          <div>
+            <DraftTabs activeTab={activeTab} onTabChange={onTabChange} queueCount={engine.queuedPlayers.length} />
+            <DraftComplete
+              draftId={draftId || urlDraftId}
+              generatedCardUrl={generatedCardUrl}
+              walletAddress={walletParam}
+            />
+          </div>
         ) : (
           <div className="flex flex-1 overflow-hidden">
-            {/* Main tab content (left) */}
+            {/* Main tab content (left) — tabs centered above player list */}
             <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+              <DraftTabs activeTab={activeTab} onTabChange={onTabChange} queueCount={engine.queuedPlayers.length} />
               {activeTab === 'draft' && (
                 <DraftPlayerList
                   availablePlayers={engine.availablePlayers}

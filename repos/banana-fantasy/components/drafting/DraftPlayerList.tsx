@@ -332,7 +332,7 @@ export function DraftPlayerList({
                 <div style={{ display: 'flex', flexDirection: 'row', paddingRight: 15, gap: 15 }}>
                   <div style={{ width: 40, textAlign: 'center' }}>
                     <div style={{ fontWeight: 'bold', fontSize: 13, color: '#fff' }}>
-                      {player.adp || 'N/A'}
+                      {player.adp || player.rank || 'N/A'}
                     </div>
                   </div>
                   <div style={{ width: 40, textAlign: 'center' }}>
