@@ -82,47 +82,46 @@ function generateAllPositions(): PlayerData[] {
     }
   }
 
-  // Realistic ADP order: interleave positions like a real draft board
-  // SF-RB1 (1), DAL-WR1 (2), BUF-QB (3), MIA-WR1 (4), CIN-RB1 (5)...
-  // Each position group uses a different team offset so same team doesn't cluster
-  const posGroups: { pos: string; teamOffset: number }[] = [
-    { pos: 'RB1', teamOffset: 0 },
-    { pos: 'WR1', teamOffset: 3 },
-    { pos: 'QB', teamOffset: 7 },
-    { pos: 'WR2', teamOffset: 11 },
-    { pos: 'RB2', teamOffset: 15 },
-    { pos: 'TE', teamOffset: 19 },
-    { pos: 'DST', teamOffset: 23 },
+  // Match the backend's ranking order: SF-RB1 first, then WR1-heavy top picks
+  // The backend ranks by projected points — WR1s dominate the top, RB1s mixed in
+  // This hardcoded order matches the staging API's /draft/{id}/playerState/ response
+  const topOrder: { team: string; pos: string }[] = [
+    { team: 'SF', pos: 'RB1' },   // 1
+    { team: 'DAL', pos: 'WR1' },  // 2
+    { team: 'MIA', pos: 'WR1' },  // 3
+    { team: 'CIN', pos: 'WR1' },  // 4
+    { team: 'MIN', pos: 'WR1' },  // 5
+    { team: 'DET', pos: 'WR1' },  // 6
+    { team: 'ATL', pos: 'RB1' },  // 7
+    { team: 'NYJ', pos: 'RB1' },  // 8
+    { team: 'PHI', pos: 'WR1' },  // 9
+    { team: 'BUF', pos: 'QB' },   // 10
+    { team: 'KC', pos: 'QB' },    // 11
+    { team: 'BAL', pos: 'QB' },   // 12
+    { team: 'HOU', pos: 'WR1' },  // 13
+    { team: 'SEA', pos: 'WR1' },  // 14
+    { team: 'GB', pos: 'WR1' },   // 15
+    { team: 'CLE', pos: 'RB1' },  // 16
+    { team: 'JAX', pos: 'RB1' },  // 17
+    { team: 'PHI', pos: 'QB' },   // 18
+    { team: 'DEN', pos: 'RB1' },  // 19
+    { team: 'KC', pos: 'TE' },    // 20
   ];
 
-  // Build interleaved order: round-robin through position groups
-  // Each group starts at a different team index for variety
-  const grouped: Record<string, typeof adpOrder> = {};
-  for (const { pos, teamOffset } of posGroups) {
-    grouped[pos] = [];
-    for (let i = 0; i < TEAMS.length; i++) {
-      const team = TEAMS[(i + teamOffset) % TEAMS.length];
-      grouped[pos].push({ team, pos });
-    }
-  }
+  // Put top picks first, then everything else sorted by position priority
+  const topSet = new Set(topOrder.map(e => `${e.team}-${e.pos}`));
+  const remaining = adpOrder.filter(e => !topSet.has(`${e.team}-${e.pos}`));
 
-  const interleaved: typeof adpOrder = [];
-  const posKeys = posGroups.map(g => g.pos);
-  const indices: Record<string, number> = Object.fromEntries(posKeys.map(k => [k, 0]));
-  let hasMore = true;
-  while (hasMore) {
-    hasMore = false;
-    for (const pk of posKeys) {
-      if (indices[pk] < (grouped[pk]?.length || 0)) {
-        interleaved.push(grouped[pk][indices[pk]]);
-        indices[pk]++;
-        hasMore = true;
-      }
-    }
-  }
+  // Sort remaining by position priority then team
+  const posPri: Record<string, number> = { RB1: 0, WR1: 1, QB: 2, WR2: 3, RB2: 4, TE: 5, DST: 6 };
+  remaining.sort((a, b) => {
+    const ap = posPri[a.pos] ?? 6;
+    const bp = posPri[b.pos] ?? 6;
+    return ap !== bp ? ap - bp : TEAMS.indexOf(a.team) - TEAMS.indexOf(b.team);
+  });
 
   adpOrder.length = 0;
-  adpOrder.push(...interleaved);
+  adpOrder.push(...topOrder, ...remaining);
 
   for (const entry of adpOrder) {
     const playerId = `${entry.team}-${entry.pos}`;
