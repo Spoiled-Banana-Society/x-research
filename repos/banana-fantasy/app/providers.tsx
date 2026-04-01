@@ -50,7 +50,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
     <NotifContext.Provider value={{ triggerOptIn: notif.triggerOptIn }}>
       <div className="min-h-screen bg-bg-primary">
         {!isDraftRoom && <Header onEditProfile={() => setShowEditProfile(true)} onShowTutorial={handleShowTutorial} />}
-        <main id="main-content" tabIndex={-1} className="pb-16 md:pb-0">{children}</main>
+        <main className="pb-16 md:pb-0">{children}</main>
         {!isDraftRoom && <MobileTabBar />}
         <EditProfileModal isOpen={showEditProfile} onClose={() => setShowEditProfile(false)} />
         {showOnboarding && <OnboardingTutorial onComplete={() => setShowOnboarding(false)} />}
