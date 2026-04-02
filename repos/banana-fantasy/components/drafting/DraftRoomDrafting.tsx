@@ -12,6 +12,7 @@ import { DraftComplete } from '@/components/drafting/DraftComplete';
 import {
   getPositionColorHex,
   POSITION_COLORS,
+  ALL_POSITIONS,
 } from '@/lib/draftRoomConstants';
 import type { DraftType, RoomPhase } from '@/lib/draftRoomConstants';
 import { useDraftEngine } from '@/hooks/useDraftEngine';
@@ -383,15 +384,15 @@ export function DraftRoomDrafting({
                   {(() => {
                     const userRoster = engine.rosters[engine.draftOrder[engine.userDraftPosition]?.name || ''];
                     const positionKeys = ['QB', 'RB', 'WR', 'TE', 'DST'] as const;
-                    // Build a lookup for pick details (bye, adp, pick#) from engine data
+                    // Build a lookup for pick details (bye, adp, pick#) from static data
+                    // Use ALL_POSITIONS (never mutated) instead of engine.availablePlayers (which removes picked players)
                     const pickLookup: Record<string, { bye: number; adp: number; pick: number }> = {};
                     for (const p of engine.picks) {
                       if (p.ownerIndex === engine.userDraftPosition) {
-                        const player = engine.availablePlayers.find(ap => ap.playerId === p.playerId)
-                          || (engine as unknown as { allPlayers?: { playerId: string; byeWeek?: number; adp?: number; rank?: number }[] }).allPlayers?.find((ap: { playerId: string }) => ap.playerId === p.playerId);
+                        const player = ALL_POSITIONS.find(ap => ap.playerId === p.playerId);
                         pickLookup[p.playerId] = {
-                          bye: (player as { byeWeek?: number } | undefined)?.byeWeek || 0,
-                          adp: (player as { adp?: number; rank?: number } | undefined)?.adp || (player as { rank?: number } | undefined)?.rank || 0,
+                          bye: player?.byeWeek || 0,
+                          adp: player?.adp || player?.rank || 0,
                           pick: p.pickNumber || 0,
                         };
                       }
