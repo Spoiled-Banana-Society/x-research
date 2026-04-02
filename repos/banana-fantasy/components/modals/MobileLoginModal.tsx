@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe } from '@privy-io/react-auth';
+import { useSafePrivy } from '@/providers/PrivyProvider';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const { initOAuth } = useLoginWithOAuth();
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
+  const privy = useSafePrivy();
 
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -20,8 +22,19 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const [view, setView] = useState<'main' | 'email-input' | 'otp'>('main');
   const [walletStatus, setWalletStatus] = useState<'idle' | 'connecting' | 'signing' | 'error'>('idle');
   const [walletError, setWalletError] = useState('');
+  const [connectingWallet, setConnectingWallet] = useState<'metamask' | 'coinbase' | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mmSdkRef = useRef<Record<string, any> | null>(null);
+
+  // Detect when user returns from Coinbase Wallet auth and Privy auth completes
+  const wasAuthenticatedRef = useRef(privy.authenticated);
+  useEffect(() => {
+    if (!wasAuthenticatedRef.current && privy.authenticated && connectingWallet === 'coinbase') {
+      console.log('[Base Login] Auth detected after return from keys.coinbase.com');
+      handleClose();
+    }
+    wasAuthenticatedRef.current = privy.authenticated;
+  }, [privy.authenticated, connectingWallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 
@@ -35,6 +48,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     setEmailError('');
     setWalletStatus('idle');
     setWalletError('');
+    setConnectingWallet(null);
     onClose();
   };
 
@@ -62,7 +76,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
   const handleMetaMaskLogin = async () => {
     setWalletStatus('connecting');
-
+    setConnectingWallet('metamask');
     setWalletError('');
 
     try {
@@ -143,8 +157,74 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         setWalletStatus('error');
       }
     } finally {
-
+      setConnectingWallet(null);
     }
+  };
+
+  // Coinbase Wallet / Base Account — pre-open popup to fix mobile Safari
+  const handleCoinbaseLogin = () => {
+    setWalletStatus('connecting');
+    setConnectingWallet('coinbase');
+    setWalletError('');
+    console.log('[Base Login] Pre-opening popup synchronously from click handler...');
+
+    // Step 1: Pre-open popup SYNCHRONOUSLY from click handler
+    // Mobile Safari allows window.open from direct click handlers but blocks it from async callbacks.
+    // The Base Account SDK opens its popup from an async context, which Safari turns into a new tab
+    // (breaking window.opener and postMessage). By pre-opening here, we ensure it's a real popup.
+    const popup = window.open('about:blank', 'base-auth', 'width=480,height=720');
+    console.log('[Base Login] Popup pre-opened:', !!popup);
+
+    if (!popup) {
+      // Popup was blocked — fall back to showing error
+      setWalletError('Please allow popups for this site and try again.');
+      setWalletStatus('error');
+      setConnectingWallet(null);
+      return;
+    }
+
+    // Step 2: Intercept the NEXT window.open call so the SDK uses our pre-opened popup
+    const originalOpen = window.open.bind(window);
+    let intercepted = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).open = (...args: any[]) => {
+      if (!intercepted && args[0] && typeof args[0] === 'string') {
+        intercepted = true;
+        console.log('[Base Login] Intercepted SDK popup → navigating pre-opened popup to:', args[0]);
+        try {
+          popup.location.href = args[0];
+        } catch {
+          // Cross-origin navigation — try assigning directly
+          popup.location.assign(args[0]);
+        }
+        return popup;
+      }
+      return originalOpen(...args);
+    };
+
+    // Step 3: Trigger Base Account connect via Privy
+    // preSelectedWalletId skips Privy's wallet picker → goes straight to Base Account
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (privy as any).connectWallet?.({
+      walletList: ['base_account'],
+      preSelectedWalletId: 'base_account',
+      walletChainType: 'ethereum-only',
+    });
+
+    // Step 4: Restore window.open after generous timeout
+    setTimeout(() => {
+      window.open = originalOpen;
+      console.log('[Base Login] window.open restored');
+    }, 30000);
+
+    // Step 5: Timeout — if nothing happens after 60s, reset state
+    setTimeout(() => {
+      if (connectingWallet === 'coinbase') {
+        console.log('[Base Login] Timeout — resetting state');
+        setWalletStatus('idle');
+        setConnectingWallet(null);
+      }
+    }, 60000);
   };
 
   return (
@@ -229,12 +309,9 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
-              {/* Coinbase Wallet — opens site in CB Wallet's in-app browser */}
+              {/* Coinbase Wallet / Base — pre-opened popup approach for mobile Safari */}
               <button
-                onClick={() => {
-                  const appUrl = encodeURIComponent(window.location.origin);
-                  window.location.href = `cbwallet://dapp?url=${appUrl}`;
-                }}
+                onClick={handleCoinbaseLogin}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
               >
                 <Image src="/coinbase-wallet.png" alt="Coinbase Wallet" width={32} height={32} className="rounded-lg" />
@@ -257,12 +334,16 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
             <div className="py-10 text-center">
               <div className="w-12 h-12 mx-auto mb-4 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
               <p className="text-white font-medium text-[15px] mb-1">
-                {walletStatus === 'connecting' ? 'Opening MetaMask...' : 'Signing in...'}
+                {walletStatus === 'connecting'
+                  ? `Connecting to ${connectingWallet === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask'}...`
+                  : 'Signing in...'}
               </p>
               <p className="text-[#7b8491] text-[13px]">
-                {walletStatus === 'connecting'
-                  ? 'Approve the connection in MetaMask'
-                  : 'Confirm the signature in MetaMask'}
+                {connectingWallet === 'coinbase'
+                  ? 'Complete sign-in in the popup window'
+                  : walletStatus === 'connecting'
+                    ? 'Approve the connection in MetaMask'
+                    : 'Confirm the signature in MetaMask'}
               </p>
             </div>
           )}
@@ -278,7 +359,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
               <p className="text-white font-medium text-[15px] mb-1">Connection failed</p>
               <p className="text-[#7b8491] text-[13px] mb-4">{walletError}</p>
               <button
-                onClick={() => { setWalletStatus('idle'); setWalletError(''); }}
+                onClick={() => { setWalletStatus('idle'); setWalletError(''); setConnectingWallet(null); }}
                 className="px-6 py-2 rounded-lg text-[13px] font-medium bg-[#f59e0b] text-black"
               >
                 Try again
