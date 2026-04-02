@@ -329,23 +329,20 @@ export function DraftRoomDrafting({
             </button>
             <div className={`hidden xl:flex flex-col flex-shrink-0 border-l border-white/[0.06] overflow-hidden transition-all duration-200 ${sidebarOpen ? 'w-72' : 'w-0 border-l-0'}`}>
               {/* Queue preview — compact, just enough for the list */}
+              {(() => {
+                const draftedIds = new Set(engine.picks.map(p => p.playerId));
+                const activeQueue = engine.queuedPlayers.filter(p => !draftedIds.has(p.playerId));
+                return (
               <div className="flex flex-col border-b border-white/[0.06]" style={{ maxHeight: '30%' }}>
                 <button
                   onClick={() => onTabChange('queue')}
                   className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors flex-shrink-0"
                 >
-                  {(() => {
-                    const draftedIds = new Set(engine.picks.map(p => p.playerId));
-                    const activeQueue = engine.queuedPlayers.filter(p => !draftedIds.has(p.playerId));
-                    return <span>Queue {activeQueue.length > 0 ? `(${activeQueue.length})` : ''}</span>;
-                  })()}
+                  <span>Queue {activeQueue.length > 0 ? `(${activeQueue.length})` : ''}</span>
                   <span className="text-[10px] text-white/30">View full →</span>
                 </button>
                 <div className="flex-1 overflow-y-auto px-2 pb-2">
-                  {(() => {
-                    const draftedIds = new Set(engine.picks.map(p => p.playerId));
-                    const activeQueue = engine.queuedPlayers.filter(p => !draftedIds.has(p.playerId));
-                    return activeQueue.length === 0 ? (
+                  {activeQueue.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-white/20 text-xs text-center px-4">
                       <span className="text-2xl mb-2">⭐</span>
                       <p>Add players from the list to set your pick order</p>
@@ -366,10 +363,11 @@ export function DraftRoomDrafting({
                         </div>
                       ))}
                     </div>
-                  );
-                  })()}
+                  )}
                 </div>
               </div>
+                );
+              })()}
 
               {/* My Team preview */}
               <div className="flex-1 min-h-0 flex flex-col">
