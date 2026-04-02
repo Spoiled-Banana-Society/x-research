@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useLoginWithOAuth, useLoginWithEmail, useLoginWithSiwe } from '@privy-io/react-auth';
-import { useSafePrivy } from '@/providers/PrivyProvider';
 
 interface MobileLoginModalProps {
   isOpen: boolean;
@@ -14,7 +13,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const { initOAuth } = useLoginWithOAuth();
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
-  const privy = useSafePrivy();
 
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -25,16 +23,22 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
   const [connectingWallet, setConnectingWallet] = useState<'metamask' | 'coinbase' | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mmSdkRef = useRef<Record<string, any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const baseProviderRef = useRef<any>(null);
 
-  // Detect when user returns from Coinbase Wallet auth and Privy auth completes
-  const wasAuthenticatedRef = useRef(privy.authenticated);
+  // Pre-load Base Account SDK when modal opens so it's ready on click
   useEffect(() => {
-    if (!wasAuthenticatedRef.current && privy.authenticated && connectingWallet === 'coinbase') {
-      console.log('[Base Login] Auth detected after return from keys.coinbase.com');
-      handleClose();
-    }
-    wasAuthenticatedRef.current = privy.authenticated;
-  }, [privy.authenticated, connectingWallet]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isOpen) return;
+    import('@base-org/account').then(({ createBaseAccountSDK }) => {
+      const sdk = createBaseAccountSDK({
+        appName: 'Banana Fantasy',
+        appLogoUrl: `${window.location.origin}/sbs-logo.png`,
+        appChainIds: [8453],
+      });
+      baseProviderRef.current = sdk.getProvider();
+      console.log('[CB] Base Account SDK pre-loaded');
+    }).catch(err => console.error('[CB] Failed to pre-load Base SDK:', err));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -109,7 +113,6 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         throw new Error('No accounts returned from MetaMask');
       }
 
-      // Checksum the address (EIP-55) — Privy requires it
       const { getAddress } = await import('ethers');
       const address = getAddress(accounts[0]);
       console.log('[MM Login] Step 4: Connected. Address:', address);
@@ -120,17 +123,12 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         throw new Error('MetaMask provider not available after connect');
       }
 
-      // Get the chain MetaMask is actually connected to
       const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
       const chainIdNum = parseInt(chainIdHex, 16);
       const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
       console.log('[MM Login] Step 5: Provider acquired. Chain:', siweChainId);
 
-      console.log('[MM Login] Step 5b: Generating SIWE message...');
-      const message = await generateSiweMessage({
-        address,
-        chainId: siweChainId,
-      });
+      const message = await generateSiweMessage({ address, chainId: siweChainId });
       console.log('[MM Login] Step 6: SIWE message generated. Requesting signature...');
 
       const signature = await provider.request({
@@ -161,76 +159,81 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     }
   };
 
-  // Coinbase Wallet / Base Account login for mobile Safari
-  const handleCoinbaseLogin = () => {
+  // Coinbase Wallet / Base Account — use SDK directly (bypass Privy's connectWallet modal)
+  // Same pattern as MetaMask: SDK handles connection, then SIWE via Privy
+  const handleCoinbaseLogin = async () => {
     setWalletStatus('connecting');
     setConnectingWallet('coinbase');
     setWalletError('');
 
-    console.log('[CB] === Starting Coinbase Wallet login ===');
-    console.log('[CB] privy.authenticated:', privy.authenticated);
-    console.log('[CB] privy.ready:', privy.ready);
-    console.log('[CB] typeof privy.connectWallet:', typeof (privy as any).connectWallet); // eslint-disable-line
-    console.log('[CB] typeof privy.login:', typeof (privy as any).login); // eslint-disable-line
-
-    // Intercept ALL window.open calls to log what the SDK does
-    const originalOpen = window.open.bind(window);
-    let openCallCount = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).open = (...args: any[]) => {
-      openCallCount++;
-      console.log(`[CB] window.open call #${openCallCount}:`, {
-        url: args[0],
-        target: args[1],
-        features: args[2],
-      });
-      // Let it open normally so we can see what happens
-      const result = originalOpen(...args);
-      console.log(`[CB] window.open result:`, result ? 'Window opened' : 'Blocked/null');
-      return result;
-    };
-
-    // Listen for postMessage to see if anything comes back
-    const messageHandler = (event: MessageEvent) => {
-      console.log('[CB] postMessage received:', {
-        origin: event.origin,
-        dataType: typeof event.data,
-        dataPreview: typeof event.data === 'string' ? event.data.slice(0, 200) : JSON.stringify(event.data).slice(0, 200),
-      });
-    };
-    window.addEventListener('message', messageHandler);
-
-    // Listen for visibility change (user returning from another tab)
-    const visHandler = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[CB] Tab became visible again — user returned');
-        console.log('[CB] privy.authenticated now:', privy.authenticated);
-      }
-    };
-    document.addEventListener('visibilitychange', visHandler);
-
-    // Try calling connectWallet with preSelectedWalletId
-    console.log('[CB] Calling privy.connectWallet({ preSelectedWalletId: "base_account" })...');
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (privy as any).connectWallet?.({
-        walletList: ['base_account'],
-        preSelectedWalletId: 'base_account',
-        walletChainType: 'ethereum-only',
-      });
-      console.log('[CB] connectWallet called successfully (no error thrown)');
-    } catch (err) {
-      console.error('[CB] connectWallet threw:', err);
-    }
+      // Get pre-loaded provider, or create one now
+      let provider = baseProviderRef.current;
+      if (!provider) {
+        console.log('[CB] SDK not pre-loaded, loading now...');
+        const { createBaseAccountSDK } = await import('@base-org/account');
+        const sdk = createBaseAccountSDK({
+          appName: 'Banana Fantasy',
+          appLogoUrl: `${window.location.origin}/sbs-logo.png`,
+          appChainIds: [8453],
+        });
+        provider = sdk.getProvider();
+        baseProviderRef.current = provider;
+      }
 
-    // Restore window.open and clean up listeners after 60s
-    setTimeout(() => {
-      window.open = originalOpen;
-      window.removeEventListener('message', messageHandler);
-      document.removeEventListener('visibilitychange', visHandler);
-      console.log('[CB] Cleanup complete. openCallCount:', openCallCount);
-      console.log('[CB] privy.authenticated final:', privy.authenticated);
-    }, 60000);
+      console.log('[CB] Step 1: Requesting accounts (this opens keys.coinbase.com)...');
+
+      // This triggers the keys.coinbase.com popup/tab
+      // The SDK handles the popup, postMessage, and response
+      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+      console.log('[CB] Step 2: Got accounts:', accounts);
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts returned from Coinbase Wallet');
+      }
+
+      const { getAddress } = await import('ethers');
+      const address = getAddress(accounts[0]);
+      console.log('[CB] Step 3: Address:', address);
+      setWalletStatus('signing');
+
+      // Get chain ID
+      const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
+      const chainIdNum = parseInt(chainIdHex as string, 16);
+      const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
+      console.log('[CB] Step 4: Chain:', siweChainId);
+
+      // Generate and sign SIWE message
+      const message = await generateSiweMessage({ address, chainId: siweChainId });
+      console.log('[CB] Step 5: SIWE message generated, requesting signature...');
+
+      const signature = await provider.request({
+        method: 'personal_sign',
+        params: [message, address],
+      }) as string;
+      console.log('[CB] Step 6: Signature received, logging in with Privy...');
+
+      // Log in via Privy with the SIWE signature
+      await loginWithSiwe({
+        signature,
+        message,
+        walletClientType: 'coinbase_wallet',
+        connectorType: 'wallet_connect_v2',
+      });
+      console.log('[CB] Step 7: Privy login complete!');
+
+      handleClose();
+    } catch (err: unknown) {
+      console.error('[CB] Error:', err);
+      const msg = (err instanceof Error ? err.message : null) || 'Connection failed';
+      if (msg.includes('rejected') || msg.includes('denied') || msg.includes('User rejected')) {
+        setWalletStatus('idle');
+      } else {
+        setWalletError(msg);
+        setWalletStatus('error');
+      }
+      setConnectingWallet(null);
+    }
   };
 
   return (
@@ -315,7 +318,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
                 <span className="text-white text-[14px] font-medium">X (Twitter)</span>
               </button>
 
-              {/* Coinbase Wallet / Base — pre-opened popup approach for mobile Safari */}
+              {/* Coinbase Wallet — direct Base Account SDK (no Privy modal) */}
               <button
                 onClick={handleCoinbaseLogin}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] active:bg-white/[0.08] transition-colors"
@@ -346,7 +349,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
               </p>
               <p className="text-[#7b8491] text-[13px]">
                 {connectingWallet === 'coinbase'
-                  ? 'Complete sign-in in the popup window'
+                  ? 'Complete sign-in in the Coinbase window'
                   : walletStatus === 'connecting'
                     ? 'Approve the connection in MetaMask'
                     : 'Confirm the signature in MetaMask'}
