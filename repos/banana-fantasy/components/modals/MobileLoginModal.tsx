@@ -161,69 +161,75 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     }
   };
 
-  // Coinbase Wallet / Base Account — pre-open popup to fix mobile Safari
+  // Coinbase Wallet / Base Account login for mobile Safari
   const handleCoinbaseLogin = () => {
     setWalletStatus('connecting');
     setConnectingWallet('coinbase');
     setWalletError('');
-    console.log('[Base Login] Pre-opening popup synchronously from click handler...');
 
-    // Step 1: Pre-open popup SYNCHRONOUSLY from click handler
-    // Mobile Safari allows window.open from direct click handlers but blocks it from async callbacks.
-    // The Base Account SDK opens its popup from an async context, which Safari turns into a new tab
-    // (breaking window.opener and postMessage). By pre-opening here, we ensure it's a real popup.
-    const popup = window.open('about:blank', 'base-auth', 'width=480,height=720');
-    console.log('[Base Login] Popup pre-opened:', !!popup);
+    console.log('[CB] === Starting Coinbase Wallet login ===');
+    console.log('[CB] privy.authenticated:', privy.authenticated);
+    console.log('[CB] privy.ready:', privy.ready);
+    console.log('[CB] typeof privy.connectWallet:', typeof (privy as any).connectWallet); // eslint-disable-line
+    console.log('[CB] typeof privy.login:', typeof (privy as any).login); // eslint-disable-line
 
-    if (!popup) {
-      // Popup was blocked — fall back to showing error
-      setWalletError('Please allow popups for this site and try again.');
-      setWalletStatus('error');
-      setConnectingWallet(null);
-      return;
-    }
-
-    // Step 2: Intercept the NEXT window.open call so the SDK uses our pre-opened popup
+    // Intercept ALL window.open calls to log what the SDK does
     const originalOpen = window.open.bind(window);
-    let intercepted = false;
+    let openCallCount = 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).open = (...args: any[]) => {
-      if (!intercepted && args[0] && typeof args[0] === 'string') {
-        intercepted = true;
-        console.log('[Base Login] Intercepted SDK popup → navigating pre-opened popup to:', args[0]);
-        try {
-          popup.location.href = args[0];
-        } catch {
-          // Cross-origin navigation — try assigning directly
-          popup.location.assign(args[0]);
-        }
-        return popup;
-      }
-      return originalOpen(...args);
+      openCallCount++;
+      console.log(`[CB] window.open call #${openCallCount}:`, {
+        url: args[0],
+        target: args[1],
+        features: args[2],
+      });
+      // Let it open normally so we can see what happens
+      const result = originalOpen(...args);
+      console.log(`[CB] window.open result:`, result ? 'Window opened' : 'Blocked/null');
+      return result;
     };
 
-    // Step 3: Trigger Base Account connect via Privy
-    // preSelectedWalletId skips Privy's wallet picker → goes straight to Base Account
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (privy as any).connectWallet?.({
-      walletList: ['base_account'],
-      preSelectedWalletId: 'base_account',
-      walletChainType: 'ethereum-only',
-    });
+    // Listen for postMessage to see if anything comes back
+    const messageHandler = (event: MessageEvent) => {
+      console.log('[CB] postMessage received:', {
+        origin: event.origin,
+        dataType: typeof event.data,
+        dataPreview: typeof event.data === 'string' ? event.data.slice(0, 200) : JSON.stringify(event.data).slice(0, 200),
+      });
+    };
+    window.addEventListener('message', messageHandler);
 
-    // Step 4: Restore window.open after generous timeout
+    // Listen for visibility change (user returning from another tab)
+    const visHandler = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[CB] Tab became visible again — user returned');
+        console.log('[CB] privy.authenticated now:', privy.authenticated);
+      }
+    };
+    document.addEventListener('visibilitychange', visHandler);
+
+    // Try calling connectWallet with preSelectedWalletId
+    console.log('[CB] Calling privy.connectWallet({ preSelectedWalletId: "base_account" })...');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (privy as any).connectWallet?.({
+        walletList: ['base_account'],
+        preSelectedWalletId: 'base_account',
+        walletChainType: 'ethereum-only',
+      });
+      console.log('[CB] connectWallet called successfully (no error thrown)');
+    } catch (err) {
+      console.error('[CB] connectWallet threw:', err);
+    }
+
+    // Restore window.open and clean up listeners after 60s
     setTimeout(() => {
       window.open = originalOpen;
-      console.log('[Base Login] window.open restored');
-    }, 30000);
-
-    // Step 5: Timeout — if nothing happens after 60s, reset state
-    setTimeout(() => {
-      if (connectingWallet === 'coinbase') {
-        console.log('[Base Login] Timeout — resetting state');
-        setWalletStatus('idle');
-        setConnectingWallet(null);
-      }
+      window.removeEventListener('message', messageHandler);
+      document.removeEventListener('visibilitychange', visHandler);
+      console.log('[CB] Cleanup complete. openCallCount:', openCallCount);
+      console.log('[CB] privy.authenticated final:', privy.authenticated);
     }, 60000);
   };
 
