@@ -161,79 +161,103 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
   // Coinbase Wallet / Base Account — use SDK directly (bypass Privy's connectWallet modal)
   // Same pattern as MetaMask: SDK handles connection, then SIWE via Privy
-  const handleCoinbaseLogin = async () => {
+  const handleCoinbaseLogin = () => {
+    const provider = baseProviderRef.current;
+    if (!provider) {
+      // SDK not pre-loaded yet — tell user to try again
+      setWalletError('Loading... please try again.');
+      setWalletStatus('error');
+      return;
+    }
+
     setWalletStatus('connecting');
     setConnectingWallet('coinbase');
     setWalletError('');
 
-    try {
-      // Get pre-loaded provider, or create one now
-      let provider = baseProviderRef.current;
-      if (!provider) {
-        console.log('[CB] SDK not pre-loaded, loading now...');
-        const { createBaseAccountSDK } = await import('@base-org/account');
-        const sdk = createBaseAccountSDK({
-          appName: 'Banana Fantasy',
-          appLogoUrl: `${window.location.origin}/sbs-logo.png`,
-          appChainIds: [8453],
-        });
-        provider = sdk.getProvider();
-        baseProviderRef.current = provider;
-      }
+    // Pre-open the popup SYNCHRONOUSLY from click handler.
+    // Safari allows window.open from direct clicks but blocks it from async callbacks.
+    // The Base Account SDK calls window.open from deep inside async code, which Safari blocks,
+    // showing the "wants to continue in Base Account" dialog. By pre-opening here and
+    // monkey-patching window.open, the SDK reuses our popup and skips the dialog.
+    const originalOpen = window.open.bind(window);
+    const popup = originalOpen(
+      'https://keys.coinbase.com/connect',
+      `wallet_${crypto.randomUUID()}`,
+      `width=420, height=700, left=${(window.innerWidth - 420) / 2 + window.screenX}, top=${(window.innerHeight - 700) / 2 + window.screenY}`
+    );
 
-      console.log('[CB] Step 1: Requesting accounts (this opens keys.coinbase.com)...');
+    if (popup) {
+      // Intercept SDK's window.open call — return our pre-opened popup
+      let intercepted = false;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).open = (...args: any[]) => {
+        if (!intercepted) {
+          intercepted = true;
+          console.log('[CB] Intercepted SDK window.open, reusing pre-opened popup');
+          // Navigate to the SDK's full URL (with query params)
+          if (args[0] && typeof args[0] === 'string') {
+            try { popup.location.href = args[0]; } catch { /* cross-origin */ }
+          }
+          return popup;
+        }
+        return originalOpen(...args);
+      };
 
-      // This triggers the keys.coinbase.com popup/tab
-      // The SDK handles the popup, postMessage, and response
-      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
-      console.log('[CB] Step 2: Got accounts:', accounts);
-
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No accounts returned from Coinbase Wallet');
-      }
-
-      const { getAddress } = await import('ethers');
-      const address = getAddress(accounts[0]);
-      console.log('[CB] Step 3: Address:', address);
-      setWalletStatus('signing');
-
-      // Get chain ID
-      const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
-      const chainIdNum = parseInt(chainIdHex as string, 16);
-      const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
-      console.log('[CB] Step 4: Chain:', siweChainId);
-
-      // Generate and sign SIWE message
-      const message = await generateSiweMessage({ address, chainId: siweChainId });
-      console.log('[CB] Step 5: SIWE message generated, requesting signature...');
-
-      const signature = await provider.request({
-        method: 'personal_sign',
-        params: [message, address],
-      }) as string;
-      console.log('[CB] Step 6: Signature received, logging in with Privy...');
-
-      // Log in via Privy with the SIWE signature
-      await loginWithSiwe({
-        signature,
-        message,
-        walletClientType: 'coinbase_wallet',
-        connectorType: 'wallet_connect_v2',
-      });
-      console.log('[CB] Step 7: Privy login complete!');
-
-      handleClose();
-    } catch (err: unknown) {
-      console.error('[CB] Error:', err);
-      const msg = (err instanceof Error ? err.message : null) || 'Connection failed';
-      if (msg.includes('rejected') || msg.includes('denied') || msg.includes('User rejected')) {
-        setWalletStatus('idle');
-      } else {
-        setWalletError(msg);
-        setWalletStatus('error');
-      }
-      setConnectingWallet(null);
+      // Restore after 30s
+      setTimeout(() => { window.open = originalOpen; }, 30000);
     }
+
+    // Trigger SDK flow — it will use our pre-opened popup
+    (async () => {
+      try {
+        console.log('[CB] Step 1: Requesting accounts...');
+        const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+        console.log('[CB] Step 2: Got accounts:', accounts);
+
+        if (!accounts || accounts.length === 0) {
+          throw new Error('No accounts returned from Coinbase Wallet');
+        }
+
+        const { getAddress } = await import('ethers');
+        const address = getAddress(accounts[0]);
+        console.log('[CB] Step 3: Address:', address);
+        setWalletStatus('signing');
+
+        const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
+        const chainIdNum = parseInt(chainIdHex as string, 16);
+        const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
+        console.log('[CB] Step 4: Chain:', siweChainId);
+
+        const message = await generateSiweMessage({ address, chainId: siweChainId });
+        console.log('[CB] Step 5: SIWE message generated, requesting signature...');
+
+        const signature = await provider.request({
+          method: 'personal_sign',
+          params: [message, address],
+        }) as string;
+        console.log('[CB] Step 6: Signature received, logging in with Privy...');
+
+        await loginWithSiwe({
+          signature,
+          message,
+          walletClientType: 'coinbase_wallet',
+          connectorType: 'wallet_connect_v2',
+        });
+        console.log('[CB] Step 7: Privy login complete!');
+
+        handleClose();
+      } catch (err: unknown) {
+        console.error('[CB] Error:', err);
+        const msg = (err instanceof Error ? err.message : null) || 'Connection failed';
+        if (msg.includes('rejected') || msg.includes('denied') || msg.includes('User rejected')) {
+          setWalletStatus('idle');
+        } else {
+          setWalletError(msg);
+          setWalletStatus('error');
+        }
+        setConnectingWallet(null);
+      }
+    })();
   };
 
   return (
