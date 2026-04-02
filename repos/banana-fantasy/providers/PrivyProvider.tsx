@@ -79,9 +79,13 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
               theme: 'dark',
               accentColor: '#f59e0b',
               logo: '/sbs-logo.png',
+              showWalletLoginFirst: true,
               walletList: ['base_account', 'metamask', 'coinbase_wallet'],
             },
-            loginMethods: ['wallet', 'google', 'twitter', 'email'],
+            loginMethodsAndOrder: {
+              primary: ['email', 'google', 'twitter', 'metamask', 'coinbase_wallet'],
+              overflow: [],
+            },
             embeddedWallets: {
               ethereum: {
                 createOnLogin: 'users-without-wallets',
