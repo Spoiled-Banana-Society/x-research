@@ -69,12 +69,12 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
     setErrorMessage(null);
 
     try {
-      // For bank withdrawals, open BankWithdrawModal (Bridge via Privy)
+      // For bank withdrawals, open BankWithdrawModal directly (Bridge via Privy)
+      // Don't call onWithdraw first — Bridge handles the actual transfer
       if (payoutMethod === 'bank') {
-        await onWithdraw(draftId, amount, payoutMethod);
         setShowBankWithdraw(true);
-        setStep('select');
         setIsSubmitting(false);
+        setStep('select');
         return;
       }
 
@@ -241,7 +241,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
         </button>
 
         {payoutMethod === 'bank' && (
-          <p className="text-center text-text-muted text-xs">Powered by MoonPay</p>
+          <p className="text-center text-text-muted text-xs">Powered by Bridge</p>
         )}
       </div>
 
