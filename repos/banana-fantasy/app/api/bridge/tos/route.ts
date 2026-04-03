@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
+import { getPrivyUser } from '@/lib/auth';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
-import { privyApiFetch, BRIDGE_PROVIDER, extractPrivyUserId } from '@/lib/privy-api';
+import { privyApiFetch, BRIDGE_PROVIDER } from '@/lib/privy-api';
 
 export async function POST(req: Request) {
   try {
-    const userId = extractPrivyUserId(req);
+    const { userId } = await getPrivyUser(req);
     const body = await parseBody(req);
     const redirectUri = requireString(body.redirectUri, 'redirectUri');
 

@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
+import { getPrivyUser } from '@/lib/auth';
 import { json, jsonError, parseBody } from '@/lib/api/routeUtils';
-import { privyApiFetch, BRIDGE_PROVIDER, extractPrivyUserId } from '@/lib/privy-api';
+import { privyApiFetch, BRIDGE_PROVIDER } from '@/lib/privy-api';
 
 // Check KYC status
 export async function GET(req: Request) {
   try {
-    const userId = extractPrivyUserId(req);
+    const { userId } = await getPrivyUser(req);
 
     const result = await privyApiFetch<{ status: string; user_id: string }>(
       `/users/${userId}/fiat/kyc?provider=${BRIDGE_PROVIDER}`,
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
 // Submit KYC data
 export async function POST(req: Request) {
   try {
-    const userId = extractPrivyUserId(req);
+    const { userId } = await getPrivyUser(req);
     const body = await parseBody(req);
 
     const result = await privyApiFetch<{ status: string; user_id: string }>(

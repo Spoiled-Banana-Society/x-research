@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
+import { getPrivyUser } from '@/lib/auth';
 import { json, jsonError, parseBody } from '@/lib/api/routeUtils';
-import { privyApiFetch, BRIDGE_PROVIDER, extractPrivyUserId } from '@/lib/privy-api';
+import { privyApiFetch, BRIDGE_PROVIDER } from '@/lib/privy-api';
 
 // Get registered fiat accounts
 export async function GET(req: Request) {
   try {
-    const userId = extractPrivyUserId(req);
+    const { userId } = await getPrivyUser(req);
 
     const result = await privyApiFetch<{ accounts: unknown[] }>(
       `/users/${userId}/fiat/accounts?provider=${BRIDGE_PROVIDER}`,
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
 // Register a bank account
 export async function POST(req: Request) {
   try {
-    const userId = extractPrivyUserId(req);
+    const { userId } = await getPrivyUser(req);
     const body = await parseBody(req);
 
     const result = await privyApiFetch<{ id: string }>(
