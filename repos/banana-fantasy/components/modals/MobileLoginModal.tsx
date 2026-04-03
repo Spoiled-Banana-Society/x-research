@@ -1,5 +1,4 @@
 'use client';
-import { logger } from '@/lib/logger';
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
@@ -37,7 +36,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         appChainIds: [8453],
       });
       baseProviderRef.current = sdk.getProvider();
-      logger.debug('[CB] Base Account SDK pre-loaded');
+      console.log('[CB] Base Account SDK pre-loaded');
     }).catch(err => console.error('[CB] Failed to pre-load Base SDK:', err));
   }, [isOpen]);
 
@@ -85,11 +84,11 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     setWalletError('');
 
     try {
-      logger.debug('[MM Login] Step 1: Loading MetaMask SDK...');
+      console.log('[MM Login] Step 1: Loading MetaMask SDK...');
       const { default: MetaMaskSDK } = await import('@metamask/sdk');
 
       if (!mmSdkRef.current) {
-        logger.debug('[MM Login] Step 2: Initializing SDK...');
+        console.log('[MM Login] Step 2: Initializing SDK...');
         const sdk = new MetaMaskSDK({
           dappMetadata: {
             name: 'Banana Fantasy',
@@ -101,14 +100,14 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         });
         await sdk.init();
         mmSdkRef.current = sdk;
-        logger.debug('[MM Login] SDK initialized successfully');
+        console.log('[MM Login] SDK initialized successfully');
       }
 
       const sdk = mmSdkRef.current;
 
-      logger.debug('[MM Login] Step 3: Calling sdk.connect()...');
+      console.log('[MM Login] Step 3: Calling sdk.connect()...');
       const accounts = await sdk.connect() as string[];
-      logger.debug('[MM Login] Step 3 complete. Accounts:', accounts);
+      console.log('[MM Login] Step 3 complete. Accounts:', accounts);
 
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts returned from MetaMask');
@@ -116,7 +115,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
       const { getAddress } = await import('ethers');
       const address = getAddress(accounts[0]);
-      logger.debug('[MM Login] Step 4: Connected. Address:', address);
+      console.log('[MM Login] Step 4: Connected. Address:', address);
       setWalletStatus('signing');
 
       const provider = sdk.getProvider();
@@ -127,16 +126,16 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
       const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
       const chainIdNum = parseInt(chainIdHex, 16);
       const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
-      logger.debug('[MM Login] Step 5: Provider acquired. Chain:', siweChainId);
+      console.log('[MM Login] Step 5: Provider acquired. Chain:', siweChainId);
 
       const message = await generateSiweMessage({ address, chainId: siweChainId });
-      logger.debug('[MM Login] Step 6: SIWE message generated. Requesting signature...');
+      console.log('[MM Login] Step 6: SIWE message generated. Requesting signature...');
 
       const signature = await provider.request({
         method: 'personal_sign',
         params: [message, address],
       }) as string;
-      logger.debug('[MM Login] Step 7: Signature received. Logging in with Privy...');
+      console.log('[MM Login] Step 7: Signature received. Logging in with Privy...');
 
       await loginWithSiwe({
         signature,
@@ -144,7 +143,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
         walletClientType: 'metamask',
         connectorType: 'wallet_connect_v2',
       });
-      logger.debug('[MM Login] Step 8: Privy login complete!');
+      console.log('[MM Login] Step 8: Privy login complete!');
 
       handleClose();
     } catch (err: unknown) {
@@ -194,7 +193,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
       (window as any).open = (...args: any[]) => {
         if (!intercepted) {
           intercepted = true;
-          logger.debug('[CB] Intercepted SDK window.open, reusing pre-opened popup');
+          console.log('[CB] Intercepted SDK window.open, reusing pre-opened popup');
           // Navigate to the SDK's full URL (with query params)
           if (args[0] && typeof args[0] === 'string') {
             try { popup.location.href = args[0]; } catch { /* cross-origin */ }
@@ -211,9 +210,9 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
     // Trigger SDK flow — it will use our pre-opened popup
     (async () => {
       try {
-        logger.debug('[CB] Step 1: Requesting accounts...');
+        console.log('[CB] Step 1: Requesting accounts...');
         const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
-        logger.debug('[CB] Step 2: Got accounts:', accounts);
+        console.log('[CB] Step 2: Got accounts:', accounts);
 
         if (!accounts || accounts.length === 0) {
           throw new Error('No accounts returned from Coinbase Wallet');
@@ -221,22 +220,22 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
 
         const { getAddress } = await import('ethers');
         const address = getAddress(accounts[0]);
-        logger.debug('[CB] Step 3: Address:', address);
+        console.log('[CB] Step 3: Address:', address);
         setWalletStatus('signing');
 
         const chainIdHex = await provider.request({ method: 'eth_chainId' }) as string;
         const chainIdNum = parseInt(chainIdHex as string, 16);
         const siweChainId = `eip155:${chainIdNum}` as `eip155:${number}`;
-        logger.debug('[CB] Step 4: Chain:', siweChainId);
+        console.log('[CB] Step 4: Chain:', siweChainId);
 
         const message = await generateSiweMessage({ address, chainId: siweChainId });
-        logger.debug('[CB] Step 5: SIWE message generated, requesting signature...');
+        console.log('[CB] Step 5: SIWE message generated, requesting signature...');
 
         const signature = await provider.request({
           method: 'personal_sign',
           params: [message, address],
         }) as string;
-        logger.debug('[CB] Step 6: Signature received, logging in with Privy...');
+        console.log('[CB] Step 6: Signature received, logging in with Privy...');
 
         await loginWithSiwe({
           signature,
@@ -244,7 +243,7 @@ export function MobileLoginModal({ isOpen, onClose }: MobileLoginModalProps) {
           walletClientType: 'coinbase_wallet',
           connectorType: 'wallet_connect_v2',
         });
-        logger.debug('[CB] Step 7: Privy login complete!');
+        console.log('[CB] Step 7: Privy login complete!');
 
         handleClose();
       } catch (err: unknown) {

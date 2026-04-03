@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
+import { PersonaVerificationModal } from './PersonaVerificationModal';
 import type { PrizeWithdrawal } from '@/types';
 
 interface WithdrawModalProps {
@@ -9,16 +10,21 @@ interface WithdrawModalProps {
   onClose: () => void;
   amount: number;
   draftId?: string;
+  userId?: string;
   onWithdraw: (draftId: string, amount: number, method: PrizeWithdrawal['method']) => Promise<unknown>;
 }
 
 type Step = 'select' | 'processing' | 'success' | 'error';
 
-export function WithdrawModal({ isOpen, onClose, amount, draftId, onWithdraw }: WithdrawModalProps) {
+const TEMPLATE_BASIC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_BASIC || '';
+const TEMPLATE_KYC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_KYC || '';
+
+export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, onWithdraw }: WithdrawModalProps) {
   const [payoutMethod, setPayoutMethod] = useState<PrizeWithdrawal['method']>('bank');
   const [step, setStep] = useState<Step>('select');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showVerification, setShowVerification] = useState<'basic' | 'kyc' | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -26,6 +32,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, onWithdraw }: 
       setStep('select');
       setErrorMessage(null);
       setIsSubmitting(false);
+      setShowVerification(null);
     }
   }, [isOpen]);
 
@@ -37,6 +44,14 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, onWithdraw }: 
       maximumFractionDigits: 0,
     }).format(value);
   };
+
+  const handleVerificationComplete = useCallback(async (_inquiryId: string, status: string) => {
+    setShowVerification(null);
+    if (status === 'completed') {
+      // Verification passed — retry the withdrawal
+      handleConfirm();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirm = async () => {
     if (!draftId) {
@@ -53,6 +68,14 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, onWithdraw }: 
       await onWithdraw(draftId, amount, payoutMethod);
       setStep('success');
     } catch (err) {
+      // Check if the error is a verification requirement
+      if (err && typeof err === 'object' && 'requiresVerification' in err) {
+        const verErr = err as { requiresVerification: 'basic' | 'kyc' };
+        setShowVerification(verErr.requiresVerification);
+        setStep('select');
+        setIsSubmitting(false);
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Withdrawal failed. Please try again.';
       setErrorMessage(message);
       setStep('error');
@@ -207,6 +230,17 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, onWithdraw }: 
           <p className="text-center text-text-muted text-xs">Powered by Coinbase Offramp</p>
         )}
       </div>
+
+      {/* Persona Verification Modal — opens when withdrawal requires verification */}
+      {showVerification && userId && (
+        <PersonaVerificationModal
+          isOpen={true}
+          onClose={() => setShowVerification(null)}
+          templateId={showVerification === 'basic' ? TEMPLATE_BASIC : TEMPLATE_KYC}
+          userId={userId}
+          onComplete={handleVerificationComplete}
+        />
+      )}
     </Modal>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePrizes, useEligibility } from '@/hooks/usePrizes';
 import { WithdrawModal } from '@/components/modals/WithdrawModal';
-import type { EligibilityCheckStatus, PrizeHistoryItem } from '@/types';
+import type { PrizeHistoryItem } from '@/types';
 
 export default function PrizesPage() {
   const { isLoggedIn, setShowLoginModal, user } = useAuth();
@@ -62,37 +62,14 @@ export default function PrizesPage() {
     };
   }, [prizesQuery.totalWinnings, prizesQuery.pendingWithdrawals]);
 
-  const isBlueCheckVerified = useMemo(() => {
-    if (typeof user?.isBlueCheckVerified === 'boolean') return user.isBlueCheckVerified;
-    return Boolean(eligibility?.isBlueCheckVerified);
-  }, [eligibility?.isBlueCheckVerified, user?.isBlueCheckVerified]);
-
-  const normalizedStatus = useCallback((status?: EligibilityCheckStatus) => {
-    if (status === 'verified' || status === 'pending' || status === 'unverified') return status;
-    return eligibility?.isVerified ? 'verified' : 'unverified';
-  }, [eligibility?.isVerified]);
-
   const isEligible = useMemo(() => {
-    if (!eligibility) return false;
-    if (eligibility.isVerified) return true;
-    const checks = [eligibility.kycStatus, eligibility.ageStatus, eligibility.regionStatus].map(normalizedStatus);
-    return checks.every((status) => status === 'verified');
-  }, [eligibility, normalizedStatus]);
+    return Boolean(eligibility?.tier1Verified);
+  }, [eligibility?.tier1Verified]);
 
-  const canWithdrawPrizes = isEligible && isBlueCheckVerified;
+  // Users can always attempt withdrawal — Persona verification triggers inline if needed
+  const canWithdrawPrizes = true;
 
-  const renderEligibilityBadge = (status?: EligibilityCheckStatus) => {
-    const normalized = normalizedStatus(status);
-    if (normalized === 'verified') {
-      return <Badge type="default" className="bg-success/20 text-success border-success/30">Verified</Badge>;
-    }
-    if (normalized === 'pending') {
-      return <Badge type="default" className="bg-warning/20 text-warning border-warning/30">Pending</Badge>;
-    }
-    return <Badge type="default" className="bg-error/20 text-error border-error/30">Unverified</Badge>;
-  };
-
-  const verificationUrl = eligibility?.verificationUrl || '/verify';
+  const verificationUrl = '/verify';
 
   if (!isLoggedIn) {
     return (
@@ -140,9 +117,9 @@ export default function PrizesPage() {
                 ? 'Your eligibility allows SBS to issue prizes automatically when you win a contest.'
                 : 'Complete verification to receive prize payouts.'}
             </p>
-            {!isBlueCheckVerified && (
+            {!isEligible && (
               <p className="text-text-muted text-sm mt-1">
-                BlueCheck identity verification is required before withdrawals.
+                Verification will be required when you make your first withdrawal.
               </p>
             )}
           </div>
@@ -154,37 +131,27 @@ export default function PrizesPage() {
           )}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="flex items-center justify-between rounded-xl bg-bg-tertiary/60 border border-bg-tertiary px-4 py-3">
             <div>
-              <p className="text-xs text-text-muted">KYC</p>
-              <p className="text-sm text-text-primary font-medium">Identity</p>
+              <p className="text-xs text-text-muted">Age + Location</p>
+              <p className="text-sm text-text-primary font-medium">Basic Verification</p>
             </div>
-            {renderEligibilityBadge(eligibility?.kycStatus)}
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-bg-tertiary/60 border border-bg-tertiary px-4 py-3">
-            <div>
-              <p className="text-xs text-text-muted">Age</p>
-              <p className="text-sm text-text-primary font-medium">18+ Requirement</p>
-            </div>
-            {renderEligibilityBadge(eligibility?.ageStatus)}
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-bg-tertiary/60 border border-bg-tertiary px-4 py-3">
-            <div>
-              <p className="text-xs text-text-muted">Region</p>
-              <p className="text-sm text-text-primary font-medium">Location</p>
-            </div>
-            {renderEligibilityBadge(eligibility?.regionStatus)}
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-bg-tertiary/60 border border-bg-tertiary px-4 py-3">
-            <div>
-              <p className="text-xs text-text-muted">BlueCheck</p>
-              <p className="text-sm text-text-primary font-medium">ID + Selfie</p>
-            </div>
-            {isBlueCheckVerified ? (
+            {eligibility?.tier1Verified ? (
               <Badge type="default" className="bg-success/20 text-success border-success/30">Verified</Badge>
             ) : (
-              <Badge type="default" className="bg-error/20 text-error border-error/30">Required</Badge>
+              <Badge type="default" className="bg-bg-elevated text-text-muted border-bg-elevated">At Withdrawal</Badge>
+            )}
+          </div>
+          <div className="flex items-center justify-between rounded-xl bg-bg-tertiary/60 border border-bg-tertiary px-4 py-3">
+            <div>
+              <p className="text-xs text-text-muted">Full KYC</p>
+              <p className="text-sm text-text-primary font-medium">Identity (over $2k)</p>
+            </div>
+            {eligibility?.tier2Verified ? (
+              <Badge type="default" className="bg-success/20 text-success border-success/30">Verified</Badge>
+            ) : (
+              <Badge type="default" className="bg-bg-elevated text-text-muted border-bg-elevated">When Needed</Badge>
             )}
           </div>
         </div>
@@ -329,6 +296,7 @@ export default function PrizesPage() {
         onClose={() => setWithdrawModal({ isOpen: false })}
         amount={withdrawModal.prize?.amount ?? 0}
         draftId={withdrawModal.prize?.type === 'win' ? withdrawModal.prize.draftId : undefined}
+        userId={user?.id}
         onWithdraw={prizesQuery.withdraw}
       />
     </div>

@@ -15,8 +15,6 @@ export interface User {
   hofEntries: number;
   cardPurchaseCount: number;
   isVerified: boolean;
-  blueCheckEmail?: string;
-  isBlueCheckVerified?: boolean;
   referredBy?: string;
   createdAt: string;
 }
@@ -211,14 +209,15 @@ export type EligibilityCheckStatus = 'verified' | 'pending' | 'unverified';
 
 export interface EligibilityStatus {
   isVerified: boolean;
-  isBlueCheckVerified?: boolean;
   season: number;
   w9Completed: boolean;
   lastVerifiedDate?: string;
-  kycStatus?: EligibilityCheckStatus;
-  ageStatus?: EligibilityCheckStatus;
-  regionStatus?: EligibilityCheckStatus;
-  verificationUrl?: string;
+  // Persona verification tiers
+  tier1Verified: boolean; // age + geo (first withdrawal)
+  tier2Verified: boolean; // full KYC (cumulative $2k+)
+  cumulativeWithdrawals: number;
+  geoState?: string;
+  personaInquiryId?: string;
 }
 
 // Promo types

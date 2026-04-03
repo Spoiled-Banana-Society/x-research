@@ -4,7 +4,10 @@ import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireNumber, requireString } from '@/lib/api/routeUtils';
 import { getPrivyUser } from '@/lib/auth';
 import { createWithdrawal } from '@/lib/db';
+import { getPersonaVerification, incrementCumulativeWithdrawals } from '@/lib/db-firestore';
 import type { PrizeWithdrawal, WithdrawalStatus } from '@/types';
+
+const KYC_THRESHOLD = 2000; // Cumulative withdrawal threshold for full KYC
 
 const API_BASE = process.env.NEXT_PUBLIC_SBS_API_URL || '';
 
@@ -53,6 +56,20 @@ export async function POST(req: Request) {
     }
     const method: PrizeWithdrawal['method'] = methodRaw;
 
+    // Check Persona verification status before processing
+    const verification = await getPersonaVerification(userId);
+
+    // Tier 1: First withdrawal — must have age + geo verification
+    if (!verification.tier1.verified) {
+      return json({ requiresVerification: 'basic', message: 'Age and location verification required before withdrawal' }, 403);
+    }
+
+    // Tier 2: Cumulative withdrawals >= $2k — must have full KYC
+    const projectedTotal = (verification.cumulativeWithdrawals || 0) + amount;
+    if (projectedTotal >= KYC_THRESHOLD && !verification.tier2.verified) {
+      return json({ requiresVerification: 'kyc', message: 'Full identity verification required for withdrawals over $2,000', cumulativeTotal: verification.cumulativeWithdrawals }, 403);
+    }
+
     let backendStatus: WithdrawalStatus | undefined;
     if (API_BASE) {
       const res = await fetch(`${API_BASE}/owner/${userId}/withdraw`, {
@@ -78,6 +95,10 @@ export async function POST(req: Request) {
     }
 
     const withdrawal = await createWithdrawal(userId, draftId, amount, method, backendStatus ?? 'pending');
+
+    // Track cumulative withdrawals for KYC threshold
+    await incrementCumulativeWithdrawals(userId, amount);
+
     return json({ status: withdrawal.status, withdrawal }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);

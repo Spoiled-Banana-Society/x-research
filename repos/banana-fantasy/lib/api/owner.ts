@@ -87,13 +87,6 @@ function fallbackUsernameFromWallet(walletAddress: string): string {
  * Missing fields are filled with safe defaults.
  */
 export function mapOwnerProfileToUser(walletAddress: string, owner: ApiOwnerProfile): User {
-  const blueCheckVerified =
-    typeof owner.isBlueCheckVerified === 'boolean'
-      ? owner.isBlueCheckVerified
-      : typeof owner.IsBlueCheckVerified === 'boolean'
-        ? owner.IsBlueCheckVerified
-        : false;
-
   return {
     id: normalizeWalletAddress(walletAddress),
     username: owner.pfp?.displayName || fallbackUsernameFromWallet(walletAddress),
@@ -102,17 +95,14 @@ export function mapOwnerProfileToUser(walletAddress: string, owner: ApiOwnerProf
     profilePicture: owner.pfp?.imageUrl,
     nflTeam: undefined,
     xHandle: undefined,
-    // These counts should eventually come from draft tokens / promos.
     draftPasses: typeof owner.availableCredit === 'number' ? owner.availableCredit : 0,
-    usdcBalance: 0, // Will be populated by on-chain read in useAuth
+    usdcBalance: 0,
     freeDrafts: 0,
     wheelSpins: 0,
     jackpotEntries: 0,
     hofEntries: 0,
     cardPurchaseCount: 0,
     isVerified: true,
-    blueCheckEmail: typeof owner.blueCheckEmail === 'string' ? owner.blueCheckEmail : undefined,
-    isBlueCheckVerified: blueCheckVerified,
     createdAt: new Date().toISOString(),
   };
 }

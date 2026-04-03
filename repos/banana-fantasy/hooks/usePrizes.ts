@@ -88,6 +88,6 @@ export function useEligibility(opts?: { userId?: string }) {
   return useSWRLike<EligibilityStatus>(
     userId ? `eligibility:${userId}` : null,
     ({ signal }) => fetchJson<EligibilityStatus>('/api/eligibility', { signal, query: { userId } }),
-    { enabled: !!userId, fallbackData: { isVerified: false, season: 0, w9Completed: false } },
+    { enabled: !!userId, fallbackData: { isVerified: false, season: 0, w9Completed: false, tier1Verified: false, tier2Verified: false, cumulativeWithdrawals: 0 } },
   );
 }

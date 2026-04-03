@@ -49,8 +49,7 @@ export const mockEligibility: EligibilityStatus = {
   season: 2026,
   w9Completed: true,
   lastVerifiedDate: '2025-12-01',
-  kycStatus: 'verified',
-  ageStatus: 'verified',
-  regionStatus: 'verified',
-  verificationUrl: '/verify',
+  tier1Verified: true,
+  tier2Verified: false,
+  cumulativeWithdrawals: 0,
 };

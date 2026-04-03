@@ -28,6 +28,7 @@ import type {
 const USERS_COLLECTION = 'v2_users';
 const PURCHASES_COLLECTION = 'v2_purchases';
 const WITHDRAWALS_COLLECTION = 'withdrawalRequests';
+const PERSONA_COLLECTION = 'personaVerifications';
 const CONTESTS_COLLECTION = 'v2_contests';
 
 const REFERRAL_CODES_COLLECTION = 'v2_referral_codes';
@@ -997,4 +998,40 @@ export async function recordDraftCompletion(userId: string, draftId: string): Pr
 export async function recordPick10(userId: string, draftId: string, _draftName: string): Promise<Promo | null> {
   logger.debug(`[db] recordPick10 stub: userId=${userId}, draftId=${draftId}`);
   return null;
+}
+
+// ── Persona Verification ──────────────────────────────────────────────
+
+export interface PersonaVerificationData {
+  tier1: { verified: boolean; inquiryId?: string; verifiedAt?: string; geoState?: string };
+  tier2: { verified: boolean; inquiryId?: string; verifiedAt?: string };
+  cumulativeWithdrawals: number;
+}
+
+const DEFAULT_PERSONA: PersonaVerificationData = {
+  tier1: { verified: false },
+  tier2: { verified: false },
+  cumulativeWithdrawals: 0,
+};
+
+export async function getPersonaVerification(userId: string): Promise<PersonaVerificationData> {
+  const db = getAdminFirestore();
+  const doc = await db.collection(PERSONA_COLLECTION).doc(userId).get();
+  if (!doc.exists) return { ...DEFAULT_PERSONA };
+  return doc.data() as PersonaVerificationData;
+}
+
+export async function savePersonaVerification(userId: string, data: Partial<PersonaVerificationData>): Promise<void> {
+  const db = getAdminFirestore();
+  await db.collection(PERSONA_COLLECTION).doc(userId).set(data, { merge: true });
+}
+
+export async function incrementCumulativeWithdrawals(userId: string, amount: number): Promise<number> {
+  const db = getAdminFirestore();
+  const ref = db.collection(PERSONA_COLLECTION).doc(userId);
+  const doc = await ref.get();
+  const current = doc.exists ? (doc.data() as PersonaVerificationData).cumulativeWithdrawals || 0 : 0;
+  const newTotal = current + amount;
+  await ref.set({ cumulativeWithdrawals: newTotal }, { merge: true });
+  return newTotal;
 }
