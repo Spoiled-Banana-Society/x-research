@@ -2,6 +2,7 @@
 
 import { useMemo, useCallback, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useSafePrivy } from '@/providers/PrivyProvider';
 import type { EligibilityStatus, PrizeHistoryItem, PrizeWithdrawal } from '@/types';
 import { AppApiError, fetchJson } from '@/lib/appApiClient';
 import { useSWRLike } from '@/hooks/useSWRLike';
@@ -13,6 +14,7 @@ interface WithdrawResponse {
 
 export function usePrizes(opts?: { userId?: string }) {
   const { user } = useAuth();
+  const privy = useSafePrivy();
   const ownerId = opts?.userId ?? user?.walletAddress ?? user?.id;
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
@@ -42,13 +44,23 @@ export function usePrizes(opts?: { userId?: string }) {
       if (!ownerId) throw new Error('Missing user id');
       setWithdrawError(null);
       try {
+        const token = await privy.getAccessToken();
         const response = await fetchJson<WithdrawResponse>('/api/prizes/withdraw', {
           method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           body: JSON.stringify({ userId: ownerId, draftId, amount, method }),
         });
         await refresh();
         return response.withdrawal;
       } catch (err) {
+        // Check if API returned a verification requirement (403 with requiresVerification)
+        if (err instanceof AppApiError && err.status === 403 && err.body) {
+          const body = err.body as Record<string, unknown>;
+          if (body.requiresVerification) {
+            throw { requiresVerification: body.requiresVerification };
+          }
+        }
+
         let message = 'Withdrawal failed. Please try again.';
         if (err instanceof AppApiError) {
           message = err.message || message;
@@ -66,7 +78,7 @@ export function usePrizes(opts?: { userId?: string }) {
         throw new Error(message);
       }
     },
-    [ownerId, refresh],
+    [ownerId, privy, refresh],
   );
 
   return {
