@@ -297,6 +297,7 @@ export default function PrizesPage() {
         amount={withdrawModal.prize?.amount ?? 0}
         draftId={withdrawModal.prize?.type === 'win' ? withdrawModal.prize.draftId : undefined}
         userId={user?.id}
+        walletAddress={user?.walletAddress}
         onWithdraw={prizesQuery.withdraw}
       />
     </div>

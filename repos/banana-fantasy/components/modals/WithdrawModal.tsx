@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
 import { PersonaVerificationModal } from './PersonaVerificationModal';
+import { BankWithdrawModal } from './BankWithdrawModal';
 import type { PrizeWithdrawal } from '@/types';
 
 interface WithdrawModalProps {
@@ -11,6 +12,7 @@ interface WithdrawModalProps {
   amount: number;
   draftId?: string;
   userId?: string;
+  walletAddress?: string;
   onWithdraw: (draftId: string, amount: number, method: PrizeWithdrawal['method']) => Promise<unknown>;
 }
 
@@ -19,12 +21,13 @@ type Step = 'select' | 'processing' | 'success' | 'error';
 const TEMPLATE_BASIC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_BASIC || '';
 const TEMPLATE_KYC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_KYC || '';
 
-export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, onWithdraw }: WithdrawModalProps) {
+export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, walletAddress, onWithdraw }: WithdrawModalProps) {
   const [payoutMethod, setPayoutMethod] = useState<PrizeWithdrawal['method']>('bank');
   const [step, setStep] = useState<Step>('select');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVerification, setShowVerification] = useState<'basic' | 'kyc' | null>(null);
+  const [showBankWithdraw, setShowBankWithdraw] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -33,6 +36,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, onWith
       setErrorMessage(null);
       setIsSubmitting(false);
       setShowVerification(null);
+      setShowBankWithdraw(false);
     }
   }, [isOpen]);
 
@@ -65,6 +69,16 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, onWith
     setErrorMessage(null);
 
     try {
+      // For bank withdrawals, open BankWithdrawModal (Bridge via Privy)
+      if (payoutMethod === 'bank') {
+        await onWithdraw(draftId, amount, payoutMethod);
+        setShowBankWithdraw(true);
+        setStep('select');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // For USDC withdrawals, process directly
       await onWithdraw(draftId, amount, payoutMethod);
       setStep('success');
     } catch (err) {
@@ -227,7 +241,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, onWith
         </button>
 
         {payoutMethod === 'bank' && (
-          <p className="text-center text-text-muted text-xs">Powered by Coinbase Offramp</p>
+          <p className="text-center text-text-muted text-xs">Powered by MoonPay</p>
         )}
       </div>
 
@@ -239,6 +253,20 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, onWith
           templateId={showVerification === 'basic' ? TEMPLATE_BASIC : TEMPLATE_KYC}
           userId={userId}
           onComplete={handleVerificationComplete}
+        />
+      )}
+
+      {/* Bank Withdraw Modal — Bridge via Privy for bank cashout */}
+      {showBankWithdraw && walletAddress && (
+        <BankWithdrawModal
+          isOpen={true}
+          onClose={() => setShowBankWithdraw(false)}
+          amount={amount}
+          walletAddress={walletAddress}
+          onSuccess={() => {
+            setShowBankWithdraw(false);
+            setStep('success');
+          }}
         />
       )}
     </Modal>
