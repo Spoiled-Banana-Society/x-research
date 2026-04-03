@@ -2,7 +2,7 @@
 
 import { useMemo, useCallback, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useSafePrivy } from '@/providers/PrivyProvider';
+import { usePrivy } from '@privy-io/react-auth';
 import type { EligibilityStatus, PrizeHistoryItem, PrizeWithdrawal } from '@/types';
 import { AppApiError, fetchJson } from '@/lib/appApiClient';
 import { useSWRLike } from '@/hooks/useSWRLike';
@@ -14,7 +14,7 @@ interface WithdrawResponse {
 
 export function usePrizes(opts?: { userId?: string }) {
   const { user } = useAuth();
-  const privy = useSafePrivy();
+  const privy = usePrivy();
   const ownerId = opts?.userId ?? user?.walletAddress ?? user?.id;
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
