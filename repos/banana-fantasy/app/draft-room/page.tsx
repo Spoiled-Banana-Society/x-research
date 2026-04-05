@@ -831,10 +831,12 @@ function DraftRoomContent() {
 
   useEffect(() => {
     if (phase !== 'filling') return;
+    // In live mode, player count comes from the server (Firebase RTDB / polling) — don't simulate filling
+    if (isLiveMode) return;
 
     if (!fillingStartedAtRef.current) {
       fillingStartedAtRef.current = Date.now();
-      if (!isLiveMode && draftId) {
+      if (draftId) {
         draftStore.updateDraft(draftId, { phase: 'filling', fillingStartedAt: fillingStartedAtRef.current, fillingInitialPlayers: Math.max(initialPlayers, 1) });
       }
     }
@@ -850,7 +852,7 @@ function DraftRoomContent() {
       setPlayerCount(prev => {
         if (prev >= 10) { clearInterval(interval); return 10; }
         if (count <= prev) return prev;
-        if (!isLiveMode && draftId) draftStore.updateDraft(draftId, { players: count, status: 'filling' });
+        if (draftId) draftStore.updateDraft(draftId, { players: count, status: 'filling' });
         return count;
       });
     }, fillingInterval);
