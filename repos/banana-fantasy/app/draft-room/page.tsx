@@ -106,11 +106,6 @@ function DraftRoomContent() {
     return 'filling';
   });
   const [playerCount, setPlayerCount] = useState(() => {
-    if (stored?.phase === 'filling' && stored.fillingStartedAt) {
-      const initPlayers = stored.fillingInitialPlayers ?? Math.max(initialPlayers, 1);
-      const elapsed = (Date.now() - stored.fillingStartedAt) / 800;
-      return Math.min(10, initPlayers + Math.floor(elapsed));
-    }
     if (stored?.phase && stored.phase !== 'filling') return 10;
     return Math.min(Math.max(initialPlayers, 1), 10);
   });
@@ -829,40 +824,11 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data?.isDraftClosed, draftId, walletParam, generatedCardUrl]);
 
+  // Player count comes from server polling only — no fake simulation
+
+  // Poll Firestore league document for real player count during filling
   useEffect(() => {
-    if (phase !== 'filling') return;
-    // In live mode, player count comes from the server (Firebase RTDB / polling) — don't simulate filling
-    if (isLiveMode) return;
-
-    if (!fillingStartedAtRef.current) {
-      fillingStartedAtRef.current = Date.now();
-      if (draftId) {
-        draftStore.updateDraft(draftId, { phase: 'filling', fillingStartedAt: fillingStartedAtRef.current, fillingInitialPlayers: Math.max(initialPlayers, 1) });
-      }
-    }
-
-    if (playerCount >= 10) return;
-
-    const fillingInterval = 800;
-    const startedAt = fillingStartedAtRef.current;
-    const initPlayers = stored?.fillingInitialPlayers ?? Math.max(initialPlayers, 1);
-    const interval = setInterval(() => {
-      const elapsed = (Date.now() - startedAt) / fillingInterval;
-      const count = Math.min(10, initPlayers + Math.floor(elapsed));
-      setPlayerCount(prev => {
-        if (prev >= 10) { clearInterval(interval); return 10; }
-        if (count <= prev) return prev;
-        if (draftId) draftStore.updateDraft(draftId, { players: count, status: 'filling' });
-        return count;
-      });
-    }, fillingInterval);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
-
-  // Live mode: poll Firestore league document for real player count during filling
-  useEffect(() => {
-    if (!isLiveMode || !draftId || phase !== 'filling') return;
+    if (!draftId || phase !== 'filling') return;
     let cancelled = false;
 
     const pollPlayers = async () => {
@@ -872,7 +838,7 @@ function DraftRoomContent() {
         const data = await res.json();
         const count = Number(data.numPlayers) || 0;
         if (count > 0 && !cancelled) {
-          setPlayerCount(prev => Math.max(prev, count));
+          setPlayerCount(count);
         }
       } catch {
         // ignore
@@ -883,7 +849,7 @@ function DraftRoomContent() {
     const interval = setInterval(pollPlayers, 3000);
     return () => { cancelled = true; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLiveMode, draftId, phase]);
+  }, [draftId, phase]);
 
   useEffect(() => {
     if (!isLiveMode || !draftId) return;
