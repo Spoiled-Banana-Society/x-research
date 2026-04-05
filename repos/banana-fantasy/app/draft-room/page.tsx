@@ -860,6 +860,31 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // Live mode: poll Firestore league document for real player count during filling
+  useEffect(() => {
+    if (!isLiveMode || !draftId || phase !== 'filling') return;
+    let cancelled = false;
+
+    const pollPlayers = async () => {
+      try {
+        const res = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draftId)}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const count = Number(data.numPlayers) || 0;
+        if (count > 0 && !cancelled) {
+          setPlayerCount(prev => Math.max(prev, count));
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    pollPlayers();
+    const interval = setInterval(pollPlayers, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLiveMode, draftId, phase]);
+
   useEffect(() => {
     if (!isLiveMode || !draftId) return;
     if (phase === 'drafting' || phase === 'loading') return;
