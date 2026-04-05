@@ -153,6 +153,22 @@ export function useDraftLiveSync({
       const MAX_JOIN_RETRIES = 3;
       let lastErr: unknown = null;
 
+      // Auto-mint a token before joining so the wallet always has one available
+      try {
+        const { getStagingApiUrl } = await import('@/lib/staging');
+        const apiBase = getStagingApiUrl();
+        if (apiBase) {
+          const mintId = Date.now();
+          await fetch(`${apiBase}/owner/${walletParam}/draftToken/mint`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minId: mintId, maxId: mintId }),
+          });
+        }
+      } catch {
+        // Mint may fail if token already exists — that's fine
+      }
+
       for (let attempt = 1; attempt <= MAX_JOIN_RETRIES; attempt++) {
         try {
           const { joinDraft } = await import('@/lib/api/leagues');
@@ -160,6 +176,7 @@ export function useDraftLiveSync({
           if (!draftRoom?.id) throw new Error('Join failed: no draft ID');
 
           const newId = draftRoom.id;
+          logger.debug('[Draft Room] Joined draft:', newId, 'players:', draftRoom.players);
           setDraftId(newId);
 
           try {
@@ -186,9 +203,6 @@ export function useDraftLiveSync({
             passType: passTypeParam || 'paid',
           });
 
-          // Bot-fill removed — let draft stay in filling phase so multiple
-          // real users can join for testing. Use the "Fill with Bots" button
-          // in the draft room UI when ready.
           return;
         } catch (err) {
           lastErr = err;
