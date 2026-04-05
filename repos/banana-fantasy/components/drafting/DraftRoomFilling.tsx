@@ -21,9 +21,6 @@ interface DraftRoomFillingProps {
   user?: UserLike | null;
   visibleDraftType: DraftType | null;
   controls?: React.ReactNode;
-  draftId?: string;
-  speed?: string;
-  onFillBots?: (count: number) => void;
 }
 
 export function DraftRoomFilling({
@@ -36,9 +33,6 @@ export function DraftRoomFilling({
   user,
   visibleDraftType,
   controls,
-  draftId,
-  speed: _speed,
-  onFillBots,
 }: DraftRoomFillingProps) {
   const isRandomizing = waitingForServer || isRandomizingFromStore;
   const randomizingProgress = Math.max(serverWaitProgress, randomizingProgressFromStore);
@@ -156,29 +150,6 @@ export function DraftRoomFilling({
           )}
         </div>
 
-        {/* Staging: Fill with Bots + Copy Link buttons */}
-        {draftId && !isRandomizing && playerCount < 10 && (
-          <div className="flex items-center justify-center gap-3 mt-3 pb-2">
-            <button
-              onClick={() => onFillBots?.(10 - playerCount)}
-              className="px-4 py-1.5 text-xs font-bold rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-white/70 hover:text-white transition-colors border border-white/[0.1]"
-            >
-              Fill with Bots ({10 - playerCount})
-            </button>
-            <button
-              onClick={() => {
-                const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
-                  const btn = document.activeElement as HTMLButtonElement;
-                  if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy Invite Link'; }, 1500); }
-                });
-              }}
-              className="px-4 py-1.5 text-xs font-bold rounded-lg bg-banana/20 hover:bg-banana/30 text-banana hover:text-banana transition-colors border border-banana/30"
-            >
-              Copy Invite Link
-            </button>
-          </div>
-        )}
 
         {controls}
       </div>
