@@ -186,13 +186,9 @@ export function useDraftLiveSync({
             passType: passTypeParam || 'paid',
           });
 
-          if (isStagingMode()) {
-            const stagingBase = getStagingApiUrl();
-            if (stagingBase) {
-              fetch(`${stagingBase}/staging/fill-bots/${speedParam || 'fast'}?count=9&leagueId=${newId}`, { method: 'POST' })
-                .catch(() => console.warn('Bot fill failed'));
-            }
-          }
+          // Bot-fill removed — let draft stay in filling phase so multiple
+          // real users can join for testing. Use the "Fill with Bots" button
+          // in the draft room UI when ready.
           return;
         } catch (err) {
           lastErr = err;

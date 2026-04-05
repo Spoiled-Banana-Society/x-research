@@ -1532,6 +1532,19 @@ function DraftRoomContent() {
               user={user}
               visibleDraftType={visibleDraftType}
               controls={bannerControls}
+              draftId={draftId}
+              speed={speedParam || 'fast'}
+              onFillBots={async (count) => {
+                try {
+                  const { getStagingApiUrl } = await import('@/lib/staging');
+                  const base = getStagingApiUrl();
+                  if (base && draftId) {
+                    await fetch(`${base}/staging/fill-bots/${speedParam || 'fast'}?count=${count}&leagueId=${draftId}`, { method: 'POST' });
+                  }
+                } catch (e) {
+                  console.error('Fill bots failed:', e);
+                }
+              }}
             />
           )}
 
