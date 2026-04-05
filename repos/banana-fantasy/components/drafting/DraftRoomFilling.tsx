@@ -37,7 +37,7 @@ export function DraftRoomFilling({
   visibleDraftType,
   controls,
   draftId,
-  speed,
+  speed: _speed,
   onFillBots,
 }: DraftRoomFillingProps) {
   const isRandomizing = waitingForServer || isRandomizingFromStore;
