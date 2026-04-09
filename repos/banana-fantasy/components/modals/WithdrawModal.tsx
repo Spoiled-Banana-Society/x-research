@@ -3,7 +3,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
 import { PersonaVerificationModal } from './PersonaVerificationModal';
-import { BankWithdrawModal } from './BankWithdrawModal';
 import type { PrizeWithdrawal } from '@/types';
 
 interface WithdrawModalProps {
@@ -16,29 +15,31 @@ interface WithdrawModalProps {
   onWithdraw: (draftId: string, amount: number, method: PrizeWithdrawal['method']) => Promise<unknown>;
 }
 
-type Step = 'select' | 'processing' | 'success' | 'error';
+type Step = 'form' | 'processing' | 'success' | 'error';
 
 const TEMPLATE_BASIC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_BASIC || '';
 const TEMPLATE_KYC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_KYC || '';
 
+function isValidAddress(addr: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(addr);
+}
+
 export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, walletAddress, onWithdraw }: WithdrawModalProps) {
-  const [payoutMethod, setPayoutMethod] = useState<PrizeWithdrawal['method']>('bank');
-  const [step, setStep] = useState<Step>('select');
+  const [destinationAddress, setDestinationAddress] = useState('');
+  const [step, setStep] = useState<Step>('form');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVerification, setShowVerification] = useState<'basic' | 'kyc' | null>(null);
-  const [showBankWithdraw, setShowBankWithdraw] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setPayoutMethod('bank');
-      setStep('select');
+      setDestinationAddress(walletAddress || '');
+      setStep('form');
       setErrorMessage(null);
       setIsSubmitting(false);
       setShowVerification(null);
-      setShowBankWithdraw(false);
     }
-  }, [isOpen]);
+  }, [isOpen, walletAddress]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -52,7 +53,6 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
   const handleVerificationComplete = useCallback(async (_inquiryId: string, status: string) => {
     setShowVerification(null);
     if (status === 'completed') {
-      // Verification passed — retry the withdrawal
       handleConfirm();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -64,29 +64,23 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
       return;
     }
 
+    if (!isValidAddress(destinationAddress)) {
+      setErrorMessage('Please enter a valid wallet address (0x...)');
+      return;
+    }
+
     setIsSubmitting(true);
     setStep('processing');
     setErrorMessage(null);
 
     try {
-      // For bank withdrawals, open BankWithdrawModal directly (Bridge via Privy)
-      // Don't call onWithdraw first — Bridge handles the actual transfer
-      if (payoutMethod === 'bank') {
-        setShowBankWithdraw(true);
-        setIsSubmitting(false);
-        setStep('select');
-        return;
-      }
-
-      // For USDC withdrawals, process directly
-      await onWithdraw(draftId, amount, payoutMethod);
+      await onWithdraw(draftId, amount, 'usdc');
       setStep('success');
     } catch (err) {
-      // Check if the error is a verification requirement
       if (err && typeof err === 'object' && 'requiresVerification' in err) {
         const verErr = err as { requiresVerification: 'basic' | 'kyc' };
         setShowVerification(verErr.requiresVerification);
-        setStep('select');
+        setStep('form');
         setIsSubmitting(false);
         return;
       }
@@ -100,13 +94,13 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
 
   if (step === 'processing') {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Withdraw Winnings" size="md">
+      <Modal isOpen={isOpen} onClose={onClose} title="Withdraw" size="md">
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
           <svg className="animate-spin h-10 w-10 text-banana" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
-          <p className="text-text-secondary text-lg">Processing your withdrawal...</p>
+          <p className="text-text-secondary text-lg">Sending USDC...</p>
         </div>
       </Modal>
     );
@@ -114,7 +108,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
 
   if (step === 'success') {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Withdraw Winnings" size="md">
+      <Modal isOpen={isOpen} onClose={onClose} title="Withdraw" size="md">
         <div className="flex flex-col items-center justify-center py-8 space-y-4">
           <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
@@ -122,13 +116,17 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
           </div>
-          <h3 className="text-xl font-bold text-text-primary">Withdrawal Initiated!</h3>
-          <p className="text-text-secondary text-center">
-            Your funds will be transferred to your {payoutMethod === 'bank' ? 'bank account' : 'wallet'}.
+          <h3 className="text-xl font-bold text-text-primary">Withdrawal Sent!</h3>
+          <p className="text-text-secondary text-center text-sm">
+            {formatCurrency(amount)} USDC has been sent to your wallet on Base.
           </p>
+          <div className="w-full p-3 rounded-lg bg-bg-tertiary/60 border border-bg-tertiary">
+            <p className="text-text-muted text-xs mb-1">Sent to</p>
+            <p className="text-text-primary text-sm font-mono break-all">{destinationAddress}</p>
+          </div>
           <button
             onClick={onClose}
-            className="w-full py-3 rounded-xl font-bold text-lg bg-banana text-black hover:brightness-110 transition-all mt-4"
+            className="w-full py-3 rounded-xl font-bold text-lg bg-banana text-black hover:brightness-110 transition-all mt-2"
           >
             Done
           </button>
@@ -139,7 +137,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
 
   if (step === 'error') {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Withdraw Winnings" size="md">
+      <Modal isOpen={isOpen} onClose={onClose} title="Withdraw" size="md">
         <div className="space-y-6">
           <div className="p-4 rounded-xl bg-error/10 border border-error/30">
             <p className="text-error font-semibold">Withdrawal failed</p>
@@ -147,7 +145,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setStep('select')}
+              onClick={() => { setStep('form'); setErrorMessage(null); }}
               className="w-full py-3 rounded-xl font-bold text-lg bg-bg-tertiary text-text-primary hover:bg-bg-elevated transition-all"
             >
               Try Again
@@ -164,70 +162,57 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
     );
   }
 
-  const canWithdraw = amount > 0 && !!draftId;
+  const canWithdraw = amount > 0 && !!draftId && isValidAddress(destinationAddress);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Withdraw Winnings" size="md">
-      <div className="space-y-6">
+    <Modal isOpen={isOpen} onClose={onClose} title="Withdraw" size="md">
+      <div className="space-y-5">
+        {/* Amount */}
         <div className="text-center">
+          <p className="text-text-muted text-sm mb-1">Withdrawal Amount</p>
           <p className="text-4xl font-bold text-banana">{formatCurrency(amount)}</p>
+          <p className="text-text-muted text-xs mt-1">USDC on Base</p>
         </div>
 
+        {/* Wallet Address Input */}
         <div>
-          <h3 className="text-sm font-semibold text-text-primary mb-3">Payout Method</h3>
-          <div className="space-y-3">
-            <button
-              onClick={() => setPayoutMethod('bank')}
-              className={`
-                w-full p-3 rounded-xl border-2 text-left flex items-center gap-3 transition-all
-                ${payoutMethod === 'bank'
-                  ? 'border-banana bg-banana/5'
-                  : 'border-bg-elevated bg-bg-tertiary hover:border-bg-elevated/80'
-                }
-              `}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${payoutMethod === 'bank' ? 'bg-banana/20' : 'bg-bg-elevated'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 ${payoutMethod === 'bank' ? 'text-banana' : 'text-text-muted'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                  <line x1="1" y1="10" x2="23" y2="10"/>
-                </svg>
-              </div>
-              <div>
-                <p className={`font-semibold text-sm ${payoutMethod === 'bank' ? 'text-text-primary' : 'text-text-secondary'}`}>Cash out to Bank</p>
-                <p className="text-text-muted text-xs">ACH transfer · 1-3 business days</p>
-              </div>
-            </button>
+          <label className="text-sm font-semibold text-text-primary mb-2 block">Send to wallet address</label>
+          <input
+            type="text"
+            value={destinationAddress}
+            onChange={e => { setDestinationAddress(e.target.value); setErrorMessage(null); }}
+            placeholder="0x..."
+            className="w-full px-4 py-3 rounded-xl bg-bg-tertiary border border-bg-elevated text-text-primary text-sm font-mono placeholder-text-muted focus:outline-none focus:border-banana/50 transition-colors"
+          />
+          {destinationAddress && !isValidAddress(destinationAddress) && (
+            <p className="text-error text-xs mt-1.5">Enter a valid wallet address (0x followed by 40 hex characters)</p>
+          )}
+          {errorMessage && step === 'form' && (
+            <p className="text-error text-xs mt-1.5">{errorMessage}</p>
+          )}
+        </div>
 
-            <button
-              onClick={() => setPayoutMethod('usdc')}
-              className={`
-                w-full p-3 rounded-xl border-2 text-left flex items-center gap-3 transition-all
-                ${payoutMethod === 'usdc'
-                  ? 'border-banana bg-banana/5'
-                  : 'border-bg-elevated bg-bg-tertiary hover:border-bg-elevated/80'
-                }
-              `}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${payoutMethod === 'usdc' ? 'bg-banana/20' : 'bg-bg-elevated'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 ${payoutMethod === 'usdc' ? 'text-banana' : 'text-text-muted'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="1" x2="12" y2="23"/>
-                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                </svg>
-              </div>
-              <div>
-                <p className={`font-semibold text-sm ${payoutMethod === 'usdc' ? 'text-text-primary' : 'text-text-secondary'}`}>Withdraw USDC</p>
-                <p className="text-text-muted text-xs">Direct to wallet on Base · Instant</p>
-              </div>
-            </button>
+        {/* Info */}
+        <div className="p-3 rounded-xl bg-bg-tertiary/60 border border-bg-tertiary space-y-1.5">
+          <div className="flex justify-between text-sm">
+            <span className="text-text-muted">Network</span>
+            <span className="text-text-primary font-medium">Base</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-text-muted">Token</span>
+            <span className="text-text-primary font-medium">USDC</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-text-muted">Speed</span>
+            <span className="text-text-primary font-medium">Instant</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-text-muted">Fee</span>
+            <span className="text-success font-medium">Free</span>
           </div>
         </div>
 
-        {!canWithdraw && (
-          <div className="text-center text-text-muted text-sm">
-            This prize is not yet eligible for withdrawal.
-          </div>
-        )}
-
+        {/* Confirm Button */}
         <button
           onClick={handleConfirm}
           disabled={!canWithdraw || isSubmitting}
@@ -237,15 +222,11 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
               : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
           }`}
         >
-          {isSubmitting ? 'Processing...' : 'Confirm Withdrawal'}
+          {isSubmitting ? 'Processing...' : 'Withdraw USDC'}
         </button>
-
-        {payoutMethod === 'bank' && (
-          <p className="text-center text-text-muted text-xs">Powered by Bridge</p>
-        )}
       </div>
 
-      {/* Persona Verification Modal — opens when withdrawal requires verification */}
+      {/* Persona Verification Modal */}
       {showVerification && userId && (
         <PersonaVerificationModal
           isOpen={true}
@@ -253,20 +234,6 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
           templateId={showVerification === 'basic' ? TEMPLATE_BASIC : TEMPLATE_KYC}
           userId={userId}
           onComplete={handleVerificationComplete}
-        />
-      )}
-
-      {/* Bank Withdraw Modal — Bridge via Privy for bank cashout */}
-      {showBankWithdraw && walletAddress && (
-        <BankWithdrawModal
-          isOpen={true}
-          onClose={() => setShowBankWithdraw(false)}
-          amount={amount}
-          walletAddress={walletAddress}
-          onSuccess={() => {
-            setShowBankWithdraw(false);
-            setStep('success');
-          }}
         />
       )}
     </Modal>

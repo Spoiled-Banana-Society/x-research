@@ -176,7 +176,7 @@ function DraftRoomContent() {
   });
   const bannerRef = useRef<HTMLDivElement>(null);
 
-  const fillingStartedAtRef = useRef<number | null>(stored?.fillingStartedAt ?? null);
+  const _fillingStartedAtRef = useRef<number | null>(stored?.fillingStartedAt ?? null);
   const preSpinStartedAtRef = useRef<number | null>(stored?.preSpinStartedAt ?? null);
   const animationOffsetRef = useRef(0);
 
