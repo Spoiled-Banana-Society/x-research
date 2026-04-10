@@ -42,7 +42,7 @@ export function DraftRoomChat({ playerCount: _playerCount, phase: _phase, userna
   }, [isCollapsed]);
 
   // Voice participants (simulated)
-  const [voiceParticipants, _setVoiceParticipants] = useState<VoiceParticipant[]>([
+  const [voiceParticipants] = useState<VoiceParticipant[]>([
     { id: 'you', name: username, isMuted: true, isSpeaking: false, isYou: true },
   ]);
 
