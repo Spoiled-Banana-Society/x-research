@@ -33,7 +33,7 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
 
   useEffect(() => {
     if (isOpen) {
-      setDestinationAddress(walletAddress || '');
+      setDestinationAddress('');
       setStep('form');
       setErrorMessage(null);
       setIsSubmitting(false);
@@ -177,10 +177,11 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
         {/* Wallet Address Input */}
         <div>
           <label className="text-sm font-semibold text-text-primary mb-2 block">Send to wallet address</label>
+          <p className="text-text-muted text-xs mb-2">Paste your Coinbase or wallet address to receive USDC on Base</p>
           <input
             type="text"
             value={destinationAddress}
-            onChange={e => { setDestinationAddress(e.target.value); setErrorMessage(null); }}
+            onChange={e => { setDestinationAddress(e.target.value.trim()); setErrorMessage(null); }}
             placeholder="0x..."
             className="w-full px-4 py-3 rounded-xl bg-bg-tertiary border border-bg-elevated text-text-primary text-sm font-mono placeholder-text-muted focus:outline-none focus:border-banana/50 transition-colors"
           />
@@ -190,6 +191,14 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
           {errorMessage && step === 'form' && (
             <p className="text-error text-xs mt-1.5">{errorMessage}</p>
           )}
+          <details className="mt-3">
+            <summary className="text-banana text-xs cursor-pointer hover:brightness-110">How do I get a wallet address?</summary>
+            <div className="mt-2 p-3 rounded-lg bg-bg-tertiary/60 border border-bg-tertiary text-xs text-text-secondary space-y-1.5">
+              <p><strong>Coinbase:</strong> Open Coinbase app → Receive → USDC → Base network → Copy address</p>
+              <p><strong>MetaMask / Rainbow:</strong> Copy your wallet address from the app</p>
+              <p>Once USDC arrives, you can sell it for USD and withdraw to your bank directly in Coinbase.</p>
+            </div>
+          </details>
         </div>
 
         {/* Info */}
