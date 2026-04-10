@@ -390,7 +390,7 @@ export function useDraftingPageState() {
   );
 
   useEffect(() => {
-    if (!isLive || fillingLiveDraftIds.length === 0) return;
+    if (fillingLiveDraftIds.length === 0) return;
     let cancelled = false;
 
     const pollAll = async () => {
@@ -409,7 +409,7 @@ export function useDraftingPageState() {
     pollAll();
     const interval = setInterval(pollAll, 3000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [isLive, fillingLiveDraftIds]);
+  }, [fillingLiveDraftIds]);
 
   useEffect(() => {
     if (!isLive || !user?.walletAddress) return;
