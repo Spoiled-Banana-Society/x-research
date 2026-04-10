@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminApp } from '@/lib/firebaseAdmin';
-import { getDatabase } from 'firebase-admin/database';
 
 /**
  * GET /api/drafts/league-players?draftId=xxx
@@ -15,10 +14,16 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Use REST API with service account OAuth token to read RTDB
+    // This bypasses security rules (admin access)
     const app = getAdminApp();
-    const rtdb = getDatabase(app, 'https://sbs-staging-env-default-rtdb.firebaseio.com');
-    const snap = await rtdb.ref(`drafts/${draftId}/numPlayers`).get();
-    const numPlayers = snap.exists() ? Number(snap.val()) || 0 : 0;
+    const credential = app.options.credential;
+    const token = await credential?.getAccessToken();
+
+    const rtdbUrl = `https://sbs-staging-env-default-rtdb.firebaseio.com/drafts/${encodeURIComponent(draftId)}/numPlayers.json`;
+    const res = await fetch(`${rtdbUrl}?access_token=${token?.access_token}`, { cache: 'no-store' });
+    const val = await res.json();
+    const numPlayers = typeof val === 'number' ? val : 0;
 
     return NextResponse.json({ numPlayers, players: [] });
   } catch (err) {
