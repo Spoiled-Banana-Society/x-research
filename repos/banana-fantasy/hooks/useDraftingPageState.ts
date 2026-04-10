@@ -384,7 +384,7 @@ export function useDraftingPageState() {
 
   const fillingLiveDraftIds = useMemo(
     () => localDrafts
-      .filter(d => d.liveWalletAddress && (d.phase === 'filling' || d.status === 'filling'))
+      .filter(d => d.phase === 'filling' || d.status === 'filling')
       .map(d => d.id),
     [localDrafts],
   );
