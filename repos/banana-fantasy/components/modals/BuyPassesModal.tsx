@@ -281,19 +281,6 @@ export function BuyPassesModal({
         consumePromoDraftType(forcedDraftType);
       }
 
-      // In staging mode, fill the league with 9 bots so draft can start
-      if (isStagingMode()) {
-        try {
-          const { stagingFillBots } = await import('@/lib/api/leagues');
-          await stagingFillBots(speed, 9);
-          logger.debug('[BuyModal] Staging bots filled');
-        } catch (fillErr) {
-          console.warn('[BuyModal] Bot fill failed (continuing anyway):', fillErr);
-        }
-        // Wait for backend to create draft state after 10th player joins
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-
       // Navigate to draft lobby with staging params
       const params = new URLSearchParams({
         id: draftId,

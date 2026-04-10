@@ -121,8 +121,6 @@ export async function seedActiveDrafts(page: Page) {
         maxPlayers: 10,
         joinedAt: timestamp - 30000,
         phase: 'filling',
-        fillingStartedAt: timestamp - 2000,
-        fillingInitialPlayers: 7,
         lastUpdated: timestamp,
         liveWalletAddress: '0xd3301bC039faF4223dA98bcEB5Fb818C9993620',
       },

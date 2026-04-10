@@ -19,32 +19,6 @@ interface VoiceParticipant {
   isYou: boolean;
 }
 
-// Trash talk messages for simulation
-const TRASH_TALK = [
-  "Let's gooo!",
-  "KC QB is mine, don't even try",
-  "Who's taking SF RB first?",
-  "This is gonna be a good one",
-  "GL everyone",
-  "Ready to dominate",
-  "First timer here, be gentle lol",
-  "Anyone else get Jackpot before?",
-  "That pick was bold",
-  "Interesting strategy...",
-  "Stealing that one from ya",
-  "RIP to whoever gets stuck with NE",
-  "My sleeper pick is gonna hit",
-  "Trust the process",
-  "gg",
-  "nice pick",
-  "I wanted that one",
-  "This draft is stacked",
-  "Going contrarian here",
-  "Fade the chalk",
-];
-
-const PLAYER_NAMES = ['GridironKing', 'TouchdownTitan', 'Diamond', 'MoonBoi', 'BlitzMaster', 'EndZoneKing', 'Holder', 'Gridiron', 'DraftKing'];
-
 interface DraftRoomChatProps {
   playerCount: number;
   phase: 'filling' | 'pre-spin' | 'countdown' | 'spinning' | 'result' | 'drafting' | 'loading' | 'completed';
@@ -60,7 +34,6 @@ export function DraftRoomChat({ playerCount, phase, username = 'You' }: DraftRoo
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const lastPlayerCountRef = useRef(playerCount);
   const isCollapsedRef = useRef(isCollapsed);
 
   // Keep ref in sync
@@ -87,72 +60,6 @@ export function DraftRoomChat({ playerCount, phase, username = 'You' }: DraftRoo
     }
   }, [isCollapsed]);
 
-  // Simulate players joining during filling
-  useEffect(() => {
-    if (phase === 'filling' && playerCount > lastPlayerCountRef.current) {
-      const newPlayerName = PLAYER_NAMES[playerCount - 2] || `Player${playerCount}`;
-
-      // Add to voice participants
-      setVoiceParticipants(prev => [
-        ...prev,
-        { id: `p${playerCount}`, name: newPlayerName, isMuted: Math.random() > 0.3, isSpeaking: false, isYou: false }
-      ]);
-
-      // Sometimes the new player says something
-      if (Math.random() > 0.5) {
-        setTimeout(() => {
-          const greetings = ["hey", "yo", "let's go", "sup", "ready!", "GL all"];
-          const msg: ChatMessage = {
-            id: `msg-${Date.now()}`,
-            sender: newPlayerName,
-            text: greetings[Math.floor(Math.random() * greetings.length)],
-            isYou: false,
-            timestamp: Date.now(),
-          };
-          setMessages(prev => [...prev, msg]);
-          if (isCollapsedRef.current) setUnreadCount(c => c + 1);
-        }, 500 + Math.random() * 1500);
-      }
-    }
-    lastPlayerCountRef.current = playerCount;
-  }, [playerCount, phase]);
-
-  // Simulate random chat during drafting
-  useEffect(() => {
-    if (phase !== 'drafting') return;
-
-    const interval = setInterval(() => {
-      if (Math.random() > 0.7) {
-        const sender = PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
-        const text = TRASH_TALK[Math.floor(Math.random() * TRASH_TALK.length)];
-        const msg: ChatMessage = {
-          id: `msg-${Date.now()}-${Math.random()}`,
-          sender,
-          text,
-          isYou: false,
-          timestamp: Date.now(),
-        };
-        setMessages(prev => [...prev.slice(-50), msg]); // Keep last 50 messages
-        if (isCollapsedRef.current) setUnreadCount(c => c + 1);
-      }
-    }, 3000 + Math.random() * 5000);
-
-    return () => clearInterval(interval);
-  }, [phase]);
-
-  // Simulate voice activity
-  useEffect(() => {
-    if (!showVoicePanel) return;
-
-    const interval = setInterval(() => {
-      setVoiceParticipants(prev => prev.map(p => ({
-        ...p,
-        isSpeaking: !p.isMuted && !p.isYou && Math.random() > 0.7
-      })));
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [showVoicePanel]);
 
   const sendMessage = () => {
     if (!inputValue.trim()) return;

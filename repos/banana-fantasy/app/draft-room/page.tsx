@@ -176,7 +176,6 @@ function DraftRoomContent() {
   });
   const bannerRef = useRef<HTMLDivElement>(null);
 
-  const fillingStartedAtRef = useRef<number | null>(stored?.fillingStartedAt ?? null);
   const preSpinStartedAtRef = useRef<number | null>(stored?.preSpinStartedAt ?? null);
   const animationOffsetRef = useRef(0);
 
@@ -585,8 +584,6 @@ function DraftRoomContent() {
       maxPlayers: 10,
       joinedAt: Date.now(),
       phase: 'filling',
-      fillingStartedAt: Date.now(),
-      fillingInitialPlayers: Math.max(initialPlayers, 1),
       liveWalletAddress: walletParam,
       ...(specialTypeParam ? { specialType: specialTypeParam } : {}),
     });

@@ -37,8 +37,6 @@ test.describe('Randomizing bar speed (3s)', () => {
         maxPlayers: 10,
         lastUpdated: Date.now(),
         phase: 'filling',
-        fillingStartedAt: Date.now() - 10000,
-        fillingInitialPlayers: 10,
         randomizingStartedAt: Date.now(),
       };
       const existing = JSON.parse(localStorage.getItem('banana-active-drafts') || '[]');

@@ -23,8 +23,6 @@ export interface DraftState {
 
   // Phase & timing for resuming draft room state
   phase?: 'filling' | 'pre-spin' | 'spinning' | 'result' | 'countdown' | 'drafting';
-  fillingStartedAt?: number;
-  fillingInitialPlayers?: number; // player count when filling began (for deriving live count)
   preSpinStartedAt?: number;
   randomizingStartedAt?: number;  // Timestamp when "Randomizing Draft Order" began (10/10 reached)
   draftType?: 'pro' | 'hof' | 'jackpot' | null;

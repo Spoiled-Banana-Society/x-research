@@ -10,7 +10,6 @@ import { useActiveDrafts } from '@/hooks/useActiveDrafts';
 import * as draftStore from '@/lib/draftStore';
 import type { DraftState } from '@/lib/draftStore';
 import type { ApiDraftToken } from '@/lib/api/owner';
-import { DRAFT_PLAYERS } from '@/lib/draftRoomConstants';
 import * as draftApi from '@/lib/draftApi';
 import { leaveDraft } from '@/lib/api/leagues';
 import { useContests } from '@/hooks/useContests';
@@ -762,51 +761,22 @@ export function useDraftingPageState() {
 
       for (const d of allDrafts) {
         if ((d.phase === 'filling' || d.status === 'filling')
-          && !d.preSpinStartedAt
-          && d.fillingStartedAt != null
-          && d.fillingInitialPlayers != null) {
-          const simulated = Math.min(10, d.fillingInitialPlayers + Math.floor((now - d.fillingStartedAt) / 800));
-          const count = Math.max(simulated, d.players || 0);
+          && !d.preSpinStartedAt) {
+          const count = d.players || 0;
 
-          if (count >= 10 && !d.preSpinStartedAt) {
-            if (d.liveWalletAddress) {
-              if (!d.randomizingStartedAt) {
-                draftStore.updateDraft(d.id, { players: 10, randomizingStartedAt: now });
-              } else if ((now - d.randomizingStartedAt) >= 3000) {
-                draftStore.updateDraft(d.id, {
-                  phase: 'pre-spin',
-                  players: 10,
-                  preSpinStartedAt: now,
-                  randomizingStartedAt: undefined,
-                });
-              }
-              continue;
-            }
-
+          if (count >= 10) {
             if (!d.randomizingStartedAt) {
               draftStore.updateDraft(d.id, { players: 10, randomizingStartedAt: now });
-              continue;
-            }
-            if ((now - d.randomizingStartedAt) >= 3000) {
-              const shuffled = [...DRAFT_PLAYERS].sort(() => Math.random() - 0.5);
-              const userPos = shuffled.findIndex(p => p.isYou);
+            } else if ((now - d.randomizingStartedAt) >= 3000) {
               draftStore.updateDraft(d.id, {
                 phase: 'pre-spin',
                 players: 10,
                 preSpinStartedAt: now,
                 randomizingStartedAt: undefined,
-                draftOrder: shuffled,
-                userDraftPosition: userPos,
-                draftType: 'pro',
-                type: 'pro',
               });
             }
+            continue;
           }
-
-          if (count < 10 && count !== d.players) {
-            draftStore.updateDraft(d.id, { players: count });
-          }
-          continue;
         }
 
         if (d.randomizingStartedAt && !d.preSpinStartedAt && (now - d.randomizingStartedAt) >= 3000) {
@@ -816,15 +786,6 @@ export function useDraftingPageState() {
             randomizingStartedAt: undefined,
           });
           continue;
-        }
-
-        if (d.preSpinStartedAt && !d.type && !d.draftType && !d.specialType) {
-          const preSpinElapsed = (now - d.preSpinStartedAt) / 1000;
-          if (preSpinElapsed >= 15) {
-            const roll = Math.random() * 100;
-            const revealedType = roll < 1 ? 'jackpot' : roll < 6 ? 'hof' : 'pro';
-            draftStore.updateDraft(d.id, { type: revealedType, draftType: revealedType });
-          }
         }
 
         if (['pre-spin', 'spinning', 'result', 'countdown'].includes(d.phase || '') && d.preSpinStartedAt) {
@@ -902,12 +863,7 @@ export function useDraftingPageState() {
     }
 
     if (!draft.preSpinStartedAt && !draft.randomizingStartedAt && (draft.status === 'filling' || draft.phase === 'filling')) {
-      let count = draft.players || 1;
-      if (draft.fillingStartedAt != null && draft.fillingInitialPlayers != null) {
-        const simulated = Math.min(10, draft.fillingInitialPlayers + Math.floor((now - draft.fillingStartedAt) / 800));
-        count = Math.max(count, simulated);
-      }
-      count = Math.min(10, count);
+      const count = Math.min(10, draft.players || 1);
       if (count >= 10) {
         if (!timers.has(draft.id)) timers.set(draft.id, now);
         const tStart = timers.get(draft.id)!;
