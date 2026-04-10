@@ -12,6 +12,7 @@ interface WithdrawModalProps {
   draftId?: string;
   userId?: string;
   walletAddress?: string;
+  isEmbeddedWallet?: boolean;
   onWithdraw: (draftId: string, amount: number, method: PrizeWithdrawal['method']) => Promise<unknown>;
 }
 
@@ -24,7 +25,9 @@ function isValidAddress(addr: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(addr);
 }
 
-export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, walletAddress, onWithdraw }: WithdrawModalProps) {
+const SAVED_ADDRESS_KEY = 'banana-fantasy-withdraw-address';
+
+export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, walletAddress, isEmbeddedWallet, onWithdraw }: WithdrawModalProps) {
   const [destinationAddress, setDestinationAddress] = useState('');
   const [step, setStep] = useState<Step>('form');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -33,13 +36,21 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
 
   useEffect(() => {
     if (isOpen) {
-      setDestinationAddress('');
+      // Priority: saved address > external wallet > empty
+      const saved = typeof window !== 'undefined' ? localStorage.getItem(SAVED_ADDRESS_KEY) : null;
+      if (saved && isValidAddress(saved)) {
+        setDestinationAddress(saved);
+      } else if (!isEmbeddedWallet && walletAddress) {
+        setDestinationAddress(walletAddress);
+      } else {
+        setDestinationAddress('');
+      }
       setStep('form');
       setErrorMessage(null);
       setIsSubmitting(false);
       setShowVerification(null);
     }
-  }, [isOpen, walletAddress]);
+  }, [isOpen, walletAddress, isEmbeddedWallet]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -75,6 +86,8 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
 
     try {
       await onWithdraw(draftId, amount, 'usdc');
+      // Save address for next time
+      try { localStorage.setItem(SAVED_ADDRESS_KEY, destinationAddress); } catch { /* ignore */ }
       setStep('success');
     } catch (err) {
       if (err && typeof err === 'object' && 'requiresVerification' in err) {

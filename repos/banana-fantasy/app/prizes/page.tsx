@@ -11,7 +11,7 @@ import { WithdrawModal } from '@/components/modals/WithdrawModal';
 import type { PrizeHistoryItem } from '@/types';
 
 export default function PrizesPage() {
-  const { isLoggedIn, setShowLoginModal, user } = useAuth();
+  const { isLoggedIn, setShowLoginModal, user, isEmbeddedWallet } = useAuth();
   const router = useRouter();
   const prizesQuery = usePrizes({ userId: user?.walletAddress ?? user?.id });
   const eligibilityQuery = useEligibility({ userId: user?.walletAddress ?? user?.id });
@@ -298,6 +298,7 @@ export default function PrizesPage() {
         draftId={withdrawModal.prize?.type === 'win' ? withdrawModal.prize.draftId : undefined}
         userId={user?.id}
         walletAddress={user?.walletAddress}
+        isEmbeddedWallet={isEmbeddedWallet}
         onWithdraw={prizesQuery.withdraw}
       />
     </div>
