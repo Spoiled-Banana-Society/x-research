@@ -13,8 +13,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing draftId' }, { status: 400 });
   }
 
-  if (!isFirestoreConfigured()) {
-    return NextResponse.json({ numPlayers: 0, players: [] }, { status: 200 });
+  const configured = isFirestoreConfigured();
+  if (!configured) {
+    return NextResponse.json({ numPlayers: 0, players: [], debug: 'firestore_not_configured' }, { status: 200 });
   }
 
   try {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     const doc = await db.collection('drafts').doc(draftId).get();
 
     if (!doc.exists) {
-      return NextResponse.json({ numPlayers: 0, players: [] }, { status: 200 });
+      return NextResponse.json({ numPlayers: 0, players: [], debug: `doc_not_found:${draftId}` }, { status: 200 });
     }
 
     const data = doc.data()!;
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       players: currentUsers.map((u) => u.OwnerId || u.ownerId || ''),
     });
   } catch (err) {
-    console.error('[league-players] Error:', err);
-    return NextResponse.json({ numPlayers: 0, players: [] }, { status: 200 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ numPlayers: 0, players: [], debug: `error:${msg}` }, { status: 200 });
   }
 }
