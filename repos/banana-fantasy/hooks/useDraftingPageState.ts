@@ -11,6 +11,7 @@ import * as draftStore from '@/lib/draftStore';
 import type { DraftState } from '@/lib/draftStore';
 import type { ApiDraftToken } from '@/lib/api/owner';
 import * as draftApi from '@/lib/draftApi';
+import { subscribeDraftNumPlayers } from '@/lib/api/firebase';
 import { leaveDraft } from '@/lib/api/leagues';
 import { useContests } from '@/hooks/useContests';
 import { fetchJson } from '@/lib/appApiClient';
@@ -381,6 +382,27 @@ export function useDraftingPageState() {
       cancelled = true;
     };
   }, [hiddenDraftIds, isLive, user]);
+
+  const fillingLiveDraftIds = useMemo(
+    () => localDrafts
+      .filter(d => d.liveWalletAddress && (d.phase === 'filling' || d.status === 'filling'))
+      .map(d => d.id),
+    [localDrafts],
+  );
+
+  useEffect(() => {
+    if (!isLive || fillingLiveDraftIds.length === 0) return;
+
+    const unsubscribes = fillingLiveDraftIds.map((draftId) =>
+      subscribeDraftNumPlayers(draftId, (count) => {
+        draftStore.updateDraft(draftId, { players: count });
+      }),
+    );
+
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [isLive, fillingLiveDraftIds]);
 
   useEffect(() => {
     if (!isLive || !user?.walletAddress) return;
