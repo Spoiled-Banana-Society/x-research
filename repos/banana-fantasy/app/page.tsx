@@ -219,8 +219,6 @@ export default function HomePage() {
         maxPlayers: 10,
         joinedAt: Date.now(),
         phase: 'filling',
-        fillingStartedAt: Date.now(),
-        fillingInitialPlayers: 1,
       });
       router.push(buildDraftRoomUrl(localDraftId, localContestName, speed));
     }

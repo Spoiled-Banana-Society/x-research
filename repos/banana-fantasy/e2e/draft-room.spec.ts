@@ -168,27 +168,6 @@ test.describe('Draft Room', () => {
     });
   });
 
-  test.describe('Local mode (no live server)', () => {
-    test('filling phase counts up to 10 players then transitions', async ({ page }) => {
-      await page.goto('/draft-room?name=BBB+%23300&players=1&speed=fast');
-      await page.waitForLoadState('domcontentloaded');
-
-      // Wait for filling animation to progress — should reach 10/10
-      // The filling animation adds 1 player every 800ms, so 9 players * 800ms = ~7.2s
-      // After 10/10, local mode transitions directly to pre-spin
-      // Pre-spin shows "Draft type reveal in Xs"
-      await expect(page.locator('text=/Draft type reveal in/')).toBeVisible({ timeout: 15000 });
-    });
-
-    test('starts with correct initial player count and transitions faster', async ({ page }) => {
-      await page.goto('/draft-room?name=BBB+%23300&players=7&speed=fast');
-      await page.waitForLoadState('domcontentloaded');
-
-      // Starting at 7 players, should reach 10 faster (3 * 800ms = ~2.4s)
-      // Then transitions to pre-spin with "Draft type reveal in Xs"
-      await expect(page.locator('text=/Draft type reveal in/')).toBeVisible({ timeout: 10000 });
-    });
-  });
 });
 
 test.describe('Drafting Page', () => {

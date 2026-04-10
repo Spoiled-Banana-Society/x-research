@@ -143,8 +143,6 @@ export function useDraftLiveSync({
       maxPlayers: 10,
       joinedAt: joinStartedAt,
       phase: 'filling',
-      fillingStartedAt: joinStartedAt,
-      fillingInitialPlayers: 1,
       liveWalletAddress: walletParam,
       passType: passTypeParam || 'paid',
     });
@@ -197,8 +195,6 @@ export function useDraftLiveSync({
             maxPlayers: 10,
             joinedAt: joinStartedAt,
             phase: 'filling',
-            fillingStartedAt: joinStartedAt,
-            fillingInitialPlayers: draftRoom.players || 1,
             liveWalletAddress: walletParam,
             passType: passTypeParam || 'paid',
           });
