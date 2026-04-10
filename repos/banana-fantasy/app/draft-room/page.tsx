@@ -22,7 +22,6 @@ import {
 import type { DraftType, RoomPhase } from '@/lib/draftRoomConstants';
 import { useNotifOptIn } from '@/app/providers';
 import * as draftStore from '@/lib/draftStore';
-import { subscribeDraftNumPlayers } from '@/lib/api/firebase';
 import { getDraftTokenLevel } from '@/lib/api/leagues';
 import { logger } from '@/lib/logger';
 
@@ -822,13 +821,24 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data?.isDraftClosed, draftId, walletParam, generatedCardUrl]);
 
-  // Player count comes from Firebase RTDB — real-time, no polling needed
+  // Poll server for real player count during filling
   useEffect(() => {
     if (!draftId || phase !== 'filling') return;
-    const unsub = subscribeDraftNumPlayers(draftId, (count: number) => {
-      if (count > 0) setPlayerCount(count);
-    });
-    return unsub;
+    let cancelled = false;
+
+    const pollPlayers = async () => {
+      try {
+        const res = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draftId)}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const count = Number(data.numPlayers) || 0;
+        if (count > 0 && !cancelled) setPlayerCount(count);
+      } catch { /* ignore */ }
+    };
+
+    pollPlayers();
+    const interval = setInterval(pollPlayers, 2500);
+    return () => { cancelled = true; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, phase]);
 

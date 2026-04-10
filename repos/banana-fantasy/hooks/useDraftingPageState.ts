@@ -11,7 +11,6 @@ import * as draftStore from '@/lib/draftStore';
 import type { DraftState } from '@/lib/draftStore';
 import type { ApiDraftToken } from '@/lib/api/owner';
 import * as draftApi from '@/lib/draftApi';
-import { subscribeDraftNumPlayers } from '@/lib/api/firebase';
 import { leaveDraft } from '@/lib/api/leagues';
 import { useContests } from '@/hooks/useContests';
 import { fetchJson } from '@/lib/appApiClient';
@@ -392,16 +391,24 @@ export function useDraftingPageState() {
 
   useEffect(() => {
     if (!isLive || fillingLiveDraftIds.length === 0) return;
+    let cancelled = false;
 
-    const unsubscribes = fillingLiveDraftIds.map((draftId) =>
-      subscribeDraftNumPlayers(draftId, (count) => {
-        draftStore.updateDraft(draftId, { players: count });
-      }),
-    );
-
-    return () => {
-      unsubscribes.forEach(unsubscribe => unsubscribe());
+    const pollAll = async () => {
+      for (const draftId of fillingLiveDraftIds) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draftId)}`);
+          if (!res.ok || cancelled) continue;
+          const data = await res.json();
+          const count = Number(data.numPlayers) || 0;
+          if (count > 0) draftStore.updateDraft(draftId, { players: count });
+        } catch { /* ignore */ }
+      }
     };
+
+    pollAll();
+    const interval = setInterval(pollAll, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [isLive, fillingLiveDraftIds]);
 
   useEffect(() => {
