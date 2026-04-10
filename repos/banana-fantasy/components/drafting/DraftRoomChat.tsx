@@ -25,7 +25,7 @@ interface DraftRoomChatProps {
   username?: string;
 }
 
-export function DraftRoomChat({ playerCount, phase, username = 'You' }: DraftRoomChatProps) {
+export function DraftRoomChat({ playerCount: _playerCount, phase: _phase, username = 'You' }: DraftRoomChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isMuted, setIsMuted] = useState(true);
@@ -42,7 +42,7 @@ export function DraftRoomChat({ playerCount, phase, username = 'You' }: DraftRoo
   }, [isCollapsed]);
 
   // Voice participants (simulated)
-  const [voiceParticipants, setVoiceParticipants] = useState<VoiceParticipant[]>([
+  const [voiceParticipants] = useState<VoiceParticipant[]>([
     { id: 'you', name: username, isMuted: true, isSpeaking: false, isYou: true },
   ]);
 
