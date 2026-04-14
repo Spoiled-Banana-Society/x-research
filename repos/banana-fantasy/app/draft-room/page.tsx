@@ -829,6 +829,28 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
+  // Verify draft state on load — if stored as countdown/pre-spin but server says < 10, reset to filling
+  useEffect(() => {
+    if (!draftId || !isLiveMode || phase === 'filling' || phase === 'drafting') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draftId)}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const count = Number(data.numPlayers) || 0;
+        if (count > 0 && count < 10 && !cancelled) {
+          // Server says not full — reset to filling
+          setPlayerCount(count);
+          setPhase('filling');
+          draftStore.updateDraft(draftId, { phase: 'filling', players: count, preSpinStartedAt: undefined, randomizingStartedAt: undefined });
+        }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId, isLiveMode]);
+
   // Poll server for real player count during filling
   useEffect(() => {
     if (!draftId || phase !== 'filling') return;
