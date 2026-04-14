@@ -759,7 +759,8 @@ function DraftRoomContent() {
   useEffect(() => {
     if (!isLiveMode || isMuted || phase !== 'drafting') return;
     if (!engine.mostRecentPick) return;
-    if (engine.mostRecentPick.ownerName.toLowerCase() !== walletParam.toLowerCase()) {
+    // Only play sound for YOUR picks, not everyone else's
+    if (engine.mostRecentPick.ownerName.toLowerCase() === walletParam.toLowerCase()) {
       playNewPickSound();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
