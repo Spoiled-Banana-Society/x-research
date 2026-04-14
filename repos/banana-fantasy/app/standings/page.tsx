@@ -18,7 +18,7 @@ export default function StandingsPage() {
   // Hide teams with no roster data (incomplete/corrupted drafts)
   const leaguesQuery = useMemo(() => ({
     ...leaguesQueryRaw,
-    data: leaguesQueryRaw.data.filter(l => l.roster.length > 0),
+    data: leaguesQueryRaw.data.filter(l => l.roster.length >= 15 && l.roster.some(p => p.weeklyPoints > 0 || p.seasonPoints > 0)),
   }), [leaguesQueryRaw]);
   const { data: currentGameweek } = useGameweek();
 
