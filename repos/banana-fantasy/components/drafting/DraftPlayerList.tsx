@@ -78,7 +78,7 @@ export function DraftPlayerList({
       `}</style>
       {/* Search/Filter Bar - centered at 920px */}
       <div className="w-full flex justify-center">
-        <div className="w-full" style={{ maxWidth: 920 }}>
+        <div className="w-full px-2 sm:px-0" style={{ maxWidth: 920 }}>
           {/* Buttons row */}
           <div
             style={{
@@ -222,7 +222,8 @@ export function DraftPlayerList({
           {/* ADP/RANK sort toggles - separate row, right-aligned */}
           <div
             style={{
-              width: 900,
+              maxWidth: 900,
+              width: '100%',
               margin: '0 auto',
               paddingBottom: 4,
               paddingTop: 16,
@@ -278,7 +279,7 @@ export function DraftPlayerList({
           const hexColor = getPositionColorHex(player.position);
 
           return (
-            <div key={player.playerId} style={{ width: 900, margin: '2px auto' }}>
+            <div key={player.playerId} style={{ maxWidth: 900, width: '100%', margin: '2px auto' }}>
               <button
                 onClick={() => setExpandedPlayer(expanded ? null : player.playerId)}
                 className="w-full text-left flex items-center transition-all"
@@ -288,8 +289,8 @@ export function DraftPlayerList({
                   borderRight: `2px solid ${hexColor}`,
                   borderTop: '1px solid #222',
                   borderBottom: '1px solid #222',
-                  padding: '5px 0px',
-                  gap: 20,
+                  padding: '5px 8px',
+                  gap: 12,
                   justifyContent: 'space-between',
                 }}
               >
