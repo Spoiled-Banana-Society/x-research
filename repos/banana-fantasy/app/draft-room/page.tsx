@@ -60,7 +60,7 @@ function DraftRoomContent() {
     }
   }, [urlDraftId]);
 
-  const { user } = useAuth();
+  const { user, refreshBalance } = useAuth();
   const {
     playSpinningSound,
     playReelStop,
@@ -822,6 +822,12 @@ function DraftRoomContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data?.isDraftClosed, draftId, walletParam, generatedCardUrl]);
+
+  // Refresh draft pass count after joining a draft
+  useEffect(() => {
+    if (draftId && isLiveMode) refreshBalance();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
 
   // Poll server for real player count during filling
   useEffect(() => {
