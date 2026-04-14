@@ -251,7 +251,7 @@ export function DraftRoomDrafting({
         ) : (
           <div className="flex flex-1 overflow-hidden">
             {/* Main tab content (left) — tabs centered above player list */}
-            <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+            <div className="flex-1 overflow-auto flex flex-col min-w-0">
               <DraftTabs activeTab={activeTab} onTabChange={onTabChange} queueCount={engine.queuedPlayers.length} />
               {activeTab === 'draft' && (
                 <DraftPlayerList
