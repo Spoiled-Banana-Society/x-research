@@ -60,7 +60,7 @@ function DraftRoomContent() {
     }
   }, [urlDraftId]);
 
-  const { user, refreshBalance } = useAuth();
+  const { user, refreshBalance, isLoggedIn, setShowLoginModal } = useAuth();
   const {
     playSpinningSound,
     playReelStop,
@@ -1417,6 +1417,22 @@ function DraftRoomContent() {
 
   return (
     <div className={`min-h-screen text-white overflow-hidden flex flex-col transition-colors duration-1000 bg-black ${screenShake ? 'animate-shake' : ''}`}>
+      {/* Login gate — dims draft and blocks interaction when logged out */}
+      {!isLoggedIn && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center p-8 max-w-sm">
+            <div className="text-5xl mb-4">🍌</div>
+            <h2 className="text-xl font-bold text-white mb-2">Log in to Draft</h2>
+            <p className="text-white/50 text-sm mb-6">You need to be logged in to join and participate in drafts.</p>
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="px-8 py-3 bg-banana text-black font-bold rounded-xl hover:bg-yellow-300 transition-colors"
+            >
+              Log In
+            </button>
+          </div>
+        </div>
+      )}
       {showAutoDraftNotification && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl bg-emerald-900/95 border border-emerald-500/50 shadow-2xl backdrop-blur-sm animate-fade-in-down">
           <div className="flex items-center gap-3">
