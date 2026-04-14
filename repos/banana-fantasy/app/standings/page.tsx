@@ -77,23 +77,27 @@ export default function StandingsPage() {
     }
 
     if (teamSearch.trim()) {
-      const q = teamSearch.trim().toLowerCase().replace(/^#/, '');
-      // Map common aliases to draft types
+      // Split by comma for multi-term search (AND logic)
+      const terms = teamSearch.split(',').map(t => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
+
       const typeAliases: Record<string, string> = {
         'jp': 'jackpot', 'jackpot': 'jackpot',
         'hof': 'hof', 'hall of fame': 'hof',
         'pro': 'pro',
       };
-      const matchedType = typeAliases[q];
 
       result = result.filter((league) => {
-        if (matchedType && league.type === matchedType) return true;
-        if (league.name.toLowerCase().includes(q)) return true;
-        if (league.id.toLowerCase().includes(q)) return true;
-        const numMatch = league.name.match(/#(\d+)/);
-        if (numMatch && numMatch[1].includes(q)) return true;
-        if (league.roster.some(p => p.teamPosition.toLowerCase().includes(q) || p.slot.toLowerCase().includes(q))) return true;
-        return false;
+        // Every term must match something on this league (AND)
+        return terms.every(q => {
+          const matchedType = typeAliases[q];
+          if (matchedType && league.type === matchedType) return true;
+          if (league.name.toLowerCase().includes(q)) return true;
+          if (league.id.toLowerCase().includes(q)) return true;
+          const numMatch = league.name.match(/#(\d+)/);
+          if (numMatch && numMatch[1].includes(q)) return true;
+          if (league.roster.some(p => p.teamPosition.toLowerCase().includes(q) || p.slot.toLowerCase().includes(q))) return true;
+          return false;
+        });
       });
     }
     // Sort by league number
@@ -273,7 +277,7 @@ export default function StandingsPage() {
                 type="text"
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
-                placeholder="Search by league #, roster, or type (e.g. 42, KC QB, jackpot, hof)"
+                placeholder="Search roster, type, or league # — use commas for AND (e.g. CIN QB, CIN WR)"
                 className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-9 pr-9 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-banana/40 focus:ring-1 focus:ring-banana/20 transition-colors"
               />
               {teamSearch && (
@@ -285,6 +289,9 @@ export default function StandingsPage() {
                     <path d="M6 18L18 6M6 6l12 12"/>
                   </svg>
                 </button>
+              )}
+              {teamSearch && teamSearch.includes(',') && (
+                <p className="text-white/20 text-[10px] mt-1 ml-1">Showing teams that match ALL terms</p>
               )}
             </div>
           )}
