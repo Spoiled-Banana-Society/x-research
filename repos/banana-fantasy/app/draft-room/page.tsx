@@ -107,8 +107,7 @@ function DraftRoomContent() {
   });
   const [playerCount, setPlayerCount] = useState(() => {
     if (stored?.phase && stored.phase !== 'filling') return 10;
-    if (stored?.players && stored.players > 1) return Math.min(stored.players, 10);
-    return 0; // Show loading state until first server poll
+    return Math.min(Math.max(stored?.players || initialPlayers || 1, 1), 10);
   });
   const [preSpinCountdown, setPreSpinCountdown] = useState(() => {
     if (stored?.preSpinStartedAt) return Math.max(0, Math.floor(15 - (Date.now() - stored.preSpinStartedAt) / 1000));
@@ -825,7 +824,10 @@ function DraftRoomContent() {
 
   // Refresh draft pass count after joining a draft
   useEffect(() => {
-    if (draftId && isLiveMode) refreshBalance();
+    if (!draftId || !isLiveMode) return;
+    // Delay so the Go API has time to process the join before we re-fetch pass count
+    const timer = setTimeout(() => refreshBalance(), 3000);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 

@@ -45,7 +45,7 @@ export function DraftRoomFilling({
           {Array.from({ length: 10 }, (_, i) => {
             const player = draftOrder[i];
             const isUser = player?.isYou ?? false;
-            const isFilled = isRandomizing ? true : (playerCount > 0 && (isUser || i < playerCount));
+            const isFilled = isRandomizing ? true : (isUser || i < playerCount);
             const borderColor = isUser ? '#F3E216' : isFilled ? '#444' : '#333';
             const hasWalletData = player && !player.isYou && player.name && player.name.length > 10;
 
@@ -144,14 +144,8 @@ export function DraftRoomFilling({
             </div>
           ) : (
             <span className="text-yellow-400">
-              {playerCount > 0 ? (
-                <>
-                  <span className="text-2xl font-black tabular-nums">{playerCount}/10</span>
-                  <span className="text-white/60 ml-2 text-sm">Waiting for players...</span>
-                </>
-              ) : (
-                <span className="text-2xl font-black tabular-nums animate-pulse text-white/20">-/10</span>
-              )}
+              <span className="text-2xl font-black tabular-nums">{playerCount}/10</span>
+              <span className="text-white/60 ml-2 text-sm">Waiting for players...</span>
             </span>
           )}
         </div>
