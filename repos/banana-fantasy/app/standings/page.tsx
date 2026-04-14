@@ -30,6 +30,7 @@ export default function StandingsPage() {
   const [teamSearch, setTeamSearch] = useState('');
   const [teamsPage, setTeamsPage] = useState(0);
   const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('newest');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'jackpot' | 'hof' | 'pro'>('all');
   const TEAMS_PER_PAGE = 20;
 
   // Modal state
@@ -66,12 +67,27 @@ export default function StandingsPage() {
     return opts;
   }, []);
 
-  // Filter by search query and sort by league number
+  // Filter by search query, type filter, and sort by league number
   const filteredLeagues = useMemo(() => {
     let result = [...leagues];
+
+    // Type filter buttons
+    if (typeFilter !== 'all') {
+      result = result.filter((league) => league.type === typeFilter);
+    }
+
     if (teamSearch.trim()) {
       const q = teamSearch.trim().toLowerCase().replace(/^#/, '');
+      // Map common aliases to draft types
+      const typeAliases: Record<string, string> = {
+        'jp': 'jackpot', 'jackpot': 'jackpot',
+        'hof': 'hof', 'hall of fame': 'hof',
+        'pro': 'pro',
+      };
+      const matchedType = typeAliases[q];
+
       result = result.filter((league) => {
+        if (matchedType && league.type === matchedType) return true;
         if (league.name.toLowerCase().includes(q)) return true;
         if (league.id.toLowerCase().includes(q)) return true;
         const numMatch = league.name.match(/#(\d+)/);
@@ -87,7 +103,7 @@ export default function StandingsPage() {
       return sortOrder === 'oldest' ? numA - numB : numB - numA;
     });
     return result;
-  }, [leagues, teamSearch, sortOrder]);
+  }, [leagues, teamSearch, sortOrder, typeFilter]);
 
   // Paginate
   const totalTeamPages = Math.ceil(filteredLeagues.length / TEAMS_PER_PAGE);
@@ -96,8 +112,8 @@ export default function StandingsPage() {
     return filteredLeagues.slice(start, start + TEAMS_PER_PAGE);
   }, [filteredLeagues, teamsPage]);
 
-  // Reset page when search changes
-  React.useEffect(() => { setTeamsPage(0); }, [teamSearch]);
+  // Reset page when search or filter changes
+  React.useEffect(() => { setTeamsPage(0); }, [teamSearch, typeFilter]);
 
   const handleOpenModal = (league: League, tab: ModalTab) => {
     setModalLeague(league);
@@ -257,7 +273,7 @@ export default function StandingsPage() {
                 type="text"
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
-                placeholder="Search by league # or roster (e.g. 42, KC QB)"
+                placeholder="Search by league #, roster, or type (e.g. 42, KC QB, jackpot, hof)"
                 className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-9 pr-9 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-banana/40 focus:ring-1 focus:ring-banana/20 transition-colors"
               />
               {teamSearch && (
@@ -270,6 +286,31 @@ export default function StandingsPage() {
                   </svg>
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Type filter buttons */}
+          {leagues.length > 0 && (
+            <div className="flex gap-2 mb-5">
+              {([
+                { key: 'all', label: 'All', color: 'white' },
+                { key: 'jackpot', label: `Jackpot (${typeBreakdown.jackpot})`, color: '#ef4444' },
+                { key: 'hof', label: `HOF (${typeBreakdown.hof})`, color: '#D4AF37' },
+                { key: 'pro', label: `Pro (${typeBreakdown.pro})`, color: '#a855f7' },
+              ] as const).map(({ key, label, color }) => (
+                <button
+                  key={key}
+                  onClick={() => setTypeFilter(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    typeFilter === key
+                      ? 'bg-white/10 border-white/20 text-white'
+                      : 'bg-white/[0.03] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+                  }`}
+                  style={typeFilter === key && key !== 'all' ? { borderColor: color, color } : undefined}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
 
