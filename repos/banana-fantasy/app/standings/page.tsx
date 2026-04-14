@@ -14,7 +14,12 @@ type ViewMode = 'myteams' | 'leaderboard';
 
 export default function StandingsPage() {
   const { isLoggedIn, user } = useAuth();
-  const leaguesQuery = useLeagues({ userId: user?.id, status: 'completed' });
+  const leaguesQueryRaw = useLeagues({ userId: user?.id, status: 'completed' });
+  // Hide teams with no roster data (incomplete/corrupted drafts)
+  const leaguesQuery = useMemo(() => ({
+    ...leaguesQueryRaw,
+    data: leaguesQueryRaw.data.filter(l => l.roster.length > 0),
+  }), [leaguesQueryRaw]);
   const { data: currentGameweek } = useGameweek();
 
   const leagues = leaguesQuery.data;
