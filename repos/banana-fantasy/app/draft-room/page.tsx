@@ -107,7 +107,8 @@ function DraftRoomContent() {
   });
   const [playerCount, setPlayerCount] = useState(() => {
     if (stored?.phase && stored.phase !== 'filling') return 10;
-    return Math.min(Math.max(initialPlayers, 1), 10);
+    if (stored?.players && stored.players > 1) return Math.min(stored.players, 10);
+    return 0; // Show loading state until first server poll
   });
   const [preSpinCountdown, setPreSpinCountdown] = useState(() => {
     if (stored?.preSpinStartedAt) return Math.max(0, Math.floor(15 - (Date.now() - stored.preSpinStartedAt) / 1000));

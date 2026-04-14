@@ -144,8 +144,8 @@ export function DraftRoomFilling({
             </div>
           ) : (
             <span className="text-yellow-400">
-              <span className="text-2xl font-black tabular-nums">{playerCount}/10</span>
-              <span className="text-white/60 ml-2 text-sm">Waiting for players...</span>
+              <span className="text-2xl font-black tabular-nums">{playerCount > 0 ? `${playerCount}/10` : '—'}</span>
+              <span className="text-white/60 ml-2 text-sm">{playerCount > 0 ? 'Waiting for players...' : 'Connecting...'}</span>
             </span>
           )}
         </div>
