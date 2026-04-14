@@ -1654,7 +1654,8 @@ function DraftRoomContent() {
                   if (!draftId || !walletParam) return;
                   setLeaving(true);
                   try {
-                    await leaveDraft(draftId, walletParam);
+                    const storedDraft = draftStore.getDraft(draftId);
+                    await leaveDraft(draftId, walletParam, storedDraft?.cardId);
                     draftStore.removeDraft(draftId);
                     window.location.href = '/drafting';
                   } catch (err) {

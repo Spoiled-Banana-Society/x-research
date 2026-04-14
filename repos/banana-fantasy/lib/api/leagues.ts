@@ -70,6 +70,7 @@ export async function joinDraft(
   const maxPlayers: number = Number(obj.maxPlayers ?? obj.maxDrafters ?? 10) || 10;
   const players: number = Number(obj.players ?? obj.numPlayers ?? 1) || 1;
   const contestName: string = String(obj._leagueDisplayName ?? obj.displayName ?? obj.leagueDisplayName ?? 'Draft');
+  const cardId: string = String(obj._cardId ?? obj.cardId ?? obj.tokenId ?? '');
 
   return {
     id: String(draftId),
@@ -81,6 +82,7 @@ export async function joinDraft(
     type: 'regular',
     entryFee: 0,
     draftSpeed: speed,
+    cardId,
   };
 }
 
@@ -89,9 +91,9 @@ export async function joinDraft(
  *
  * Backend endpoint: `POST /league/{draftId}/actions/leave`
  */
-export async function leaveDraft(draftId: string, walletAddress: string): Promise<void> {
+export async function leaveDraft(draftId: string, walletAddress: string, tokenId?: string): Promise<void> {
   const wallet = normalizeWalletAddress(walletAddress);
-  await draftsApi().post(`/league/${draftId}/actions/leave`, { walletAddress: wallet });
+  await draftsApi().post(`/league/${draftId}/actions/leave`, { ownerId: wallet, tokenId: tokenId || '' });
 }
 
 function mapLeaderboardTokenToEntry(

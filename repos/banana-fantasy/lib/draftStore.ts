@@ -43,6 +43,8 @@ export interface DraftState {
 
   // Special draft type (Jackpot/HOF from wheel) — forces slot machine result
   specialType?: 'jackpot' | 'hof';
+  // Card/token ID from the join response (needed for leave)
+  cardId?: string;
   // Real Go API draftId for queue drafts (id field uses queue-type-roundId for uniqueness)
   queueDraftId?: string;
 

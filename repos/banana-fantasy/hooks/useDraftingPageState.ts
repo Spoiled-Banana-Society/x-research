@@ -929,7 +929,8 @@ export function useDraftingPageState() {
   const confirmExitDraft = async () => {
     if (!exitingDraft || !user?.walletAddress) return;
     try {
-      await leaveDraft(exitingDraft.id, user.walletAddress);
+      const storedDraft = draftStore.getDraft(exitingDraft.id);
+      await leaveDraft(exitingDraft.id, user.walletAddress, storedDraft?.cardId);
       draftStore.removeDraft(exitingDraft.id);
       setLiveDrafts(prev => prev.filter(d => d.id !== exitingDraft.id));
     } catch (err) {
