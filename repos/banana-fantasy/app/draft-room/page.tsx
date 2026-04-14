@@ -247,7 +247,7 @@ function DraftRoomContent() {
               return;
             }
 
-            const countdownStart = stored?.preSpinStartedAt || Date.now();
+            const countdownStart = stored?.preSpinStartedAt || (info.draftStartTime ? info.draftStartTime * 1000 - 60000 : Date.now());
             preSpinStartedAtRef.current = countdownStart;
             setPhase('countdown');
             setMainCountdown(Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000)));
@@ -436,10 +436,10 @@ function DraftRoomContent() {
             const userPos = realOrder.findIndex((p: { isYou: boolean }) => p.isYou);
             if (userPos >= 0) setUserDraftPosition(userPos);
             setDraftType(specialTypeParam);
-            const countdownStart = Date.now();
+            const countdownStart = info.draftStartTime ? info.draftStartTime * 1000 - 60000 : Date.now();
             preSpinStartedAtRef.current = countdownStart;
             setPhase('countdown');
-            setMainCountdown(60);
+            setMainCountdown(Math.max(0, Math.floor(60 - (Date.now() - countdownStart) / 1000)));
             setLiveDataReady(true);
             draftStore.updateDraft(draftId, { phase: 'countdown', preSpinStartedAt: countdownStart, draftOrder: realOrder, userDraftPosition: userPos, type: specialTypeParam, draftType: specialTypeParam });
           } else {
@@ -973,7 +973,8 @@ function DraftRoomContent() {
             }, stepTime);
           });
 
-          setServerPollResult({ order: realOrder, countdownStart: Date.now() });
+          const serverCountdownStart = info.draftStartTime ? info.draftStartTime * 1000 - 60000 : Date.now();
+          setServerPollResult({ order: realOrder, countdownStart: serverCountdownStart });
           return;
         } catch (err) {
           console.warn(`[Draft Room] Server not ready (attempt ${attempts}):`, err instanceof Error ? err.message : err);
