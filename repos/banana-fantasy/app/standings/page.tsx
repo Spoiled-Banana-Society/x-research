@@ -29,7 +29,7 @@ export default function StandingsPage() {
   const [gameweek, setGameweek] = useState<string>(currentGameweek);
   const [teamSearch, setTeamSearch] = useState('');
   const [teamsPage, setTeamsPage] = useState(0);
-  const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('oldest');
+  const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('newest');
   const TEAMS_PER_PAGE = 20;
 
   // Modal state
