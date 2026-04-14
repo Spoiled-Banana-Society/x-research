@@ -197,7 +197,7 @@ export function useDraftLiveSync({
             phase: 'filling',
             liveWalletAddress: walletParam,
             passType: passTypeParam || 'paid',
-            cardId: (draftRoom as Record<string, unknown>).cardId as string | undefined,
+            cardId: draftRoom.cardId,
           });
 
           return;

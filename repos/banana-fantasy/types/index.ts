@@ -71,6 +71,7 @@ export interface DraftRoom {
   type: ContestType;
   entryFee: number;
   draftSpeed: 'fast' | 'slow';
+  cardId?: string;
   // Draft turn info (only relevant when status is 'drafting')
   isOnClock?: boolean;
   picksAway?: number;
