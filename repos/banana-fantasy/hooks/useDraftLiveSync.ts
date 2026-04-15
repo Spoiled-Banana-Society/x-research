@@ -284,7 +284,10 @@ export function useDraftLiveSync({
   const useWsParam = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('useWs') === 'true';
   const firebaseConfigured = typeof window !== 'undefined' && isFirebaseAvailable();
   const firebaseFailed = firebaseRtdb.hasError;
-  const wsEnabled = isLiveMode && (useWsParam || !firebaseConfigured || firebaseFailed);
+  // Always enable WS — Firebase RTDB client reads are blocked by security rules on staging.
+  // WS provides real-time draft state (timer, current drafter, picks).
+  // Firebase can still supplement if it works, but WS is the primary source.
+  const wsEnabled = isLiveMode;
 
   const ws = useDraftWebSocket({
     walletAddress: walletParam,
