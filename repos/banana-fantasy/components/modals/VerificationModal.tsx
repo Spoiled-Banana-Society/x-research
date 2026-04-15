@@ -11,45 +11,28 @@ interface VerificationModalProps {
   onComplete: () => void;
 }
 
-type Step = 'form' | 'verifying' | 'success' | 'error';
+type Step = 'loading' | 'verifying' | 'success' | 'error';
 
 export function VerificationModal({ isOpen, onClose, userId: _userId, onComplete }: VerificationModalProps) {
   const { getAccessToken } = usePrivy();
-  const [step, setStep] = useState<Step>('form');
+  const [step, setStep] = useState<Step>('loading');
   const [error, setError] = useState('');
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [zip, setZip] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const inputClass = 'w-full px-3 py-2.5 rounded-lg bg-bg-tertiary border border-bg-elevated text-text-primary text-sm placeholder-text-muted focus:outline-none focus:border-banana/50';
-
-  const handleSubmit = useCallback(async () => {
-    if (!firstName || !lastName || !dateOfBirth || !address || !city || !state || !zip) {
-      setError('Please fill in all fields');
-      return;
-    }
-
-    setIsSubmitting(true);
+  const startVerification = useCallback(async () => {
+    setStep('loading');
     setError('');
-    setStep('verifying');
 
     try {
       const token = await getAccessToken();
-      const fullAddress = `${address}, ${city}, ${state} ${zip}`;
 
+      // Create session via our API
       const res = await fetch('/api/verify/session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ firstName, lastName, dateOfBirth, address: fullAddress }),
+        body: JSON.stringify({ callback: window.location.href }),
       });
 
       if (!res.ok) {
@@ -60,71 +43,51 @@ export function VerificationModal({ isOpen, onClose, userId: _userId, onComplete
       const data = await res.json();
 
       if (data.sessionUrl) {
-        // Launch Veriff InContext SDK
-        const { createVeriffFrame } = await import('@veriff/incontext-sdk');
-        createVeriffFrame({
-          url: data.sessionUrl,
-          onEvent: (msg: string) => {
-            if (msg === 'FINISHED') {
-              setStep('success');
-              onComplete();
-            } else if (msg === 'CANCELED') {
-              setStep('form');
-              setIsSubmitting(false);
-            }
-          },
-        });
+        setStep('verifying');
+        // Launch Didit SDK
+        const { DiditSdk } = await import('@didit-protocol/sdk-web');
+        const sdk = DiditSdk.shared;
+        sdk.onComplete = (result) => {
+          if (result.type === 'completed' && result.session?.status === 'Approved') {
+            setStep('success');
+            onComplete();
+          } else if (result.type === 'cancelled') {
+            setStep('error');
+            setError('Verification was cancelled.');
+          } else {
+            setError('Verification was not approved. Please try again.');
+            setStep('error');
+          }
+        };
+        await sdk.startVerification({ url: data.sessionUrl });
       }
     } catch (err) {
       console.error('[Verification] Error:', err);
       setError(err instanceof Error ? err.message : 'Verification failed');
       setStep('error');
-      setIsSubmitting(false);
     }
-  }, [firstName, lastName, dateOfBirth, address, city, state, zip, getAccessToken, onComplete]);
+  }, [getAccessToken, onComplete]);
+
+  // Start verification when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      startVerification();
+    }
+  }, [isOpen, startVerification]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Identity Verification" size="md">
-      {/* Form Step */}
-      {step === 'form' && (
-        <div className="space-y-3">
-          <p className="text-text-secondary text-sm mb-2">
-            Quick verification required for your first withdrawal. This only takes a moment.
-          </p>
-          {error && <p className="text-error text-sm">{error}</p>}
-
-          <div className="grid grid-cols-2 gap-3">
-            <input className={inputClass} placeholder="First name" value={firstName} onChange={e => setFirstName(e.target.value)} />
-            <input className={inputClass} placeholder="Last name" value={lastName} onChange={e => setLastName(e.target.value)} />
-          </div>
-          <input className={inputClass} type="date" placeholder="Date of birth" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} />
-          <input className={inputClass} placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} />
-          <div className="grid grid-cols-3 gap-3">
-            <input className={inputClass} placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
-            <input className={inputClass} placeholder="State" value={state} onChange={e => setState(e.target.value)} maxLength={2} />
-            <input className={inputClass} placeholder="ZIP" value={zip} onChange={e => setZip(e.target.value)} />
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="w-full py-3 rounded-xl font-bold bg-banana text-black hover:brightness-110 disabled:opacity-50"
-          >
-            {isSubmitting ? 'Verifying...' : 'Verify & Continue'}
-          </button>
-          <p className="text-text-muted text-xs text-center">Your info is securely verified by Veriff. We don&apos;t store sensitive data.</p>
-        </div>
-      )}
-
-      {/* Verifying Step */}
-      {step === 'verifying' && (
+      {/* Loading / Verifying */}
+      {(step === 'loading' || step === 'verifying') && (
         <div className="flex flex-col items-center py-12 space-y-3">
           <div className="w-10 h-10 border-2 border-banana border-t-transparent rounded-full animate-spin" />
-          <p className="text-text-secondary text-sm">Verifying your information...</p>
+          <p className="text-text-secondary text-sm">
+            {step === 'loading' ? 'Starting verification...' : 'Complete the verification in the popup'}
+          </p>
         </div>
       )}
 
-      {/* Success Step */}
+      {/* Success */}
       {step === 'success' && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center">
@@ -138,7 +101,7 @@ export function VerificationModal({ isOpen, onClose, userId: _userId, onComplete
         </div>
       )}
 
-      {/* Error Step */}
+      {/* Error */}
       {step === 'error' && (
         <div className="space-y-4">
           <div className="p-4 rounded-xl bg-error/10 border border-error/30">
@@ -146,7 +109,7 @@ export function VerificationModal({ isOpen, onClose, userId: _userId, onComplete
             <p className="text-text-secondary text-sm mt-1">{error || 'Please try again.'}</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => { setStep('form'); setError(''); }} className="flex-1 py-3 rounded-xl font-bold bg-bg-tertiary text-text-primary">Try Again</button>
+            <button onClick={startVerification} className="flex-1 py-3 rounded-xl font-bold bg-bg-tertiary text-text-primary">Try Again</button>
             <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold bg-banana text-black">Close</button>
           </div>
         </div>
