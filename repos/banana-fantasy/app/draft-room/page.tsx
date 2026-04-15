@@ -1618,7 +1618,11 @@ function DraftRoomContent() {
             onViewRoster={handleViewRoster}
             rosterViewPlayer={rosterViewPlayer}
             onDraftPlayer={(playerId) => {
-              if (phase !== 'drafting' && engine.draftStatus !== 'active') return;
+              console.log('[DraftRoom] onDraftPlayer:', playerId, 'phase:', phase, 'engineStatus:', engine.draftStatus);
+              if (phase !== 'drafting' && engine.draftStatus !== 'active') {
+                console.log('[DraftRoom] BLOCKED — phase:', phase, 'engineStatus:', engine.draftStatus);
+                return;
+              }
               if (phase !== 'drafting') setPhase('drafting');
               handleLiveDraft(playerId);
             }}

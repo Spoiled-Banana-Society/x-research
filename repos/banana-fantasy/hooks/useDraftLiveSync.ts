@@ -219,6 +219,7 @@ export function useDraftLiveSync({
   }, [isLiveMode, draftId, walletParam, speedParam, passTypeParam, promoTypeParam, setDraftId]);
 
   const handleLiveDraft = useCallback((playerId: string) => {
+    console.log('[Draft] handleLiveDraft called:', playerId, 'isLiveMode:', isLiveMode, 'draftId:', draftId, 'draftStatus:', engine.draftStatus, 'isUserTurn:', engine.isUserTurn);
     engine.markManualPick();
     if (!isLiveMode) {
       engine.draftPlayer(playerId);
@@ -226,6 +227,7 @@ export function useDraftLiveSync({
     }
 
     const pickPayload = engine.draftPlayer(playerId);
+    console.log('[Draft] pickPayload:', pickPayload ? 'OK' : 'NULL', 'draftId:', draftId);
     if (pickPayload && draftId) {
       draftApi.submitPickREST(draftId, walletParam, {
         playerId: pickPayload.playerId,
