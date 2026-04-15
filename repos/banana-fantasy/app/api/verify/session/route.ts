@@ -3,6 +3,7 @@ import { json, jsonError, parseBody } from '@/lib/api/routeUtils';
 import { getPrivyUser } from '@/lib/auth';
 
 const DIDIT_API_KEY = process.env.DIDIT_API_KEY || '';
+const DIDIT_WORKFLOW_ID = process.env.DIDIT_WORKFLOW_ID || 'b0200697-541d-4cd2-b79d-96a8a20616ae';
 const DIDIT_BASE_URL = 'https://verification.didit.me';
 
 export async function POST(req: Request) {
@@ -20,6 +21,7 @@ export async function POST(req: Request) {
         'x-api-key': DIDIT_API_KEY,
       },
       body: JSON.stringify({
+        workflow_id: DIDIT_WORKFLOW_ID,
         vendor_data: vendorData,
         callback,
       }),
