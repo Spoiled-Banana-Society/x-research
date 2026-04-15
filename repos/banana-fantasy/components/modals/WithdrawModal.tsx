@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { PersonaVerificationModal } from './PersonaVerificationModal';
+import { VerificationModal } from './VerificationModal';
 import type { PrizeWithdrawal } from '@/types';
 
 interface WithdrawModalProps {
@@ -18,8 +18,6 @@ interface WithdrawModalProps {
 
 type Step = 'form' | 'processing' | 'success' | 'error';
 
-const TEMPLATE_BASIC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_BASIC || '';
-const TEMPLATE_KYC = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID_KYC || '';
 
 function isValidAddress(addr: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(addr);
@@ -60,13 +58,6 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
       maximumFractionDigits: 0,
     }).format(value);
   };
-
-  const handleVerificationComplete = useCallback(async (_inquiryId: string, status: string) => {
-    setShowVerification(null);
-    if (status === 'completed') {
-      handleConfirm();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirm = async () => {
     if (!draftId) {
@@ -248,14 +239,16 @@ export function WithdrawModal({ isOpen, onClose, amount, draftId, userId, wallet
         </button>
       </div>
 
-      {/* Persona Verification Modal */}
+      {/* Veriff Verification Modal */}
       {showVerification && userId && (
-        <PersonaVerificationModal
+        <VerificationModal
           isOpen={true}
           onClose={() => setShowVerification(null)}
-          templateId={showVerification === 'basic' ? TEMPLATE_BASIC : TEMPLATE_KYC}
           userId={userId}
-          onComplete={handleVerificationComplete}
+          onComplete={() => {
+            setShowVerification(null);
+            handleConfirm();
+          }}
         />
       )}
     </Modal>
