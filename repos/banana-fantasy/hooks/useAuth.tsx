@@ -13,7 +13,8 @@ const USER_BALANCE_KEY = 'banana-fantasy-user-balance';
 const USER_STORAGE_KEYS = [
   USER_PROFILE_KEY,
   USER_BALANCE_KEY,
-  'banana-active-drafts',
+  // NOTE: 'banana-active-drafts' intentionally NOT cleared on logout
+  // so filling/in-progress drafts persist across login sessions
   'banana-completed-drafts',
   'banana-fantasy-onboarding-complete',
   'hasSeenOnboarding',
