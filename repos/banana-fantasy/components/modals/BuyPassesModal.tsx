@@ -494,6 +494,12 @@ export function BuyPassesModal({
               ) : (
                 <p className="text-3xl font-bold text-banana">${totalPrice}</p>
               )}
+              {paymentMethod === 'usdc' && user?.usdcBalance != null && (
+                <p className={`text-xs ${user.usdcBalance >= totalPrice ? 'text-success' : 'text-error'}`}>
+                  Wallet balance: {user.usdcBalance.toFixed(2)} USDC
+                  {user.usdcBalance < totalPrice && ' (insufficient)'}
+                </p>
+              )}
             </div>
 
             {/* CTA Button */}
