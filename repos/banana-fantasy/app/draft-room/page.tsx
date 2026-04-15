@@ -1618,7 +1618,8 @@ function DraftRoomContent() {
             onViewRoster={handleViewRoster}
             rosterViewPlayer={rosterViewPlayer}
             onDraftPlayer={(playerId) => {
-              if (phase !== 'drafting') return;
+              if (phase !== 'drafting' && engine.draftStatus !== 'active') return;
+              if (phase !== 'drafting') setPhase('drafting');
               handleLiveDraft(playerId);
             }}
             onQueueSync={(queue) => {
