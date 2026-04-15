@@ -251,6 +251,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (fetchingRef.current === walletAddress) return;
       fetchingRef.current = walletAddress;
 
+      // Clear active drafts if switching to a different wallet
+      try {
+        const lastWallet = localStorage.getItem('banana-last-wallet');
+        if (lastWallet && lastWallet.toLowerCase() !== walletAddress.toLowerCase()) {
+          localStorage.removeItem('banana-active-drafts');
+        }
+        localStorage.setItem('banana-last-wallet', walletAddress.toLowerCase());
+      } catch { /* ignore */ }
+
       const savedProfile = getSavedProfile();
       // Determine login method: 'wallet' only if user has a non-embedded (external) wallet.
       // privy.user.wallet exists for ALL users (embedded wallets are auto-created),
