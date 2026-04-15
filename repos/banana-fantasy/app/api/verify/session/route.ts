@@ -3,7 +3,7 @@ import { json, jsonError, parseBody } from '@/lib/api/routeUtils';
 import { getPrivyUser } from '@/lib/auth';
 
 const DIDIT_API_KEY = process.env.DIDIT_API_KEY || '';
-const DIDIT_WORKFLOW_ID = process.env.DIDIT_WORKFLOW_ID || 'b0200697-541d-4cd2-b79d-96a8a20616ae';
+const DIDIT_WORKFLOW_ID = process.env.DIDIT_WORKFLOW_ID || 'c49a0700-b18e-4a7f-aa55-06061fda42b5';
 const DIDIT_BASE_URL = 'https://verification.didit.me';
 
 export async function POST(req: Request) {
