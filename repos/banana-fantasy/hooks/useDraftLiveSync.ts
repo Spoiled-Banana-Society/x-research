@@ -219,7 +219,6 @@ export function useDraftLiveSync({
   }, [isLiveMode, draftId, walletParam, speedParam, passTypeParam, promoTypeParam, setDraftId]);
 
   const handleLiveDraft = useCallback((playerId: string) => {
-    console.log('[Draft] handleLiveDraft called:', playerId, 'isLiveMode:', isLiveMode, 'draftId:', draftId, 'draftStatus:', engine.draftStatus, 'isUserTurn:', engine.isUserTurn);
     engine.markManualPick();
     if (!isLiveMode) {
       engine.draftPlayer(playerId);
@@ -227,17 +226,19 @@ export function useDraftLiveSync({
     }
 
     const pickPayload = engine.draftPlayer(playerId);
-    console.log('[Draft] pickPayload:', pickPayload ? 'OK' : 'NULL', 'draftId:', draftId);
     if (pickPayload && draftId) {
+      // Send pick via WebSocket (primary — matches old dev's implementation)
+      ws.sendPick(pickPayload);
+      logger.debug('[WS] Pick sent:', pickPayload.playerId);
+
+      // Also try REST as backup (may 404 if endpoint doesn't exist — that's OK)
       draftApi.submitPickREST(draftId, walletParam, {
         playerId: pickPayload.playerId,
         displayName: pickPayload.displayName,
         team: pickPayload.team,
         position: pickPayload.position,
-      }).then(() => {
-        logger.debug('[REST] Pick submitted successfully:', pickPayload.playerId);
       }).catch((err) => {
-        console.error('[REST] Pick submission failed:', err);
+        // REST endpoint may not exist — WS is the primary pick method
         if (engine.airplaneMode && engine.isUserTurn) {
           const msg = err?.message || '';
           const match = msg.match(/already picked (\S+)/);
