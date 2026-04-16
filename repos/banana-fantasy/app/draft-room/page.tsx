@@ -853,6 +853,34 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, isLiveMode]);
 
+  // Poll draft state during drafting to keep currentDrafter in sync
+  useEffect(() => {
+    if (!draftId || !isLiveMode || phase !== 'drafting') return;
+    let cancelled = false;
+
+    const pollDraftState = async () => {
+      try {
+        const info = await draftApi.getDraftInfo(draftId);
+        if (cancelled) return;
+        if (info.currentDrafter) {
+          engine.handleTimerUpdate({
+            currentDrafter: info.currentDrafter,
+            endOfTurnTimestamp: info.currentPickEndTime || 0,
+            startOfTurnTimestamp: (info.currentPickEndTime || 0) - info.pickLength,
+          });
+        }
+        if (info.pickNumber > 150) {
+          setPhase('drafting'); // Will show completed via engine.draftStatus
+        }
+      } catch { /* ignore */ }
+    };
+
+    pollDraftState();
+    const interval = setInterval(pollDraftState, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId, isLiveMode, phase]);
+
   // Poll server for real player count during filling
   useEffect(() => {
     if (!draftId || phase !== 'filling') return;
