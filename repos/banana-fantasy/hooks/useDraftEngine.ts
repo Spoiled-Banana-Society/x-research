@@ -62,7 +62,7 @@ export interface ServerTimerPayload {
 }
 
 export interface ServerDraftInfoPayload {
-  draftId: string;
+  draftId?: string;
   displayName: string;
   draftStartTime: number;
   pickLength: number;
@@ -71,7 +71,8 @@ export interface ServerDraftInfoPayload {
   roundNum: number;
   pickInRound: number;
   draftOrder: { ownerId: string; tokenId: string }[];
-  adp: { adp: number; byeWeek: string; playerId: string }[];
+  adp?: { adp: number; byeWeek: string; playerId: string }[];
+  currentPickEndTime?: number;
 }
 
 // The Go server broadcasts flat PlayerInfo as the new_pick payload.
