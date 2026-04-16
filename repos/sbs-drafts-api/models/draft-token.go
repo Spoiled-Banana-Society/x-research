@@ -269,6 +269,11 @@ func (token *DraftToken) GetDraftTokenFromDraftById(tokenId, draftId string) err
 	return nil
 }
 
+// UpdateInUseDraftTokenInDatabase is the exported wrapper for staging package access.
+func (token *DraftToken) UpdateInUseDraftTokenInDatabase(draftId string) error {
+	return token.updateInUseDraftTokenInDatabase(draftId)
+}
+
 func (token *DraftToken) updateInUseDraftTokenInDatabase(draftId string) error {
 	if token.LeagueId == "" {
 		token.LeagueId = draftId

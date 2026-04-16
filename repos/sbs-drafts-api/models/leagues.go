@@ -37,11 +37,11 @@ type LeagueUser struct {
 }
 
 type DraftLeagueTracker struct {
-	CurrentLiveDraftCount int   `json:"currentLiveDraftCount"`
-	CurrentSlowDraftCount int   `json:"currentScheduledDraftCount"`
-	FilledLeaguesCount    int   `json:"filledLeaguesCount"`
-	HofLeagueIds          []int `json:"hofLeagueIds"`
-	JackpotLeagueIds      []int `json:"jackpotLeagueIds"`
+	CurrentLiveDraftCount int   `json:"currentLiveDraftCount" firestore:"CurrentLiveDraftCount"`
+	CurrentSlowDraftCount int   `json:"currentScheduledDraftCount" firestore:"CurrentSlowDraftCount"`
+	FilledLeaguesCount    int   `json:"filledLeaguesCount" firestore:"FilledLeaguesCount"`
+	HofLeagueIds          []int `json:"hofLeagueIds" firestore:"HofLeagueIds"`
+	JackpotLeagueIds      []int `json:"jackpotLeagueIds" firestore:"JackpotLeagueIds"`
 }
 
 type Score struct {
@@ -545,4 +545,57 @@ func ReturnHallOfFamePlayoffLeaderboard(gameweek, orderBy, ownerId string) (AllD
 	fmt.Println("Num of tokens returned in leaderboard: ", len(hofPlayoffCards))
 
 	return AllDraftTokensLeaderborad{Leaderboard: hofPlayoffCards, OwnersTokens: ownersCards}, nil
+}
+
+type BatchProgressResponse struct {
+	Current            int `json:"current"`
+	Total              int `json:"total"`
+	JackpotRemaining   int `json:"jackpotRemaining"`
+	HofRemaining       int `json:"hofRemaining"`
+	FilledLeaguesCount int `json:"filledLeaguesCount"`
+}
+
+func ReturnBatchProgress() (*BatchProgressResponse, error) {
+	var draftTracker DraftLeagueTracker
+	err := utils.Db.ReadDocument("drafts", "draftTracker", &draftTracker)
+	if err != nil {
+		fmt.Println("ERROR in reading draft Tracker: ", err)
+		return nil, err
+	}
+
+	current := draftTracker.FilledLeaguesCount % 100
+	// Batch starts at the most recent multiple of 100
+	batchStart := draftTracker.FilledLeaguesCount - current
+
+	// Count jackpots in the current batch (IDs >= batchStart)
+	jackpotsInBatch := 0
+	for _, id := range draftTracker.JackpotLeagueIds {
+		if id >= batchStart {
+			jackpotsInBatch++
+		}
+	}
+	jackpotRemaining := 1 - jackpotsInBatch
+	if jackpotRemaining < 0 {
+		jackpotRemaining = 0
+	}
+
+	// Count HOF in the current batch (IDs >= batchStart)
+	hofsInBatch := 0
+	for _, id := range draftTracker.HofLeagueIds {
+		if id >= batchStart {
+			hofsInBatch++
+		}
+	}
+	hofRemaining := 5 - hofsInBatch
+	if hofRemaining < 0 {
+		hofRemaining = 0
+	}
+
+	return &BatchProgressResponse{
+		Current:            current,
+		Total:              100,
+		JackpotRemaining:   jackpotRemaining,
+		HofRemaining:       hofRemaining,
+		FilledLeaguesCount: draftTracker.FilledLeaguesCount,
+	}, nil
 }

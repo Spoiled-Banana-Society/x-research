@@ -10,6 +10,7 @@ import (
 	draftState "github.com/Spoiled-Banana-Society/sbs-drafts-api/draft-state"
 	"github.com/Spoiled-Banana-Society/sbs-drafts-api/leagues"
 	"github.com/Spoiled-Banana-Society/sbs-drafts-api/owner"
+	"github.com/Spoiled-Banana-Society/sbs-drafts-api/staging"
 	"github.com/Spoiled-Banana-Society/sbs-drafts-api/utils"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -104,6 +105,9 @@ func main() {
 
 	or := &owner.OwnerResources{}
 	r.Mount("/owner", or.Routes())
+
+	sr := &staging.StagingResources{}
+	r.Mount("/staging", sr.Routes())
 
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }

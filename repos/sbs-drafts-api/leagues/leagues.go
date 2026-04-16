@@ -25,6 +25,8 @@ func (lr *LeagueResources) Routes() chi.Router {
 	r.Get("/all/{ownerId}/draftTokenLeaderboard/gameweek/{gameweek}/orderBy/{orderBy}/level/{level}", lr.ReturnAllDraftTokenLeaderboard)
 	r.Get("/{ownerId}/drafts/{draftId}/leaderboard/{orderBy}/gameweek/{gameweek}", lr.ReturnDraftLeagueLeaderboard)
 	r.Get("/{ownerId}/hall-of-fame/leaderboard/{orderBy}/gameweek/{gameweek}", lr.ReturnHallOfFameLeaderboard)
+	r.Get("/batchProgress", lr.ReturnBatchProgress)
+	r.Get("/debugBatch", lr.DebugBatchProgress)
 	return r
 }
 
@@ -328,4 +330,43 @@ func (lr *LeagueResources) ReturnHallOfFameLeaderboard(w http.ResponseWriter, r 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (lr *LeagueResources) ReturnBatchProgress(w http.ResponseWriter, r *http.Request) {
+	batchProgress, err := models.ReturnBatchProgress()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.Marshal(batchProgress)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (lr *LeagueResources) DebugBatchProgress(w http.ResponseWriter, r *http.Request) {
+	var draftTracker models.DraftLeagueTracker
+	err := utils.Db.ReadDocument("drafts", "draftTracker", &draftTracker)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"raw_tracker":      draftTracker,
+		"filled":           draftTracker.FilledLeaguesCount,
+		"current_mod_100":  draftTracker.FilledLeaguesCount % 100,
+		"jp_ids_count":     len(draftTracker.JackpotLeagueIds),
+		"hof_ids_count":    len(draftTracker.HofLeagueIds),
+		"jp_ids_last5":     draftTracker.JackpotLeagueIds,
+		"hof_ids_last5":    draftTracker.HofLeagueIds,
+	})
 }
