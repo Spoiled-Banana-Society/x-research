@@ -6,10 +6,6 @@ const FALLBACK_URL =
   process.env.NEXT_PUBLIC_DRAFTS_API_URL ||
   'https://sbs-drafts-api-w5wydprnbq-uc.a.run.app';
 
-// Draft actions (picks, preferences) live on a separate service in sbs-test-env
-const DRAFT_ACTIONS_URL =
-  process.env.NEXT_PUBLIC_DRAFT_ACTIONS_URL ||
-  'https://sbs-drafts-api-ajuy5qy3wa-uc.a.run.app';
 
 // ==================== TYPES ====================
 
@@ -102,9 +98,7 @@ export interface UserTokens {
 // ==================== HELPERS ====================
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  // Routes under /draft-actions/ go to the sbs-test-env service
-  const isDraftAction = path.startsWith('/draft-actions/');
-  const baseUrl = isDraftAction ? DRAFT_ACTIONS_URL : (getDraftsApiUrl() || FALLBACK_URL);
+  const baseUrl = getDraftsApiUrl() || FALLBACK_URL;
   const url = `${baseUrl}${path}`;
   const res = await fetch(url, options);
   if (!res.ok) {
