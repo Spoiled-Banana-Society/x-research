@@ -24,12 +24,20 @@ async function fetchSpin(spinId: string): Promise<WheelSpinDoc | null> {
   }
 }
 
-function prizeCopy(result: string): { title: string; description: string; image: string } {
+interface PrizeCopy {
+  title: string;
+  description: string;
+  image: string;
+  video?: string; // absolute URL to MP4
+}
+
+function prizeCopy(result: string): PrizeCopy {
   if (result === 'jackpot') {
     return {
       title: 'JACKPOT on the Banana Wheel 🎰',
       description: 'Win the league → skip straight to the finals. Come spin yours on SBS Fantasy.',
       image: `${SITE_URL}/jackpot-logo.png`,
+      video: `${SITE_URL}/slots/jackpot.mp4`,
     };
   }
   if (result === 'hof') {
@@ -37,6 +45,7 @@ function prizeCopy(result: string): { title: string; description: string; image:
       title: 'Hall of Fame draft unlocked 🏆',
       description: 'Competing for bonus prizes on SBS Fantasy. Spin the Banana Wheel for your shot.',
       image: `${SITE_URL}/hof-logo.jpg`,
+      video: `${SITE_URL}/slots/hof.mp4`,
     };
   }
   const m = result.match(/^draft-(\d+)$/);
@@ -61,21 +70,47 @@ export async function generateMetadata(
   const spin = await fetchSpin(params.spinId);
   const copy = prizeCopy(spin?.result ?? '');
 
-  return {
+  const base: Metadata = {
     title: copy.title,
     description: copy.description,
     openGraph: {
       title: copy.title,
       description: copy.description,
       images: [{ url: copy.image, alt: copy.title }],
+      ...(copy.video
+        ? {
+            videos: [
+              {
+                url: copy.video,
+                type: 'video/mp4',
+                width: 720,
+                height: 720,
+              },
+            ],
+          }
+        : {}),
     },
     twitter: {
-      card: 'summary_large_image',
+      card: copy.video ? 'player' : 'summary_large_image',
       title: copy.title,
       description: copy.description,
       images: [copy.image],
+      ...(copy.video
+        ? {
+            players: [
+              {
+                playerUrl: `${SITE_URL}/wheel-result/${params.spinId}/player`,
+                streamUrl: copy.video,
+                width: 720,
+                height: 720,
+              },
+            ],
+          }
+        : {}),
     },
   };
+
+  return base;
 }
 
 export default function WheelResultLayout({ children }: { children: React.ReactNode }) {
