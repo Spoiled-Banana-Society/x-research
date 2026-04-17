@@ -1,6 +1,8 @@
 const FALLBACK_ADMIN_WALLETS = [
   '0xc0f982492c323fcd314af56d6c1a35cc9b0fc31e',
   '0x27fe00a5a1212e9294b641ba860a383783016c67',
+  '0xd3301bc039faf4223da98bceb5fb81abc9399362', // Boris
+  '0x2e64db49fc597a731091471607f6cd0251d7eafb', // Richard
 ];
 
 function normalizeWallet(value: string): string {
