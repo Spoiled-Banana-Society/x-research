@@ -2,9 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useExportWallet } from '@privy-io/react-auth';
 import { getNflTeamLogo } from '@/lib/nflTeams';
+import { isWalletAdmin } from '@/lib/adminAllowlist';
 import { InstallAppButton } from '@/components/home/AddToHomeScreenCard';
 
 interface ProfileDropdownProps {
@@ -202,6 +204,19 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
                 </svg>
                 Export Wallet
               </button>
+            )}
+
+            {isWalletAdmin(user.walletAddress) && (
+              <Link
+                href="/admin"
+                onClick={() => setIsOpen(false)}
+                className="w-full px-4 py-2 text-left text-banana hover:bg-bg-tertiary hover:text-banana transition-colors flex items-center gap-3 text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l3 7h7l-5.5 4.5 2 7L12 16l-6.5 4.5 2-7L2 9h7z" />
+                </svg>
+                Admin
+              </Link>
             )}
           </div>
 
