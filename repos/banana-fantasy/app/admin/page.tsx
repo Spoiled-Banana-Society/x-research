@@ -142,8 +142,11 @@ export default function AdminPage() {
   const authHeaders = useCallback(async (): Promise<HeadersInit> => {
     const token = await privy.getAccessToken();
     if (!token) throw new Error('Missing Privy access token');
-    return { Authorization: `Bearer ${token}` };
-  }, [privy]);
+    return {
+      Authorization: `Bearer ${token}`,
+      ...(walletAddress ? { 'X-Admin-Wallet': walletAddress } : {}),
+    };
+  }, [privy, walletAddress]);
 
   /* ── Loaders ── */
 
