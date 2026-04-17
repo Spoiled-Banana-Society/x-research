@@ -29,16 +29,18 @@ function toNonNegativeInt(value: string | null, fallback: number): number {
 
 async function resolveUsersCollection(): Promise<CollectionReference<DocumentData>> {
   const db = getAdminFirestore();
-  const usersRef = db.collection('users');
   const v2UsersRef = db.collection('v2_users');
+  const usersRef = db.collection('users');
 
-  const [usersProbe, v2Probe] = await Promise.all([usersRef.limit(1).get(), v2UsersRef.limit(1).get()]);
-
-  if (!usersProbe.empty) return usersRef;
+  // Prefer v2_users — that's where real production users live.
+  // Legacy `users` collection contains old mock/seed data.
+  const v2Probe = await v2UsersRef.limit(1).get();
   if (!v2Probe.empty) return v2UsersRef;
 
-  // Prefer users when both are empty/non-existent.
-  return usersRef;
+  const usersProbe = await usersRef.limit(1).get();
+  if (!usersProbe.empty) return usersRef;
+
+  return v2UsersRef;
 }
 
 export async function GET(req: Request) {
