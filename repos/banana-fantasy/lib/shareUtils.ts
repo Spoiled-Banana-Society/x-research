@@ -15,10 +15,6 @@ export function wheelResultPath(spinId: string): string {
   return `/wheel-result/${spinId}`;
 }
 
-export function slotResultPath(draftId: string, type: 'jackpot' | 'hof'): string {
-  return `/slot-result/${draftId}?type=${type}`;
-}
-
 export interface SpinShareCopy {
   text: string;
   earnsCredit: boolean;
@@ -36,15 +32,3 @@ export function buildWheelShareCopy(prizeId: string): SpinShareCopy {
   return { text: base, earnsCredit: bigWin };
 }
 
-export function buildSlotShareCopy(draftType: 'jackpot' | 'hof'): SpinShareCopy {
-  if (draftType === 'jackpot') {
-    return {
-      text: 'JACKPOT draft on @SBSFantasy 🎰 win the league → skip straight to finals',
-      earnsCredit: true,
-    };
-  }
-  return {
-    text: 'Hall of Fame draft on @SBSFantasy 🏆 bonus prizes in play',
-    earnsCredit: true,
-  };
-}

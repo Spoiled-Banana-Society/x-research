@@ -33,7 +33,6 @@ interface DraftRoomRevealProps {
   draftType: DraftType | null;
   slotAnimationDone: boolean;
   onCloseSlotMachine: () => void;
-  draftId?: string;
 }
 
 export function DraftRoomReveal({
@@ -57,7 +56,6 @@ export function DraftRoomReveal({
   draftType,
   slotAnimationDone,
   onCloseSlotMachine,
-  draftId,
 }: DraftRoomRevealProps) {
   const myName = user?.username && !user.username.startsWith('0x') ? user.username : 'You';
 
@@ -245,7 +243,6 @@ export function DraftRoomReveal({
           slotAnimationDone={slotAnimationDone}
           formatTime={formatTime}
           onClose={onCloseSlotMachine}
-          draftId={draftId}
         />
       )}
     </>

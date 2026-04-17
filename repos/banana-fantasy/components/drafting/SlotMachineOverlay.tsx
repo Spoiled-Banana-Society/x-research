@@ -5,8 +5,6 @@ import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { DRAFT_TYPES } from '@/lib/draftRoomConstants';
 import type { DraftType } from '@/lib/draftRoomConstants';
 import { useRng, type RngSeedData } from '@/hooks/useRng';
-import { ShareWinButton } from '@/components/share/ShareWinButton';
-import { buildSlotShareCopy } from '@/lib/shareUtils';
 
 interface SlotMachineOverlayProps {
   allReelItems: DraftType[][];
@@ -19,7 +17,6 @@ interface SlotMachineOverlayProps {
   onClose: () => void;
   rngSeedData?: RngSeedData | null;
   autoVerifyRng?: boolean;
-  draftId?: string;
 }
 
 export function SlotMachineOverlay({
@@ -33,7 +30,6 @@ export function SlotMachineOverlay({
   onClose,
   rngSeedData,
   autoVerifyRng = true,
-  draftId,
 }: SlotMachineOverlayProps) {
   const itemHeight = 130;
   const landingIndex = (allReelItems[0]?.length || 50) - 8;
@@ -185,21 +181,7 @@ export function SlotMachineOverlay({
                 {isVerifying ? 'Verifying fairness...' : isVerified ? 'Provably fair: verified' : 'Provably fair: pending'}
               </div>
             )}
-            {draftId && (draftType === 'jackpot' || draftType === 'hof') && (() => {
-              const copy = buildSlotShareCopy(draftType);
-              return (
-                <div className="mt-4" onClick={(e) => e.stopPropagation()}>
-                  <ShareWinButton
-                    shareType="slot"
-                    sourceId={draftId}
-                    prize={draftType}
-                    tweetText={copy.text}
-                    earnsCredit={copy.earnsCredit}
-                  />
-                </div>
-              );
-            })()}
-            <p className="text-white/40 text-sm mt-2">Click anywhere or press X to close</p>
+            <p className="text-white/40 text-sm">Click anywhere or press X to close</p>
           </div>
         )}
       </div>

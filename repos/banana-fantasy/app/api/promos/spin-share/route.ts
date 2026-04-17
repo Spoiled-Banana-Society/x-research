@@ -18,18 +18,15 @@ const SPIN_SHARE_PROMO_ID = '10';
 
 const SHARE_CREDIT_THRESHOLD = Number(process.env.NEXT_PUBLIC_SHARE_CREDIT_THRESHOLD || 3);
 
-function isBigWin(prize: string, shareType: SpinShareType): boolean {
-  if (shareType === 'slot') return true; // slot shares only offered for JP/HOF
+function isBigWin(prize: string): boolean {
   if (prize === 'jackpot' || prize === 'hof') return true;
   const m = prize.match(/^draft-(\d+)$/);
   if (m && Number(m[1]) >= 5) return true;
   return false;
 }
 
-function shareablePath(shareType: SpinShareType, sourceId: string, prize: string): string {
-  if (shareType === 'wheel') return `/wheel-result/${sourceId}`;
-  const slotType = prize === 'hof' ? 'hof' : 'jackpot';
-  return `/slot-result/${sourceId}?type=${slotType}`;
+function shareablePath(sourceId: string): string {
+  return `/wheel-result/${sourceId}`;
 }
 
 export async function POST(req: Request) {
@@ -49,7 +46,7 @@ export async function POST(req: Request) {
     const sourceId = requireString(body.sourceId, 'sourceId');
     const prize = requireString(body.prize, 'prize');
 
-    if (shareType !== 'wheel' && shareType !== 'slot') {
+    if (shareType !== 'wheel') {
       throw new ApiError(400, 'Invalid shareType');
     }
 
@@ -86,7 +83,7 @@ export async function POST(req: Request) {
     }
 
     // 3. Search X for the user's tweet containing the shareable URL
-    const expectedUrl = getShareableUrl(shareablePath(shareType, sourceId, prize));
+    const expectedUrl = getShareableUrl(shareablePath(sourceId));
     const tweet = await findTweetByUserContainingUrl(handle, expectedUrl);
 
     if (!tweet) {
@@ -94,7 +91,7 @@ export async function POST(req: Request) {
     }
 
     // 4. Record the share
-    const earnsCredit = isBigWin(prize, shareType);
+    const earnsCredit = isBigWin(prize);
     const tweetUrl = `https://x.com/${handle.replace(/^@/, '')}/status/${tweet.id}`;
     const verifiedAt = new Date().toISOString();
 

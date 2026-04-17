@@ -1595,7 +1595,6 @@ function DraftRoomContent() {
                 cleanupAudio();
                 if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
               }}
-              draftId={draftId ?? undefined}
             />
           )}
 
