@@ -189,15 +189,34 @@ export async function getPromos(userId: string): Promise<Promo[]> {
   const db = getAdminFirestore();
   await ensureUserSeeded(userId);
 
+  const userRef = db.collection(USERS_COLLECTION).doc(userId);
+
   const [promosSnap, twitterSnap] = await Promise.all([
-    db.collection(USERS_COLLECTION).doc(userId).collection(PROMOS_SUBCOLLECTION).get(),
+    userRef.collection(PROMOS_SUBCOLLECTION).get(),
     db.collection('v2_twitter_links').where('walletAddress', '==', userId.toLowerCase()).limit(1).get(),
   ]);
 
   const hasVerifiedTwitter = !twitterSnap.empty;
 
-  return promosSnap.docs.map((doc) => {
-    const promo = doc.data() as Promo;
+  // Lazy backfill: if seeded promo list has entries this user is missing
+  // (e.g. new promos added after the user was seeded), insert them now.
+  const existingIds = new Set(promosSnap.docs.map((d) => d.id));
+  const seedList = seedDb.promosByUser['1'] ?? [];
+  const missing = seedList.filter((p) => !existingIds.has(p.id));
+  if (missing.length > 0) {
+    const batch = db.batch();
+    for (const promo of missing) {
+      const ref = userRef.collection(PROMOS_SUBCOLLECTION).doc(promo.id);
+      batch.set(ref, stripUndefined(deepClone(promo)));
+    }
+    await batch.commit();
+  }
+
+  const allDocs = missing.length > 0
+    ? [...promosSnap.docs.map((d) => d.data() as Promo), ...missing.map((p) => deepClone(p))]
+    : promosSnap.docs.map((d) => d.data() as Promo);
+
+  return allDocs.map((promo) => {
     // Inject real twitterConnected status for promos that depend on it
     if (promo.type === 'new-user' || promo.type === 'tweet-engagement') {
       promo.modalContent.twitterConnected = hasVerifiedTwitter;

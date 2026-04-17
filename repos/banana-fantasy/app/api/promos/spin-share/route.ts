@@ -26,8 +26,10 @@ function isBigWin(prize: string, shareType: SpinShareType): boolean {
   return false;
 }
 
-function shareablePath(shareType: SpinShareType, sourceId: string): string {
-  return shareType === 'wheel' ? `/wheel-result/${sourceId}` : `/draft/${sourceId}`;
+function shareablePath(shareType: SpinShareType, sourceId: string, prize: string): string {
+  if (shareType === 'wheel') return `/wheel-result/${sourceId}`;
+  const slotType = prize === 'hof' ? 'hof' : 'jackpot';
+  return `/slot-result/${sourceId}?type=${slotType}`;
 }
 
 export async function POST(req: Request) {
@@ -84,7 +86,7 @@ export async function POST(req: Request) {
     }
 
     // 3. Search X for the user's tweet containing the shareable URL
-    const expectedUrl = getShareableUrl(shareablePath(shareType, sourceId));
+    const expectedUrl = getShareableUrl(shareablePath(shareType, sourceId, prize));
     const tweet = await findTweetByUserContainingUrl(handle, expectedUrl);
 
     if (!tweet) {

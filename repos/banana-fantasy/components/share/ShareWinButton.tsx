@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
-import { shareToX, getShareableUrl } from '@/lib/shareUtils';
+import { shareToX, getShareableUrl, wheelResultPath, slotResultPath } from '@/lib/shareUtils';
 import type { SpinShareType } from '@/types';
 
 type Status = 'idle' | 'opening' | 'verifying' | 'verified' | 'not-found' | 'error' | 'already' | 'no-x-link';
@@ -89,9 +89,10 @@ export function ShareWinButton({
   }, [privy, shareType, sourceId, prize]);
 
   const handleShare = useCallback(() => {
-    const url = getShareableUrl(
-      shareType === 'wheel' ? `/wheel-result/${sourceId}` : `/draft/${sourceId}`,
-    );
+    const path = shareType === 'wheel'
+      ? wheelResultPath(sourceId)
+      : slotResultPath(sourceId, prize === 'hof' ? 'hof' : 'jackpot');
+    const url = getShareableUrl(path);
     shareToX(tweetText, url);
     if (earnsCredit) {
       setStatus('verifying');

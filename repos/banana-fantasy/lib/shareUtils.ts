@@ -11,6 +11,14 @@ export function getShareableUrl(path: string): string {
   return `${base}${cleanPath}`;
 }
 
+export function wheelResultPath(spinId: string): string {
+  return `/wheel-result/${spinId}`;
+}
+
+export function slotResultPath(draftId: string, type: 'jackpot' | 'hof'): string {
+  return `/slot-result/${draftId}?type=${type}`;
+}
+
 export interface SpinShareCopy {
   text: string;
   earnsCredit: boolean;
