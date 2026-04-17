@@ -4,29 +4,7 @@ import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { API_CONFIG } from '@/lib/api/config';
 import { getPromos, updatePromo } from '@/lib/db';
-
-function getToken(): string {
-  const token = process.env.X_BEARER_TOKEN;
-  if (!token) throw new ApiError(500, 'X API bearer token not configured');
-  return token;
-}
-
-/** Search recent tweets and return matching tweet data. */
-async function searchTweetsRaw(query: string): Promise<Array<{ id: string; referenced_tweets?: Array<{ type: string; id: string }> }>> {
-  const url = `https://api.x.com/2/tweets/search/recent?query=${encodeURIComponent(query)}&max_results=10&tweet.fields=referenced_tweets`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    console.error(`X API search error (${res.status}): ${body}`);
-    throw new ApiError(502, `X API error (${res.status}): ${body.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  return data.data ?? [];
-}
+import { searchTweetsRaw } from '@/lib/xApi';
 
 /** Check if user has directly replied to the target tweet (not to other replies in thread). */
 async function checkDirectReply(tweetId: string, handle: string): Promise<boolean> {

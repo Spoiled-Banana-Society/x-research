@@ -222,7 +222,21 @@ export interface EligibilityStatus {
 }
 
 // Promo types
-export type PromoType = 'daily-drafts' | 'pick-10' | 'referral' | 'jackpot' | 'hof' | 'mint' | 'new-user' | 'buy-bonus' | 'tweet-engagement' | 'add-to-home-screen';
+export type PromoType = 'daily-drafts' | 'pick-10' | 'referral' | 'jackpot' | 'hof' | 'mint' | 'new-user' | 'buy-bonus' | 'tweet-engagement' | 'add-to-home-screen' | 'spin-share';
+
+// Spin share (X share credit) types
+export type SpinShareType = 'wheel' | 'slot';
+
+export interface SpinShareRecord {
+  userId: string;
+  shareType: SpinShareType;
+  sourceId: string; // spinId for wheel, draftId for slot
+  prize: string; // e.g. "jackpot", "hof", "draft-5"
+  tweetId: string;
+  tweetUrl: string;
+  earnsCredit: boolean;
+  verifiedAt: string;
+}
 
 export interface ReferralReward {
   milestone: string;

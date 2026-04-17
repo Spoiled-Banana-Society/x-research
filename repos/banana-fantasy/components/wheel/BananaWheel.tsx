@@ -5,6 +5,8 @@ import confetti from 'canvas-confetti';
 import { wheelSegments, WHEEL_SEGMENT_ANGLE, type WheelSegment } from '@/lib/wheelConfig';
 import type { WheelSpinOutcome } from '@/hooks/useWheel';
 import { startSpinSound, playWinSound, getWinTier } from '@/lib/wheelSounds';
+import { ShareWinButton } from '@/components/share/ShareWinButton';
+import { buildWheelShareCopy } from '@/lib/shareUtils';
 
 interface BananaWheelProps {
   spinsAvailable: number;
@@ -93,6 +95,7 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [wonSegment, setWonSegment] = useState<WheelSegment | null>(null);
+  const [wonSpinId, setWonSpinId] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [spinError, setSpinError] = useState<string | null>(null);
   const wheelRef = useRef<HTMLDivElement>(null);
@@ -119,6 +122,7 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
         setTimeout(() => {
           setIsSpinning(false);
           setWonSegment(segment);
+          setWonSpinId(pending.outcome.spinId);
           setShowResult(true);
           localStorage.removeItem(PENDING_SPIN_KEY);
           if (segment) {
@@ -131,6 +135,7 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
         // Spin already finished — show result immediately
         setRotation(pending.rotation);
         setWonSegment(segment);
+        setWonSpinId(pending.outcome.spinId);
         setShowResult(true);
         localStorage.removeItem(PENDING_SPIN_KEY);
         if (segment) {
@@ -201,6 +206,7 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
       stopSpinSound();
       setIsSpinning(false);
       setWonSegment(segment);
+      setWonSpinId(outcome.spinId);
       setShowResult(true);
       localStorage.removeItem(PENDING_SPIN_KEY);
       if (segment) {
@@ -472,6 +478,22 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
                   </a>
                 </div>
               )}
+
+              {/* Share on X — every win gets a button; big wins earn credit toward a free spin */}
+              {wonSpinId && (() => {
+                const copy = buildWheelShareCopy(wonSegment.id);
+                return (
+                  <div className="mt-6" style={{ animation: 'fadeIn 0.6s ease-out 0.7s both' }}>
+                    <ShareWinButton
+                      shareType="wheel"
+                      sourceId={wonSpinId}
+                      prize={wonSegment.id}
+                      tweetText={copy.text}
+                      earnsCredit={copy.earnsCredit}
+                    />
+                  </div>
+                );
+              })()}
 
             </div>
           </div>

@@ -171,4 +171,22 @@ export const mockPromos: Promo[] = [
       explanation: 'Add Banana Fantasy to your home screen for a chance to win 5 free spins. 1 random winner chosen after the timer ends.',
     },
   },
+  {
+    id: '10',
+    type: 'spin-share',
+    title: 'Share Wins → FREE SPIN',
+    description: 'Share 3 big wins on X for a spin',
+    ctaText: 'Go Spin',
+    ctaLink: '/banana-wheel',
+    backgroundColor: '#2a2a35',
+    progressCurrent: 0,
+    progressMax: 3,
+    claimable: false,
+    claimCount: 0,
+    modalContent: {
+      title: 'Share Big Wins → FREE SPIN',
+      explanation: 'Share your Jackpot, HOF, or 5+ draft wins on X. Every 3 verified shares earns you a free Banana Wheel spin.',
+      additionalRules: 'Link your X account first. Small wins can be shared but don\'t count toward the free spin.',
+    },
+  },
 ];

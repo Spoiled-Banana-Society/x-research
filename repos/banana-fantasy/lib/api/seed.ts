@@ -340,6 +340,26 @@ const seedPromos: Promo[] = [
         'For a limited time purchase 2 draft passes and receive 1 additional free draft pass! This offer applies to every 2 passes purchased.',
     },
   },
+  {
+    id: '10',
+    type: 'spin-share',
+    title: 'Share Wins → FREE SPIN',
+    description: 'Share 3 big wins on X for a spin',
+    ctaText: 'Go Spin',
+    ctaLink: '/banana-wheel',
+    backgroundColor: '#2a2a35',
+    progressCurrent: 0,
+    progressMax: 3,
+    claimable: false,
+    claimCount: 0,
+    modalContent: {
+      title: 'Share Big Wins → FREE SPIN',
+      explanation:
+        'Share your Jackpot, HOF, or 5+ draft wins on X. Every 3 verified shares earns you a free Banana Wheel spin. Small wins can still be shared for bragging rights but don\'t count toward the free spin.',
+      additionalRules:
+        'You need to link your X account in your profile. After tweeting, it may take up to a minute for us to verify. Each spin can only be shared once.',
+    },
+  },
 ];
 
 export const seedDb: DbSchema = {
