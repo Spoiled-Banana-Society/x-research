@@ -121,6 +121,11 @@ export default function AdminPage() {
   const [promos, setPromos] = useState<PromoItem[]>([]);
   const [newPromo, setNewPromo] = useState({ code: '', discountPercent: 50, maxUses: '' });
 
+  // Grant free drafts form
+  const [grantForm, setGrantForm] = useState({ identifier: '', count: '1' });
+  const [grantBusy, setGrantBusy] = useState(false);
+  const [grantResult, setGrantResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   const USERS_LIMIT = 50;
 
   const tabs: { key: TabKey; label: string; icon: string }[] = useMemo(() => [
@@ -208,6 +213,43 @@ export default function AdminPage() {
       setError(err instanceof Error ? err.message : 'Action failed');
     }
   }, [authHeaders, loadStats]);
+
+  const handleGrantDrafts = useCallback(async () => {
+    const identifier = grantForm.identifier.trim();
+    const count = Number(grantForm.count);
+    if (!identifier) {
+      setGrantResult({ ok: false, message: 'Enter a wallet or username' });
+      return;
+    }
+    if (!Number.isFinite(count) || !Number.isInteger(count) || count === 0) {
+      setGrantResult({ ok: false, message: 'Count must be a non-zero integer' });
+      return;
+    }
+    setGrantBusy(true);
+    setGrantResult(null);
+    try {
+      const res = await fetch('/api/admin/grant-drafts', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, count }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGrantResult({ ok: false, message: data.error || `Failed (${res.status})` });
+      } else {
+        const who = data.username || data.walletAddress || data.userId;
+        setGrantResult({
+          ok: true,
+          message: `Granted ${data.granted > 0 ? '+' : ''}${data.granted} to ${who} — now at ${data.freeDrafts} free draft${data.freeDrafts === 1 ? '' : 's'}`,
+        });
+        setGrantForm({ identifier: '', count: '1' });
+      }
+    } catch (err) {
+      setGrantResult({ ok: false, message: err instanceof Error ? err.message : 'Request failed' });
+    } finally {
+      setGrantBusy(false);
+    }
+  }, [grantForm, authHeaders]);
 
   const handleBanUser = useCallback(async (userId: string, banned: boolean) => {
     try {
@@ -367,6 +409,46 @@ export default function AdminPage() {
         {/* ═══ USERS TAB ═══ */}
         {activeTab === 'users' && (
           <div className="space-y-4">
+            {/* Grant free drafts */}
+            <div className="rounded-xl border border-gray-700 bg-gray-800/40 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-white">Grant Free Drafts</h3>
+                <span className="text-xs text-gray-500">Wallet (0x…) or username</span>
+              </div>
+              <div className="flex flex-col md:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="0xabc… or username"
+                  value={grantForm.identifier}
+                  onChange={(e) => setGrantForm((f) => ({ ...f, identifier: e.target.value }))}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-[#F3E216]/50"
+                />
+                <input
+                  type="number"
+                  placeholder="Count"
+                  value={grantForm.count}
+                  onChange={(e) => setGrantForm((f) => ({ ...f, count: e.target.value }))}
+                  className="w-full md:w-24 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-[#F3E216]/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleGrantDrafts()}
+                  disabled={grantBusy}
+                  className="px-4 py-2.5 rounded-lg bg-[#F3E216] hover:bg-[#F3E216]/90 text-black font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {grantBusy ? 'Granting…' : 'Grant'}
+                </button>
+              </div>
+              {grantResult && (
+                <p className={`mt-2 text-xs ${grantResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  {grantResult.message}
+                </p>
+              )}
+              <p className="mt-2 text-[11px] text-gray-500">
+                Negative counts revoke drafts. Max ±1000 per request.
+              </p>
+            </div>
+
             <div className="flex items-center gap-3">
               <input
                 type="text"
