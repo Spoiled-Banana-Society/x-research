@@ -853,35 +853,6 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, isLiveMode]);
 
-  // Poll draft state during drafting to keep current drafter in sync
-  useEffect(() => {
-    if (!draftId || !isLiveMode || phase !== 'drafting') return;
-    let cancelled = false;
-
-    const pollDraftState = async () => {
-      try {
-        const info = await draftApi.getDraftInfo(draftId);
-        if (cancelled) return;
-        // Update who the current drafter is and the pick number
-        engine.handleDraftInfoUpdate({
-          pickNumber: info.pickNumber,
-          currentDrafter: info.currentDrafter,
-          draftStartTime: info.draftStartTime,
-          pickLength: info.pickLength,
-          roundNum: info.roundNum,
-          pickInRound: info.pickInRound,
-          displayName: info.displayName,
-          draftOrder: info.draftOrder,
-          currentPickEndTime: info.currentPickEndTime,
-        });
-      } catch { /* ignore */ }
-    };
-
-    const interval = setInterval(pollDraftState, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId, isLiveMode, phase]);
-
   // Poll server for real player count during filling
   useEffect(() => {
     if (!draftId || phase !== 'filling') return;
