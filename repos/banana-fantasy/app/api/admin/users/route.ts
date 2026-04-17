@@ -62,11 +62,17 @@ export async function GET(req: Request) {
 
     const snap = await query.get();
 
+    // The doc id is the user's wallet address (authoritative).
+    // The stored `walletAddress` field is often stale seed-template data
+    // (previously all new users got the mock `0x1234...5678` from seedUser1).
+    const MOCK_SEED_WALLET = '0x1234567890abcdef1234567890abcdef12345678';
     const users = snap.docs.map((doc) => {
       const data = doc.data();
+      const storedWallet = typeof data.walletAddress === 'string' ? data.walletAddress : '';
+      const isStoredValid = storedWallet && storedWallet.toLowerCase() !== MOCK_SEED_WALLET;
       return {
         id: doc.id,
-        walletAddress: typeof data.walletAddress === 'string' ? data.walletAddress : '',
+        walletAddress: isStoredValid ? storedWallet : doc.id,
         email:
           (typeof data.blueCheckEmail === 'string' && data.blueCheckEmail) ||
           (typeof data.email === 'string' && data.email) ||

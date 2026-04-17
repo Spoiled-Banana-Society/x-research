@@ -115,9 +115,27 @@ function buildSeedUser(userId: string): {
   referral: { code: string; createdAt: string };
 } {
   const seedUser = seedDb.users['1'];
+  // IMPORTANT: override mock-template fields with real per-user values.
+  // Without these overrides every new user ends up with seedUser1's mock
+  // walletAddress/username/createdAt/etc., which is why the admin page
+  // showed 156 users all with `0x1234...5678`.
   const user: User = {
     ...deepClone(seedUser),
     id: userId,
+    walletAddress: userId,
+    username: `User-${userId.slice(0, 6)}`,
+    xHandle: undefined,
+    profilePicture: undefined,
+    nflTeam: undefined,
+    createdAt: new Date().toISOString(),
+    wheelSpins: 0,
+    freeDrafts: 0,
+    jackpotEntries: 0,
+    hofEntries: 0,
+    draftPasses: 0,
+    usdcBalance: 0,
+    cardPurchaseCount: 0,
+    isVerified: false,
   };
   const promos = deepClone(seedDb.promosByUser['1'] ?? []);
   const wheelSpins = deepClone(seedDb.wheelSpinsByUser['1'] ?? []);
