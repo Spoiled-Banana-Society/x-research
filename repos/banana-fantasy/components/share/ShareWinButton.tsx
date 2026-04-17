@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { shareToX, getShareableUrl } from '@/lib/shareUtils';
 import type { SpinShareType } from '@/types';
 
-type Status = 'idle' | 'opening' | 'verifying' | 'verified' | 'not-found' | 'error' | 'already';
+type Status = 'idle' | 'opening' | 'verifying' | 'verified' | 'not-found' | 'error' | 'already' | 'no-x-link';
 
 export interface ShareWinButtonProps {
   shareType: SpinShareType;
@@ -30,7 +30,7 @@ export function ShareWinButton({
   label,
   earnsCredit = true,
 }: ShareWinButtonProps) {
-  const { isTwitterVerified, isTwitterLinking, linkTwitter } = useAuth();
+  const { linkTwitter, isTwitterLinking } = useAuth();
   const privy = usePrivy();
   const [status, setStatus] = useState<Status>('idle');
   const [credited, setCredited] = useState<null | { verifiedShareCount: number; threshold: number; claimable: boolean }>(null);
@@ -48,7 +48,7 @@ export function ShareWinButton({
         if (attempt > 0) {
           await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
         } else {
-          await new Promise((r) => setTimeout(r, 8000)); // first check after 8s
+          await new Promise((r) => setTimeout(r, 8000));
         }
 
         const res = await fetch('/api/promos/spin-share', {
@@ -64,11 +64,7 @@ export function ShareWinButton({
         const data = await res.json();
 
         if (data.verified) {
-          if (data.alreadyRecorded) {
-            setStatus('already');
-          } else {
-            setStatus('verified');
-          }
+          setStatus(data.alreadyRecorded ? 'already' : 'verified');
           if (data.earnsCredit) {
             setCredited({
               verifiedShareCount: data.verifiedShareCount ?? 0,
@@ -80,7 +76,7 @@ export function ShareWinButton({
         }
 
         if (data.reason === 'no-x-link') {
-          setStatus('error');
+          setStatus('no-x-link');
           return;
         }
       }
@@ -92,31 +88,25 @@ export function ShareWinButton({
     }
   }, [privy, shareType, sourceId, prize]);
 
-  const handleClick = useCallback(() => {
-    if (!isTwitterVerified) {
-      linkTwitter();
-      return;
-    }
+  const handleShare = useCallback(() => {
     const url = getShareableUrl(
       shareType === 'wheel' ? `/wheel-result/${sourceId}` : `/draft/${sourceId}`,
     );
     shareToX(tweetText, url);
-    setStatus('opening');
     if (earnsCredit) {
       setStatus('verifying');
       void verifyShare();
     } else {
       setStatus('verified');
     }
-  }, [isTwitterVerified, linkTwitter, shareType, sourceId, tweetText, earnsCredit, verifyShare]);
+  }, [shareType, sourceId, tweetText, earnsCredit, verifyShare]);
 
-  const defaultLabel = isTwitterVerified ? (label || 'Share on X') : 'Connect X to share';
-  const disabled = isTwitterLinking || status === 'verifying';
+  const disabled = status === 'verifying';
 
   return (
     <div className="flex flex-col items-center gap-2">
       <button
-        onClick={handleClick}
+        onClick={handleShare}
         disabled={disabled}
         className={
           className ||
@@ -126,7 +116,7 @@ export function ShareWinButton({
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M18.244 2H21.5l-7.53 8.607L22.5 22h-6.77l-5.3-6.92L4.48 22H1.22l8.06-9.21L1.5 2h6.93l4.79 6.33L18.244 2Zm-1.187 18h1.873L7.01 3.9H5.01L17.057 20Z" />
         </svg>
-        {status === 'verifying' ? 'Verifying…' : defaultLabel}
+        {status === 'verifying' ? 'Verifying…' : (label || 'Share on X')}
       </button>
 
       {status === 'verified' && credited && (
@@ -143,11 +133,23 @@ export function ShareWinButton({
       )}
       {status === 'not-found' && (
         <p className="text-xs text-text-muted">
-          Couldn&apos;t find your tweet. Once posted it may take up to a minute — refresh to retry.
+          Couldn&apos;t find your tweet — may take a minute to index. Refresh to retry.
         </p>
       )}
+      {status === 'no-x-link' && (
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-xs text-text-muted">Connect X so your share earns credit.</p>
+          <button
+            onClick={() => linkTwitter()}
+            disabled={isTwitterLinking}
+            className="text-xs text-banana hover:underline disabled:opacity-60"
+          >
+            {isTwitterLinking ? 'Opening X…' : 'Connect X'}
+          </button>
+        </div>
+      )}
       {status === 'error' && (
-        <p className="text-xs text-text-muted">Something went wrong verifying. Your tweet still posted.</p>
+        <p className="text-xs text-text-muted">Verifying failed. Your tweet still posted.</p>
       )}
     </div>
   );
