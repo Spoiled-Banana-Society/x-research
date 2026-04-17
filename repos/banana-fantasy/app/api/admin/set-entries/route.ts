@@ -1,11 +1,15 @@
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
 export const dynamic = 'force-dynamic';
+import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody } from '@/lib/api/routeUtils';
+import { requireAdmin } from '@/lib/adminAuth';
 
 const USERS_COLLECTION = 'v2_users';
 
 export async function POST(req: Request) {
   try {
+    await requireAdmin(req);
+
     const body = await parseBody(req);
     const userId = body.userId as string;
     const jackpotEntries = typeof body.jackpotEntries === 'number' ? body.jackpotEntries : undefined;
@@ -24,14 +28,17 @@ export async function POST(req: Request) {
     await userRef.set(patch, { merge: true });
     return json({ success: true, patch }, 200);
   } catch (err) {
+    if (err instanceof ApiError) return jsonError(err.message, err.status);
     console.error(err);
     return jsonError('Internal Server Error', 500);
   }
 }
 
 // Also handle queue reset
-export async function DELETE(_req: Request) {
+export async function DELETE(req: Request) {
   try {
+    await requireAdmin(req);
+
     const { getAdminFirestore } = await import('@/lib/firebaseAdmin');
     const db = getAdminFirestore();
     const ids = ['jackpot', 'hof'];
@@ -42,6 +49,7 @@ export async function DELETE(_req: Request) {
     }
     return new Response(JSON.stringify({ success: true, reset: ids }), { status: 200 });
   } catch (err) {
+    if (err instanceof ApiError) return new Response(JSON.stringify({ error: err.message }), { status: err.status });
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
   }
 }
