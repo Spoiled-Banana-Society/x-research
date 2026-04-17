@@ -14,7 +14,7 @@ function normalizeWallet(raw: string): string {
 }
 
 export async function POST(req: Request) {
-  const rateLimited = rateLimit(req, RATE_LIMITS.general);
+  const rateLimited = rateLimit(req, RATE_LIMITS.admin);
   if (rateLimited) return rateLimited;
 
   try {

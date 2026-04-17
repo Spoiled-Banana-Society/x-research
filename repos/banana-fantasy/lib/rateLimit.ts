@@ -124,8 +124,8 @@ export function rateLimit(req: Request, config: RateLimitConfig): NextResponse |
 export const RATE_LIMITS = {
   /** Purchases: 10 req/min */
   purchases: { limit: 10, windowMs: 60_000 },
-  /** Admin: 20 req/min */
-  admin: { limit: 20, windowMs: 60_000 },
+  /** Admin: 300 req/min — admin auth already gates access; this is just scanner protection */
+  admin: { limit: 300, windowMs: 60_000 },
   /** Wheel spins: 5 req/min */
   wheel: { limit: 5, windowMs: 60_000 },
   /** RNG: 5 req/min */
