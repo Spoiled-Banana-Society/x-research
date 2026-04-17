@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
@@ -139,14 +139,21 @@ export default function AdminPage() {
     { key: 'revenue', label: 'Revenue', icon: '💵' },
   ], []);
 
+  // Keep walletAddress in a ref so authHeaders stays stable across Privy user
+  // hydration updates (otherwise loaders + loadAll recreate → effect re-fires →
+  // duplicate fetches + error-banner flashing).
+  const walletAddressRef = useRef<string | null>(walletAddress);
+  useEffect(() => { walletAddressRef.current = walletAddress; }, [walletAddress]);
+
   const authHeaders = useCallback(async (): Promise<HeadersInit> => {
     const token = await privy.getAccessToken();
     if (!token) throw new Error('Missing Privy access token');
+    const wallet = walletAddressRef.current;
     return {
       Authorization: `Bearer ${token}`,
-      ...(walletAddress ? { 'X-Admin-Wallet': walletAddress } : {}),
+      ...(wallet ? { 'X-Admin-Wallet': wallet } : {}),
     };
-  }, [privy, walletAddress]);
+  }, [privy]);
 
   /* ── Loaders ── */
 
@@ -163,27 +170,39 @@ export default function AdminPage() {
   }, [authHeaders]);
 
   const loadUsers = useCallback(async () => {
-    const q = new URLSearchParams({ limit: String(USERS_LIMIT), offset: String(usersOffset) });
-    const res = await fetch(`/api/admin/users?${q}`, { headers: await authHeaders(), cache: 'no-store' });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json() as UsersResponse;
-    setUsers(data.users);
-    setUsersTotal(data.pagination.total);
+    try {
+      const q = new URLSearchParams({ limit: String(USERS_LIMIT), offset: String(usersOffset) });
+      const res = await fetch(`/api/admin/users?${q}`, { headers: await authHeaders(), cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as UsersResponse;
+      setUsers(data.users);
+      setUsersTotal(data.pagination.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load users');
+    }
   }, [authHeaders, usersOffset]);
 
   const loadDrafts = useCallback(async () => {
-    const res = await fetch('/api/admin/drafts', { headers: await authHeaders(), cache: 'no-store' });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json() as { drafts: DraftItem[]; summary: DraftSummary };
-    setDrafts(data.drafts);
-    setDraftSummary(data.summary);
+    try {
+      const res = await fetch('/api/admin/drafts', { headers: await authHeaders(), cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as { drafts: DraftItem[]; summary: DraftSummary };
+      setDrafts(data.drafts);
+      setDraftSummary(data.summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load drafts');
+    }
   }, [authHeaders]);
 
   const loadPromos = useCallback(async () => {
-    const res = await fetch('/api/admin/promos', { headers: await authHeaders(), cache: 'no-store' });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json() as { promos: PromoItem[] };
-    setPromos(data.promos);
+    try {
+      const res = await fetch('/api/admin/promos', { headers: await authHeaders(), cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as { promos: PromoItem[] };
+      setPromos(data.promos);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load promos');
+    }
   }, [authHeaders]);
 
   const loadAll = useCallback(async () => {
