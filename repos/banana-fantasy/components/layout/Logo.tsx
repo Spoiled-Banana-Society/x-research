@@ -24,11 +24,11 @@ export function Logo({ size = 'md' }: LogoProps) {
         alt="SBS Fantasy"
         width={imgSize}
         height={imgSize}
-        className="-mr-1"
+        className="-mr-2"
         priority
       />
       <span
-        className={`font-extrabold tracking-tight ${size === 'sm' ? 'text-xl' : size === 'md' ? 'text-2xl' : 'text-3xl'} text-white`}
+        className={`font-bold tracking-tight ${size === 'sm' ? 'text-base' : size === 'md' ? 'text-lg' : 'text-xl'} text-white`}
       >
         SBS
       </span>
