@@ -18,15 +18,18 @@ export function Logo({ size = 'md' }: LogoProps) {
   const imgSize = sizeMap[size];
 
   return (
-    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-0 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"
         width={imgSize}
         height={imgSize}
-        className=""
+        className="-mr-1"
+        priority
       />
-      <span className={`font-bold ${size === 'sm' ? 'text-lg' : size === 'md' ? 'text-xl' : 'text-2xl'} text-white`}>
+      <span
+        className={`font-extrabold tracking-tight ${size === 'sm' ? 'text-xl' : size === 'md' ? 'text-2xl' : 'text-3xl'} text-white`}
+      >
         SBS
       </span>
     </Link>

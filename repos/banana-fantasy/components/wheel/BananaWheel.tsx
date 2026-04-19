@@ -339,11 +339,11 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
             <circle cx="50" cy="50" r="7" fill="url(#centerGradient)" />
             <image
               href="/sbs-logo.png"
-              x="45"
-              y="45"
-              width="10"
-              height="10"
-              preserveAspectRatio="xMidYMid slice"
+              x="42"
+              y="42"
+              width="16"
+              height="16"
+              preserveAspectRatio="xMidYMid meet"
             />
             <circle cx="50" cy="50" r="7" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
             <circle cx="50" cy="50" r="6.5" fill="none" stroke="rgba(251,191,36,0.5)" strokeWidth="0.8" />
