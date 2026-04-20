@@ -9,19 +9,20 @@ interface LogoProps {
 }
 
 const sizeMap = {
-  sm: 28,
-  md: 36,
-  lg: 44,
+  sm: 32,
+  md: 40,
+  lg: 52,
 };
 
 export function Logo({ size = 'md' }: LogoProps) {
   const imgSize = sizeMap[size];
-  // Polymarket-style lockup: text cap-height ≈ icon height, natural letter
-  // widths, small consistent gap. Font-size / 0.7 ≈ icon height.
-  const fontSize = Math.round(imgSize * 0.75);
+  // Polymarket-style lockup, tuned for all-caps 3-letter wordmark:
+  // text ~45% of icon height (all-caps reads ~20% larger than mixed-case),
+  // tight 4px gap, bold (not black) so letters don't feel chunky.
+  const fontSize = Math.round(imgSize * 0.45);
 
   return (
-    <Link href="/" className="flex items-center gap-2 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"
@@ -30,7 +31,7 @@ export function Logo({ size = 'md' }: LogoProps) {
         priority
       />
       <span
-        className="font-black tracking-tight leading-none text-white"
+        className="font-bold tracking-tight leading-none text-white"
         style={{ fontSize: `${fontSize}px` }}
       >
         SBS
