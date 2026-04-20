@@ -16,11 +16,12 @@ const sizeMap = {
 
 export function Logo({ size = 'md' }: LogoProps) {
   const imgSize = sizeMap[size];
-  // Text cap-height ≈ half the banana height — visually balanced, not dominant.
-  const fontSize = Math.round(imgSize * 0.5);
+  // "SBS" wordmark is forced to exactly match the icon's width via SVG
+  // textLength + lengthAdjust="spacingAndGlyphs". Height set to ~40% of icon.
+  const wordHeight = Math.round(imgSize * 0.4);
 
   return (
-    <Link href="/" className="flex items-center gap-1.5 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"
@@ -28,12 +29,26 @@ export function Logo({ size = 'md' }: LogoProps) {
         height={imgSize}
         priority
       />
-      <span
-        className="font-bold tracking-tight leading-none text-white"
-        style={{ fontSize: `${fontSize}px` }}
+      <svg
+        width={imgSize}
+        height={wordHeight}
+        viewBox={`0 0 ${imgSize} ${wordHeight}`}
+        aria-hidden="true"
       >
-        SBS
-      </span>
+        <text
+          x={imgSize / 2}
+          y={wordHeight * 0.85}
+          textAnchor="middle"
+          fill="white"
+          fontWeight="900"
+          fontFamily='-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif'
+          fontSize={wordHeight}
+          textLength={imgSize}
+          lengthAdjust="spacingAndGlyphs"
+        >
+          SBS
+        </text>
+      </svg>
     </Link>
   );
 }
