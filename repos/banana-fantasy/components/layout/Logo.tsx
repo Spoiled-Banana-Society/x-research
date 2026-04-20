@@ -16,12 +16,11 @@ const sizeMap = {
 
 export function Logo({ size = 'md' }: LogoProps) {
   const imgSize = sizeMap[size];
-  // Font size picked so the "SBS" cap-height visually matches the banana height.
-  // Rule of thumb: cap-height ≈ 70% of font-size, so font-size ≈ imgSize * 1.2.
-  const fontSize = Math.round(imgSize * 0.9);
+  // Text cap-height ≈ half the banana height — visually balanced, not dominant.
+  const fontSize = Math.round(imgSize * 0.5);
 
   return (
-    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-1.5 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"
@@ -30,7 +29,7 @@ export function Logo({ size = 'md' }: LogoProps) {
         priority
       />
       <span
-        className="font-black tracking-tight leading-none text-white"
+        className="font-bold tracking-tight leading-none text-white"
         style={{ fontSize: `${fontSize}px` }}
       >
         SBS
