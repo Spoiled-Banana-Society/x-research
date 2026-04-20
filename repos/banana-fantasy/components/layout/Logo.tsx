@@ -9,19 +9,19 @@ interface LogoProps {
 }
 
 const sizeMap = {
-  sm: 36,
-  md: 44,
-  lg: 56,
+  sm: 28,
+  md: 36,
+  lg: 44,
 };
 
 export function Logo({ size = 'md' }: LogoProps) {
   const imgSize = sizeMap[size];
-  // Natural letter proportions (no stretching). Font-size picked so the
-  // "SBS" rendered width is roughly the banana's width at normal glyph widths.
-  const fontSize = Math.round(imgSize * 0.6);
+  // Polymarket-style lockup: text cap-height ≈ icon height, natural letter
+  // widths, small consistent gap. Font-size / 0.7 ≈ icon height.
+  const fontSize = Math.round(imgSize * 0.75);
 
   return (
-    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-2 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"

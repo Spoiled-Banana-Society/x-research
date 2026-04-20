@@ -38,7 +38,7 @@ export function Header({ onEditProfile, onShowTutorial: _onShowTutorial }: Heade
   return (
     <header className="bg-bg-secondary/80 backdrop-blur-md border-b border-bg-tertiary sticky top-0 z-30">
       <div className="w-full pl-3 pr-2 sm:pl-8 sm:pr-4 lg:pl-12 lg:pr-6">
-        <div className="flex items-center justify-between h-16 md:h-20">
+        <div className="flex items-center justify-between h-14 md:h-16">
           {/* Left side: Logo + Desktop Navigation */}
           <div className="flex items-center gap-2">
             <Logo size="lg" />
