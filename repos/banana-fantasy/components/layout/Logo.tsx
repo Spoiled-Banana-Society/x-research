@@ -16,12 +16,11 @@ const sizeMap = {
 
 export function Logo({ size = 'md' }: LogoProps) {
   const imgSize = sizeMap[size];
-  // "SBS" wordmark is forced to exactly match the icon's width via SVG
-  // textLength + lengthAdjust="spacingAndGlyphs". Height set to ~40% of icon.
-  const wordHeight = Math.round(imgSize * 0.4);
+  // Single SVG with both banana + SBS text forced to exact same height.
+  // Text stretches horizontally to match banana width → visually equal footprint.
 
   return (
-    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-0.5 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"
@@ -31,18 +30,19 @@ export function Logo({ size = 'md' }: LogoProps) {
       />
       <svg
         width={imgSize}
-        height={wordHeight}
-        viewBox={`0 0 ${imgSize} ${wordHeight}`}
+        height={imgSize}
+        viewBox={`0 0 ${imgSize} ${imgSize}`}
         aria-hidden="true"
+        style={{ display: 'block' }}
       >
         <text
           x={imgSize / 2}
-          y={wordHeight * 0.85}
+          y={imgSize * 0.75}
           textAnchor="middle"
           fill="white"
           fontWeight="900"
           fontFamily='-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif'
-          fontSize={wordHeight}
+          fontSize={imgSize * 0.7}
           textLength={imgSize}
           lengthAdjust="spacingAndGlyphs"
         >
