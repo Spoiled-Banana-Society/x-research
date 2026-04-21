@@ -6,7 +6,8 @@ export type UserEventType =
   | 'login'
   | 'x_linked'
   | 'first_purchase'
-  | 'wallet_linked';
+  | 'wallet_linked'
+  | 'promo_claimed';
 
 export interface UserEventRecord {
   userId: string;

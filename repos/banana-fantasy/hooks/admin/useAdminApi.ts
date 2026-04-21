@@ -223,6 +223,54 @@ export function useRecentUserEvents(enabled: boolean) {
   });
 }
 
+export interface MetricsResponse {
+  users: { total: number; newToday: number; newThisWeek: number; verified: number; xLinked: number };
+  engagement: { signupsToday: number; signupsThisWeek: number; loginsToday: number; loginsThisWeek: number };
+  wheel: { totalSpins: number; spinsToday: number; jackpotHits: number; hofHits: number; draftPassAwards: number; draftPassesAwardedTotal: number };
+  promos: { sharesVerifiedTotal: number; sharesVerifiedToday: number; sharesEarnedCredit: number; promoClaimsToday: number };
+  referrals: { totalCodes: number };
+  withdrawals: { pending: number; approved: number; denied: number; totalVolume: number };
+  drafts: { queued: number; jackpotQueueSize: number; hofQueueSize: number };
+  generatedAt: string;
+  requestId?: string;
+  cached?: boolean;
+}
+
+export function useAdminMetrics(enabled: boolean) {
+  const getHeaders = useAdminAuthHeaders();
+  return useQuery<MetricsResponse>({
+    queryKey: ['admin', 'metrics'],
+    enabled,
+    queryFn: () => adminFetch<MetricsResponse>('/api/admin/metrics', getHeaders),
+    refetchInterval: 10_000, // live-polling every 10 seconds
+    refetchIntervalInBackground: false,
+    staleTime: 0,
+  });
+}
+
+export interface ErrorEventEntry {
+  source: string;
+  route?: string;
+  message: string;
+  stack?: string;
+  requestId?: string;
+  actor?: string;
+  context?: Record<string, unknown>;
+  timestamp: string;
+}
+
+export function useRecentErrors(enabled: boolean) {
+  const getHeaders = useAdminAuthHeaders();
+  return useQuery<{ errors: ErrorEventEntry[]; requestId?: string }>({
+    queryKey: ['admin', 'errors'],
+    enabled,
+    queryFn: () =>
+      adminFetch<{ errors: ErrorEventEntry[]; requestId?: string }>('/api/admin/error-events?limit=100', getHeaders),
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
 /* ────────── Mutations ────────── */
 
 export interface GrantDraftsInput {
