@@ -3,7 +3,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { wheelSegments, WHEEL_SEGMENT_ANGLE, type WheelSegment } from '@/lib/wheelConfig';
-import type { WheelSpinOutcome } from '@/hooks/useWheel';
+import type { WheelSpinOutcome } from '@/hooks/useWheelData';
 import { startSpinSound, playWinSound, getWinTier } from '@/lib/wheelSounds';
 import { ShareWinButton } from '@/components/share/ShareWinButton';
 import { buildWheelShareCopy } from '@/lib/shareUtils';
@@ -395,6 +395,19 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
 
         {spinError && (
           <p className="mt-3 text-red-400 text-sm">{spinError}</p>
+        )}
+
+        {spinsAvailable <= 0 && !isSpinning && (
+          <button
+            type="button"
+            onClick={() => {
+              const el = typeof document !== 'undefined' ? document.getElementById('earn-spins') : null;
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            className="mt-4 text-sm text-banana hover:underline underline-offset-4"
+          >
+            Out of spins — earn more below ↓
+          </button>
         )}
       </div>
 

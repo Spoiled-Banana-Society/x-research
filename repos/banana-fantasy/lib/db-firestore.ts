@@ -554,10 +554,25 @@ export async function getWheelHistory(userId: string): Promise<WheelSpin[]> {
     .collection(USERS_COLLECTION)
     .doc(userId)
     .collection(WHEEL_SPINS_SUBCOLLECTION)
-    .orderBy('date', 'desc')
+    .orderBy('timestamp', 'desc')
     .get();
 
-  return historySnap.docs.map((doc) => doc.data() as WheelSpin);
+  // Live spins are stored with `timestamp` + `spinId`; legacy seeded mock
+  // entries use `date` + `id`. Normalize both into the `WheelSpin` shape so
+  // client-side callers don't need to know which vintage a row is.
+  return historySnap.docs.map((doc) => {
+    const data = doc.data() as Record<string, unknown>;
+    const date = (data.timestamp as string) || (data.date as string) || '';
+    const id = (data.spinId as string) || (data.id as string) || doc.id;
+    return {
+      id,
+      spinId: id,
+      date,
+      prize: data.prize as WheelPrize,
+      claimed: Boolean(data.claimed),
+      result: (data.result as string) || '',
+    } as WheelSpin & { spinId: string; result: string };
+  });
 }
 
 export async function createPurchase(

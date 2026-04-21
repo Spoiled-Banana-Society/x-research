@@ -119,7 +119,7 @@ export function useDraftingPageState() {
   const [isLoading] = useState(false);
   const [, setTimers] = useState<Record<string, number>>({});
   const [exitingDraft, setExitingDraft] = useState<Draft | null>(null);
-  const [showNoPasses, setShowNoPasses] = useState(false);
+  const [showBuyPasses, setShowBuyPasses] = useState(false);
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
   const [claimedPromos, setClaimedPromos] = useState<Set<string>>(new Set());
   const [claimSuccess, setClaimSuccess] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
@@ -318,7 +318,7 @@ export function useDraftingPageState() {
     const paidPasses = user?.draftPasses || 0;
     const freePasses = user?.freeDrafts || 0;
     if (paidPasses + freePasses <= 0) {
-      setShowNoPasses(true);
+      setShowBuyPasses(true);
       return;
     }
 
@@ -984,7 +984,7 @@ export function useDraftingPageState() {
     specialDrafts,
     creatingQueueDraft,
     exitingDraft,
-    showNoPasses,
+    showBuyPasses,
     selectedPromo,
     claimedPromos,
     claimSuccess,
@@ -1000,7 +1000,7 @@ export function useDraftingPageState() {
     clearAllDrafts,
     getLiveState,
     setExitingDraft,
-    setShowNoPasses,
+    setShowBuyPasses,
     setSelectedPromo,
     setPromoIndex,
     setPromoAutoRotate,

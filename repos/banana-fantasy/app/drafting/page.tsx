@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ActiveDraftsList } from '@/components/drafting/ActiveDraftsList';
 // CompletedDraftsList moved to Standings page
@@ -9,6 +10,11 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { PromoModal } from '@/components/modals/PromoModal';
 import { EntryFlowModal } from '@/components/modals/EntryFlowModal';
 import { ContestDetailsModal } from '@/components/modals/ContestDetailsModal';
+
+const BuyPassesModal = dynamic(
+  () => import('@/components/modals/BuyPassesModal').then(m => m.BuyPassesModal),
+  { ssr: false },
+);
 // useHistory moved to Standings page
 import { logger } from '@/lib/logger';
 import { formatCountdown, formatRelativeTime, useDraftingPageState } from '@/hooks/useDraftingPageState';
@@ -84,7 +90,7 @@ export default function DraftingPage() {
     specialDrafts,
     creatingQueueDraft,
     exitingDraft,
-    showNoPasses,
+    showBuyPasses,
     selectedPromo,
     claimedPromos,
     claimSuccess,
@@ -100,7 +106,7 @@ export default function DraftingPage() {
     clearAllDrafts,
     getLiveState,
     setExitingDraft,
-    setShowNoPasses,
+    setShowBuyPasses,
     setSelectedPromo,
     setPromoIndex,
     setPromoAutoRotate,
@@ -306,39 +312,12 @@ export default function DraftingPage() {
         />
       </div>
 
-      {showNoPasses && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowNoPasses(false)}
-        >
-          <div
-            className="bg-bg-secondary rounded-2xl border border-bg-elevated p-8 max-w-sm w-full text-center"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="text-5xl mb-4">🎟️</div>
-            <h3 className="text-2xl font-bold text-white mb-3">No Draft Passes</h3>
-            <p className="text-text-secondary mb-6">
-              You have 0 draft passes. Purchase to enter a draft.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowNoPasses(false)}
-                className="flex-1 px-4 py-3 bg-transparent border border-white/30 text-white font-medium rounded-xl hover:bg-white/10 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowNoPasses(false);
-                  router.push('/buy-drafts');
-                }}
-                className="flex-1 px-4 py-3 bg-banana text-black font-semibold rounded-xl hover:brightness-110 transition-all"
-              >
-                Buy Passes
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Buy Passes Modal — only mount when open to prevent useFundWallet crash */}
+      {showBuyPasses && (
+        <BuyPassesModal
+          isOpen={true}
+          onClose={() => setShowBuyPasses(false)}
+        />
       )}
 
       {exitingDraft && (

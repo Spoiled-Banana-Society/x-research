@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 
 const BananaWheel = dynamic(() => import('@/components/wheel/BananaWheel').then(m => ({ default: m.BananaWheel })), {
@@ -11,13 +11,13 @@ import { PromoCarousel } from '@/components/home/PromoCarousel';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchJson } from '@/lib/appApiClient';
 import { pushNotification } from '@/components/NotificationCenter';
-import { useWheel, type WheelSpinOutcome } from '@/hooks/useWheel';
+import { useWheelHistory, useSpin, type WheelSpinOutcome } from '@/hooks/useWheelData';
 import { usePromos } from '@/hooks/usePromos';
 import { wheelSegments, type WheelSegment } from '@/lib/wheelConfig';
 
 export default function BananaWheelPage() {
-  const { user, updateUser, isLoading, isBalanceLoaded, walletAddress } = useAuth();
-  const wheelQuery = useWheel();
+  const { user, updateUser, isLoading, isBalanceLoaded, refreshBalance } = useAuth();
+  const spinMutation = useSpin(user?.id);
   const promosQuery = usePromos({ userId: user?.id });
   const [queuedJP, setQueuedJP] = React.useState(0);
   const [queuedHOF, setQueuedHOF] = React.useState(0);
@@ -34,41 +34,24 @@ export default function BananaWheelPage() {
         setQueuedHOF(countQueued('hof'));
       }).catch(() => {});
   }, [user?.id]);
-  const [spinHistory, setSpinHistory] = useState<Array<{ id: string; date: string; result: string }>>([]);
-  // Load spin history from Firestore on mount
-  React.useEffect(() => {
-    if (!user?.id) return;
-    fetchJson<Array<{ spinId: string; date: string; result: string }>>(`/api/wheel/history?userId=${encodeURIComponent(user.id)}`)
-      .then(history => {
-        if (Array.isArray(history) && history.length > 0) {
-          // Filter out entries with no result (seeded mock data)
-          setSpinHistory(
-            history
-              .filter(h => h.result && h.spinId)
-              .map(h => ({ id: h.spinId, date: h.date, result: h.result }))
-          );
-        }
-      })
-      .catch(() => {});
-  }, [user?.id]);
-  // Track spin-count offset locally so we can decrement immediately on spin
-  // without waiting for a server round-trip, while still syncing to the
-  // authoritative value from useAuth once it loads.
-  const [spinsUsed, setSpinsUsed] = useState(0);
-  const serverSpins = user?.wheelSpins ?? 0;
-  const spinsAvailable = Math.max(0, serverSpins - spinsUsed);
+
+  const historyQuery = useWheelHistory(user?.id);
+  const spinHistory = historyQuery.data ?? [];
+
+  const spinsAvailable = Math.max(0, user?.wheelSpins ?? 0);
 
   const segmentMap = useMemo(() => new Map(wheelSegments.map((segment) => [segment.id, segment])), []);
 
   const handleSpin = useCallback(async (): Promise<WheelSpinOutcome | null> => {
-    return wheelQuery.spin();
-  }, [wheelQuery]);
+    return spinMutation.mutateAsync();
+  }, [spinMutation]);
 
   const handleSpinComplete = useCallback(
-    (outcome: WheelSpinOutcome, segment: WheelSegment | null) => {
-      const today = new Date().toISOString().split('T')[0];
-      setSpinHistory((prev) => [{ id: outcome.spinId, date: today, result: outcome.result }, ...prev]);
-      setSpinsUsed((prev) => prev + 1);
+    (_outcome: WheelSpinOutcome, segment: WheelSegment | null) => {
+      // Pull in the authoritative wheelSpins decrement + fresh history from the server.
+      // The useSpin mutation already invalidates ['wheel','history']; refreshBalance
+      // syncs the user's wheelSpins count so spinsAvailable updates without a local offset.
+      refreshBalance().catch(() => {});
 
       if (!user || !segment) return;
       if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
@@ -106,7 +89,7 @@ export default function BananaWheelPage() {
         });
       }
     },
-    [updateUser, user, walletAddress],
+    [updateUser, user, refreshBalance],
   );
 
   const prizeSummary = useMemo(() => {
@@ -308,7 +291,7 @@ export default function BananaWheelPage() {
       </div>
 
       {/* How to Earn Spins */}
-      <section className="mt-12">
+      <section id="earn-spins" className="mt-12 scroll-mt-24">
         <h2 className="text-xl font-semibold text-text-primary mb-4">How to Earn Spins</h2>
         <PromoCarousel
           promos={promosQuery.data ?? []}
