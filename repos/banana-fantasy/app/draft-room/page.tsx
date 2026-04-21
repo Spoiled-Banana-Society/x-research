@@ -704,8 +704,9 @@ function DraftRoomContent() {
         engine.setAutoPickSortPreference(newSort);
         setMissedPicksCount(prefs.numPicksMissedConsecutive || 0);
 
-        if (prefs.autoDraft && !engine.airplaneMode) {
-          engine.setAirplaneMode(true);
+        // Sync local airplaneMode with server autoDraft preference
+        if (prefs.autoDraft !== engine.airplaneMode) {
+          engine.setAirplaneMode(prefs.autoDraft);
         }
       })
       .catch((e) => {
