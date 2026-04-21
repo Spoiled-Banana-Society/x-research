@@ -8,6 +8,8 @@ import { getAdminFirestore } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { getRequestId } from '@/lib/requestId';
 import { logAdminAction } from '@/lib/adminAudit';
+import { clearBanCache } from '@/lib/banCheck';
+import { isWalletAdmin } from '@/lib/adminAllowlist';
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const requestId = getRequestId(req);
@@ -25,6 +27,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await parseBody<{ banned?: boolean }>(req);
     if (typeof body.banned !== 'boolean') throw new ApiError(400, 'Expected { banned: boolean }');
 
+    // Safety: admin wallets can't be banned — prevents accidental self/peer lockout.
+    if (body.banned && isWalletAdmin(id)) {
+      throw new ApiError(400, 'Cannot ban an admin wallet');
+    }
+
     const db = getAdminFirestore();
     for (const col of ['users', 'v2_users']) {
       const ref = db.collection(col).doc(id);
@@ -34,6 +41,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         await ref.set({ banned: body.banned, updatedAt: new Date().toISOString() }, { merge: true });
         const updated = await ref.get();
         const data = updated.data() ?? {};
+
+        // Invalidate ban cache immediately so status takes effect without TTL wait
+        clearBanCache(id);
 
         await logAdminAction({
           actor,

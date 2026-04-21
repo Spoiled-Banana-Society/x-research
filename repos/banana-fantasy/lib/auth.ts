@@ -170,6 +170,15 @@ export async function getPrivyUser(req: Request): Promise<{ userId: string; wall
 
   const user = await verifyPrivyJwt(token);
 
+  // Enforce bans at the auth gate — every authenticated API request checks
+  // the wallet's banned flag. Cached 30s per instance to keep overhead low.
+  if (user.walletAddress) {
+    const { isUserBanned } = await import('@/lib/banCheck');
+    if (await isUserBanned(user.walletAddress)) {
+      throw new ApiError(403, 'Account suspended');
+    }
+  }
+
   // Fire-and-forget throttled login event (at most once per 6h per user)
   const loginId = user.walletAddress || user.userId;
   if (loginId) {
