@@ -96,6 +96,28 @@ export async function POST(req: Request) {
       requestId,
     });
 
+    // Notify the user via the bell on their next poll (shared `marketplace_notifications`
+    // collection is what NotificationWidget polls every 30s).
+    const notifyWallet = (resolvedWallet ?? userDocId).toLowerCase();
+    if (notifyWallet) {
+      try {
+        await db.collection('marketplace_notifications').add({
+          wallet: notifyWallet,
+          type: 'promo',
+          title: count > 0 ? 'Free Drafts Granted!' : 'Drafts Adjusted',
+          message:
+            count > 0
+              ? `You received ${count} free draft${count !== 1 ? 's' : ''}. You now have ${newFreeDrafts} total.`
+              : `An admin adjusted your free drafts by ${count}. You now have ${newFreeDrafts} total.`,
+          link: '/drafting',
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (notifyErr) {
+        logger.warn('admin.grant_drafts.notify_failed', { requestId, err: notifyErr });
+      }
+    }
+
     logger.info('admin.grant_drafts.ok', {
       requestId,
       actor: actorWallet,
