@@ -251,19 +251,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (fetchingRef.current === walletAddress) return;
       fetchingRef.current = walletAddress;
 
-      // Clean up active drafts: remove any that belong to a different wallet
+      // Track current wallet (drafts are filtered by wallet in useActiveDrafts, not deleted)
       try {
         localStorage.setItem('banana-last-wallet', walletAddress.toLowerCase());
-        const raw = localStorage.getItem('banana-active-drafts');
-        if (raw) {
-          const drafts = JSON.parse(raw);
-          const mine = drafts.filter((d: { liveWalletAddress?: string }) =>
-            !d.liveWalletAddress || d.liveWalletAddress.toLowerCase() === walletAddress.toLowerCase()
-          );
-          if (mine.length !== drafts.length) {
-            localStorage.setItem('banana-active-drafts', JSON.stringify(mine));
-          }
-        }
       } catch { /* ignore */ }
 
       const savedProfile = getSavedProfile();
