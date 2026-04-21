@@ -8,6 +8,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 const USERS_COLLECTION = 'v2_users';
 
 export async function POST(req: Request) {
+  if (process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging') {
+    return jsonError('Not available in this environment', 403);
+  }
   try {
     const body = await parseBody(req);
     const userId = requireString(body.userId, 'userId');

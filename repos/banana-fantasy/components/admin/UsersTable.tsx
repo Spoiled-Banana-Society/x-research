@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAdminUsers, useGrantDrafts, useBanUser, AdminApiError, type AdminUser } from '@/hooks/admin/useAdminApi';
+import {
+  useAdminUsers,
+  useGrantDrafts,
+  useBanUser,
+  useMarkKycVerified,
+  useResetUser,
+  AdminApiError,
+  type AdminUser,
+} from '@/hooks/admin/useAdminApi';
 import { useToast } from '@/components/ui/Toast';
 
 const LIMIT = 50;
@@ -73,13 +81,15 @@ export function UsersTable({ enabled }: { enabled: boolean }) {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 min-w-[220px]">Grant</th>
+              <th className="px-4 py-3">KYC</th>
+              <th className="px-4 py-3">Reset</th>
               <th className="px-4 py-3">Ban</th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 && !query.isLoading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                   {q ? `No users match "${q}"` : 'No users found'}
                 </td>
               </tr>
@@ -138,6 +148,12 @@ function UserRow({ user }: { user: AdminUser }) {
         <GrantInline userId={user.id} />
       </td>
       <td className="px-4 py-3">
+        <KycButton userId={user.id} />
+      </td>
+      <td className="px-4 py-3">
+        <ResetButton userId={user.id} />
+      </td>
+      <td className="px-4 py-3">
         <BanButton userId={user.id} banned={user.banned} />
       </td>
     </tr>
@@ -189,6 +205,65 @@ function GrantInline({ userId }: { userId: string }) {
         {grant.isPending ? '…' : 'Grant'}
       </button>
     </div>
+  );
+}
+
+function KycButton({ userId }: { userId: string }) {
+  const kyc = useMarkKycVerified();
+  const { show } = useToast();
+  const handle = async () => {
+    try {
+      const res = await kyc.mutateAsync({ userId, tier: 'tier1', verified: true });
+      show({
+        level: 'success',
+        message: `KYC Tier 1 verified for ${formatWallet(userId)}`,
+        requestId: res.requestId,
+      });
+    } catch (err) {
+      const e = err as AdminApiError;
+      show({ level: 'error', message: e.message, requestId: e.requestId });
+    }
+  };
+  return (
+    <button
+      onClick={handle}
+      disabled={kyc.isPending}
+      className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs disabled:opacity-50"
+      title="Mark user as KYC Tier 1 verified (admin override)"
+    >
+      {kyc.isPending ? '…' : 'Verify'}
+    </button>
+  );
+}
+
+function ResetButton({ userId }: { userId: string }) {
+  const reset = useResetUser();
+  const { show } = useToast();
+  const handle = async () => {
+    if (!window.confirm(`Reset ${formatWallet(userId)}? Clears draftPasses, freeDrafts, wheelSpins, cardPurchaseCount, JP/HOF entries.`)) {
+      return;
+    }
+    try {
+      const res = await reset.mutateAsync({ userId });
+      show({
+        level: 'success',
+        message: `Reset ${formatWallet(userId)}`,
+        requestId: res.requestId,
+      });
+    } catch (err) {
+      const e = err as AdminApiError;
+      show({ level: 'error', message: e.message, requestId: e.requestId });
+    }
+  };
+  return (
+    <button
+      onClick={handle}
+      disabled={reset.isPending}
+      className="px-2 py-1 rounded bg-orange-600 hover:bg-orange-500 text-white text-xs disabled:opacity-50"
+      title="Clear user's counters so flows can be re-run"
+    >
+      {reset.isPending ? '…' : 'Reset'}
+    </button>
   );
 }
 

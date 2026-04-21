@@ -9,7 +9,10 @@ export type AdminAction =
   | 'deny-withdrawal'
   | 'set-entries'
   | 'create-promo'
-  | 'reset-queue';
+  | 'reset-queue'
+  | 'kyc-verify'
+  | 'kyc-revoke'
+  | 'reset-user';
 
 export interface AdminActionRecord {
   actor: string;          // wallet address of admin who performed action

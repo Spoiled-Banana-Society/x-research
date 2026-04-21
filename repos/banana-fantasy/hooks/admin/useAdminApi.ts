@@ -396,4 +396,64 @@ export function useUpdateWithdrawalStatus() {
   });
 }
 
+export interface KycVerifyInput {
+  userId: string;
+  tier?: 'tier1' | 'tier2';
+  verified?: boolean;
+}
+export interface KycVerifyResponse {
+  success: boolean;
+  userId: string;
+  tier: 'tier1' | 'tier2';
+  verified: boolean;
+  requestId?: string;
+}
+export function useMarkKycVerified() {
+  const getHeaders = useAdminAuthHeaders();
+  const qc = useQueryClient();
+  return useMutation<KycVerifyResponse, AdminApiError, KycVerifyInput>({
+    mutationFn: (input) =>
+      adminFetch<KycVerifyResponse>('/api/admin/kyc-verify', getHeaders, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'recent-actions'] });
+    },
+  });
+}
+
+export interface ResetUserInput {
+  userId: string;
+}
+export interface ResetUserResponse {
+  success: boolean;
+  userId: string;
+  before: Record<string, number>;
+  requestId?: string;
+}
+export function useResetUser() {
+  const getHeaders = useAdminAuthHeaders();
+  const qc = useQueryClient();
+  return useMutation<ResetUserResponse, AdminApiError, ResetUserInput>({
+    mutationFn: (input) =>
+      adminFetch<ResetUserResponse>('/api/admin/reset-user', getHeaders, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (data) => {
+      qc.setQueriesData<AdminUsersResponse>({ queryKey: ['admin', 'users'] }, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          users: prev.users.map((u) =>
+            u.id === data.userId ? { ...u, freeDrafts: 0, wheelSpins: 0 } : u,
+          ),
+        };
+      });
+      qc.invalidateQueries({ queryKey: ['admin', 'recent-actions'] });
+    },
+  });
+}
+
 export { AdminApiError };

@@ -5,6 +5,7 @@ import { API_CONFIG, getUsdcPaymentAddressOrThrow } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { seedDb } from '@/lib/api/seed';
 import { logger } from '@/lib/logger';
+import { verifyPurchaseTx } from '@/lib/onchain/verifyPurchaseTx';
 import type {
   CompletedDraft,
   Contest,
@@ -608,6 +609,41 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
 
   await ensureUserSeeded(prePurchase.userId);
   const userRef = db.collection(USERS_COLLECTION).doc(prePurchase.userId);
+
+  // Idempotent short-circuit: already completed → return existing state.
+  if (prePurchase.status === 'completed') {
+    const userSnap = await userRef.get();
+    return {
+      purchase: deepClone(prePurchase),
+      user: deepClone(userSnap.data() as User),
+      spinsAdded: 0,
+      draftPassesAdded: 0,
+      freeDraftsAdded: 0,
+    };
+  }
+
+  // On-chain verification (skipped only for completed short-circuit above).
+  const userSnapPre = await userRef.get();
+  const userPre = userSnapPre.data() as User | undefined;
+  const expectedFrom = userPre?.walletAddress || prePurchase.userId;
+  if (!expectedFrom) throw new ApiError(400, 'No wallet address on user');
+
+  // Replay guard: the same txHash cannot verify two purchases.
+  const dupSnap = await db
+    .collection(PURCHASES_COLLECTION)
+    .where('txHash', '==', txHash)
+    .where('status', '==', 'completed')
+    .limit(1)
+    .get();
+  if (!dupSnap.empty && dupSnap.docs[0].id !== purchaseId) {
+    throw new ApiError(400, 'This transaction has already been credited to another purchase');
+  }
+
+  await verifyPurchaseTx({
+    txHash,
+    expectedFrom,
+    expectedQuantity: prePurchase.quantity,
+  });
 
   return db.runTransaction(async (tx) => {
     const purchaseSnap = await tx.get(purchaseRef);
