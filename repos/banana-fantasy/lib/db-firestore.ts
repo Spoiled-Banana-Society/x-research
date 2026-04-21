@@ -327,6 +327,17 @@ export async function claimPromo(userId: string, promoId: string) {
     tx.set(promoRef, stripUndefined(promo), { merge: true });
 
     return { promo: deepClone(promo), spinsAdded, user: deepClone(user) };
+  }).then(async (result) => {
+    // Fire-and-forget user event for Metrics dashboard
+    try {
+      const { logUserEvent } = await import('@/lib/userEvents');
+      void logUserEvent(userId, 'promo_claimed', {
+        promoId,
+        promoType: result.promo.type,
+        spinsAdded: result.spinsAdded,
+      });
+    } catch { /* non-fatal */ }
+    return result;
   });
 }
 

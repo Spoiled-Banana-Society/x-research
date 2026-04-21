@@ -20,8 +20,10 @@ import {
 import { UsersTable } from '@/components/admin/UsersTable';
 import { RecentActivity } from '@/components/admin/RecentActivity';
 import { UserActivity } from '@/components/admin/UserActivity';
+import { MetricsDashboard } from '@/components/admin/MetricsDashboard';
+import { ErrorLog } from '@/components/admin/ErrorLog';
 
-type TabKey = 'overview' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'activity' | 'user-activity' | 'season' | 'health' | 'revenue';
+type TabKey = 'metrics' | 'errors' | 'overview' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'activity' | 'user-activity' | 'season' | 'health' | 'revenue';
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
@@ -56,10 +58,12 @@ export default function AdminPage() {
   const { walletAddress, isLoading } = useAuth();
   const { show } = useToast();
 
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>('metrics');
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   const tabs: { key: TabKey; label: string; icon: string }[] = useMemo(() => [
+    { key: 'metrics', label: 'Metrics', icon: '📈' },
+    { key: 'errors', label: 'Errors', icon: '🚨' },
     { key: 'overview', label: 'Dashboard', icon: '📊' },
     { key: 'users', label: 'Users', icon: '👥' },
     { key: 'drafts', label: 'Drafts', icon: '🏈' },
@@ -154,6 +158,12 @@ export default function AdminPage() {
             </button>
           ))}
         </nav>
+
+        {/* METRICS */}
+        {activeTab === 'metrics' && <MetricsDashboard enabled={isAuthorized} />}
+
+        {/* ERRORS */}
+        {activeTab === 'errors' && <ErrorLog enabled={isAuthorized} />}
 
         {/* DASHBOARD */}
         {activeTab === 'overview' && (

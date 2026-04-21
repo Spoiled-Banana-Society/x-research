@@ -83,6 +83,35 @@ class Logger {
     const fields = args[1] !== undefined && isFieldsObject(args[1]) ? args[1] : undefined;
     const isStructured = msg !== undefined && (args.length === 1 || (args.length === 2 && fields !== undefined));
 
+    // Fire-and-forget Firestore error event write for server-side errors — surfaces
+    // in the admin Error Log tab. Guarded to avoid infinite loops (errorEvents.ts
+    // itself catches all throws internally).
+    if (level === 'error' && typeof window === 'undefined') {
+      const errField = fields?.err;
+      const context = fields ? { ...fields, err: undefined } : undefined;
+      const errMsg =
+        errField instanceof Error
+          ? errField.message
+          : typeof errField === 'string'
+            ? errField
+            : msg ?? 'Unknown error';
+      const stack = errField instanceof Error ? errField.stack : undefined;
+      // Dynamic import to avoid bundling Firestore admin in client code
+      import('@/lib/errorEvents')
+        .then(({ logErrorEvent }) => {
+          logErrorEvent({
+            source: msg ?? 'unknown',
+            route: typeof fields?.route === 'string' ? fields.route : undefined,
+            message: errMsg,
+            stack,
+            requestId: typeof fields?.requestId === 'string' ? fields.requestId : undefined,
+            actor: typeof fields?.actor === 'string' ? fields.actor : undefined,
+            context,
+          });
+        })
+        .catch(() => { /* swallow — logging must never break */ });
+    }
+
     if (isStructured && isProd()) {
       const payload = {
         level,
@@ -92,7 +121,7 @@ class Logger {
       };
       const line = JSON.stringify(payload, (_k, v) => (v instanceof Error ? serializeError(v) : v));
       if (level === 'error') console.error(line);
-      else if (level === 'warn') console.warn(level === 'warn' ? line : line);
+      else if (level === 'warn') console.warn(line);
       else console.log(line);
       return;
     }
