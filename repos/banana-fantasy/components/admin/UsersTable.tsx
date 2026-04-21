@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAdminUsers, useGrantDrafts, useBanUser, AdminApiError, type AdminUser } from '@/hooks/admin/useAdminApi';
 import { useToast } from '@/components/ui/Toast';
 
