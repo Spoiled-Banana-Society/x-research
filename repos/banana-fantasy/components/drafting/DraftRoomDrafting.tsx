@@ -1,8 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import type { DropResult } from '@hello-pangea/dnd';
+import React, { useState } from 'react';
 import { DraftRoomChat } from '@/components/drafting/DraftRoomChat';
 import { DraftTabs } from '@/components/drafting/DraftTabs';
 import type { DraftTab } from '@/components/drafting/DraftTabs';
@@ -350,43 +348,32 @@ export function DraftRoomDrafting({
                       <p>Add players from the list to set your pick order</p>
                     </div>
                   ) : (
-                    <DragDropContext onDragEnd={(result: DropResult) => {
-                      if (!result.destination) return;
-                      const items = [...activeQueue];
-                      const [reordered] = items.splice(result.source.index, 1);
-                      items.splice(result.destination.index, 0, reordered);
-                      engine.reorderQueue(items);
-                      if (phase === 'drafting') onQueueSync(items);
-                    }}>
-                      <Droppable droppableId="sidebar-queue">
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                            {activeQueue.map((player, i) => (
-                              <Draggable key={player.playerId} draggableId={`sq-${player.playerId}`} index={i}>
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors cursor-grab active:cursor-grabbing ${
-                                      snapshot.isDragging ? 'bg-white/10 shadow-lg' : 'bg-white/[0.03] hover:bg-white/[0.06]'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span className="text-white/20 text-[10px] flex-shrink-0">⠿</span>
-                                      <span className="text-white/30 w-4 text-center flex-shrink-0">{i + 1}</span>
-                                      <span className="text-white/80 font-medium truncate">{player.playerId}</span>
-                                    </div>
-                                    <span className="text-white/30 flex-shrink-0 ml-2">#{player.rank}</span>
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
+                    <div className="space-y-1">
+                      {activeQueue.map((player, i) => (
+                        <div
+                          key={player.playerId}
+                          className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-xs group"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex flex-col gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (i > 0) { const q = [...activeQueue]; [q[i-1], q[i]] = [q[i], q[i-1]]; onQueueSync(q); engine.reorderQueue(q); }}}
+                                disabled={i === 0}
+                                className="text-white/40 hover:text-white disabled:opacity-20 leading-none text-[8px]"
+                              >▲</button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (i < activeQueue.length - 1) { const q = [...activeQueue]; [q[i], q[i+1]] = [q[i+1], q[i]]; onQueueSync(q); engine.reorderQueue(q); }}}
+                                disabled={i === activeQueue.length - 1}
+                                className="text-white/40 hover:text-white disabled:opacity-20 leading-none text-[8px]"
+                              >▼</button>
+                            </div>
+                            <span className="text-white/30 w-4 text-center flex-shrink-0">{i + 1}</span>
+                            <span className="text-white/80 font-medium truncate cursor-pointer" onClick={() => onTabChange('queue')}>{player.playerId}</span>
                           </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
+                          <span className="text-white/30 flex-shrink-0 ml-2">#{player.rank}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

@@ -271,6 +271,39 @@ export function useRecentErrors(enabled: boolean) {
   });
 }
 
+export interface CrispConversationEntry {
+  session_id: string;
+  nickname: string | null;
+  email: string | null;
+  avatar: string | null;
+  state: 'pending' | 'unresolved' | 'resolved';
+  unread: { operator?: number; visitor?: number } | number;
+  last_message: string | null;
+  updated_at: number;
+  created_at: number;
+  waiting_since?: number;
+  url: string;
+}
+
+export interface SupportResponse {
+  conversations: CrispConversationEntry[];
+  configured: boolean;
+  inboxUrl: string;
+  requestId?: string;
+}
+
+export function useSupportInbox(enabled: boolean, filter: 'all' | 'unread' | 'open') {
+  const getHeaders = useAdminAuthHeaders();
+  return useQuery<SupportResponse>({
+    queryKey: ['admin', 'support', filter],
+    enabled,
+    queryFn: () =>
+      adminFetch<SupportResponse>(`/api/admin/support?filter=${filter}`, getHeaders),
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
 /* ────────── Mutations ────────── */
 
 export interface GrantDraftsInput {
