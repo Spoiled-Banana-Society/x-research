@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { DraftRoomChat } from '@/components/drafting/DraftRoomChat';
@@ -368,7 +368,7 @@ export function DraftRoomDrafting({
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
                                     {...provided.dragHandleProps}
-                                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors cursor-grab active:cursor-grabbing ${
+                                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors cursor-grab active:cursor-grabbing select-none ${
                                       snapshot.isDragging ? 'bg-white/10 shadow-lg' : 'bg-white/[0.03] hover:bg-white/[0.06]'
                                     }`}
                                   >
