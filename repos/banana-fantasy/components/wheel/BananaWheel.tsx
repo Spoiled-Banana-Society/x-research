@@ -398,16 +398,16 @@ export function BananaWheel({ spinsAvailable, onSpin, onSpinComplete, onSpecialD
         )}
 
         {spinsAvailable <= 0 && !isSpinning && (
-          <button
-            type="button"
-            onClick={() => {
-              const el = typeof document !== 'undefined' ? document.getElementById('earn-spins') : null;
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-            className="mt-4 text-sm text-banana hover:underline underline-offset-4"
-          >
-            Out of spins — earn more below ↓
-          </button>
+          <div className="mt-5 text-center text-[13px] text-text-muted">
+            <p className="text-text-secondary mb-2 font-medium">Earn spins by:</p>
+            <ul className="space-y-1">
+              <li>Buying 10 draft passes → 1 free spin</li>
+              <li>Completing Pick-10 milestones</li>
+              <li>Referring friends who buy passes</li>
+              <li>Engaging with SBS on X</li>
+            </ul>
+            <p className="mt-3 text-[12px] text-text-muted/70">See promos below for details.</p>
+          </div>
         )}
       </div>
 
