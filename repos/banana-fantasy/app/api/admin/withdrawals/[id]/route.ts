@@ -7,6 +7,9 @@ import { json, jsonError, parseBody } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
 import { requireAdmin } from '@/lib/adminAuth';
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
+import { getRequestId } from '@/lib/requestId';
+import { logAdminAction } from '@/lib/adminAudit';
 
 type FirestoreTimestamp = Timestamp | { toDate: () => Date };
 
@@ -30,51 +33,65 @@ function toNumber(value: unknown): number {
 }
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const requestId = getRequestId(req);
+  const start = Date.now();
   const rateLimited = rateLimit(req, RATE_LIMITS.admin);
   if (rateLimited) return rateLimited;
+
+  let actor = '';
   try {
-    await requireAdmin(req);
+    const admin = await requireAdmin(req);
+    actor = admin.walletAddress ?? admin.userId;
 
     const { id } = params;
-    if (!id) return jsonError('Missing withdrawal id', 400);
+    if (!id) throw new ApiError(400, 'Missing withdrawal id');
 
     const body = await parseBody<{ status?: unknown }>(req);
     if (body.status !== 'approved' && body.status !== 'denied') {
-      return jsonError('Invalid status. Expected approved or denied', 400);
+      throw new ApiError(400, 'Invalid status. Expected approved or denied');
     }
 
     const db = getAdminFirestore();
     const ref = db.collection('withdrawalRequests').doc(id);
     const existing = await ref.get();
+    if (!existing.exists) throw new ApiError(404, 'Withdrawal request not found');
+    const before = existing.data() ?? {};
 
-    if (!existing.exists) return jsonError('Withdrawal request not found', 404);
-
-    await ref.set(
-      {
-        status: body.status,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true },
-    );
+    await ref.set({ status: body.status, updatedAt: new Date().toISOString() }, { merge: true });
 
     const updated = await ref.get();
-    const data = updated.data() || {};
+    const data = updated.data() ?? {};
 
-    return json(
-      {
-        id: updated.id,
-        userId: typeof data.userId === 'string' ? data.userId : '',
-        walletAddress: typeof data.walletAddress === 'string' ? data.walletAddress : '',
-        amount: toNumber(data.amount),
-        status: typeof data.status === 'string' ? data.status : body.status,
-        createdAt: toIsoDate(data.createdAt),
-        blueCheckVerified: data.blueCheckVerified === true || data.isBlueCheckVerified === true,
-      },
-      200,
-    );
+    await logAdminAction({
+      actor,
+      action: body.status === 'approved' ? 'approve-withdrawal' : 'deny-withdrawal',
+      target: id,
+      before: { status: before.status },
+      after: { status: data.status },
+      requestId,
+    });
+
+    logger.info('admin.withdrawal_status.ok', {
+      requestId,
+      actor,
+      target: id,
+      status: body.status,
+      durationMs: Date.now() - start,
+    });
+
+    return json({
+      id: updated.id,
+      userId: typeof data.userId === 'string' ? data.userId : '',
+      walletAddress: typeof data.walletAddress === 'string' ? data.walletAddress : '',
+      amount: toNumber(data.amount),
+      status: typeof data.status === 'string' ? data.status : body.status,
+      createdAt: toIsoDate(data.createdAt),
+      blueCheckVerified: data.blueCheckVerified === true || data.isBlueCheckVerified === true,
+      requestId,
+    });
   } catch (err) {
-    if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('[admin/withdrawals/:id] PUT failed:', err);
-    return jsonError('Internal Server Error', 500);
+    logger.error('admin.withdrawal_status.failed', { requestId, actor, err, durationMs: Date.now() - start });
+    if (err instanceof ApiError) return jsonError(err.message, err.status, { requestId });
+    return jsonError('Internal Server Error', 500, { requestId });
   }
 }

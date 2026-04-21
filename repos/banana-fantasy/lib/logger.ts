@@ -1,15 +1,15 @@
 /**
- * Structured logger with environment-aware log levels.
+ * Structured logger. JSON lines in prod, pretty in dev.
  *
- * Usage:
- *   import { logger } from '@/lib/logger';
- *   logger.debug('[Draft]', 'Connected to WebSocket');
- *   logger.info('[Auth]', 'User logged in');
- *   logger.warn('[API]', 'Retrying request');
- *   logger.error('[WS]', 'Connection failed', error);
+ * Structured (preferred):
+ *   logger.info('admin.grant_drafts', { requestId, actor, target, count })
  *
- * In production: only error + warn are logged.
- * In staging: all levels are logged.
+ * Legacy (still works):
+ *   logger.debug('[Draft]', 'Connected')      → "[Draft] Connected"
+ *   logger.error('[WS]', err)                 → "[WS] Error: ..."
+ *
+ * Level gating: debug/info/warn/error/silent. Env-controlled via LOG_LEVEL
+ * (server) or NEXT_PUBLIC_ENVIRONMENT (client).
  */
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -24,21 +24,48 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 
 function getDefaultLevel(): LogLevel {
   if (typeof window === 'undefined') {
-    // Server-side: use env var
-    return (process.env.LOG_LEVEL as LogLevel) ?? 'warn';
+    return (process.env.LOG_LEVEL as LogLevel) ?? 'info';
   }
-  // Client-side: staging gets debug, production gets warn
   const env = process.env.NEXT_PUBLIC_ENVIRONMENT;
   if (env === 'staging' || env === 'dev') return 'debug';
   return 'warn';
 }
 
-class Logger {
-  private level: LogLevel;
-
-  constructor() {
-    this.level = getDefaultLevel();
+function isProd(): boolean {
+  if (typeof window === 'undefined') {
+    return process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging';
   }
+  return process.env.NEXT_PUBLIC_ENVIRONMENT === 'prod';
+}
+
+type Fields = Record<string, unknown>;
+
+function isFieldsObject(v: unknown): v is Fields {
+  return (
+    v !== null &&
+    typeof v === 'object' &&
+    !Array.isArray(v) &&
+    !(v instanceof Error) &&
+    v.constructor === Object
+  );
+}
+
+function serializeError(err: unknown): Fields {
+  if (err instanceof Error) {
+    return {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+      ...(err as unknown as { status?: number }).status !== undefined
+        ? { status: (err as unknown as { status?: number }).status }
+        : {},
+    };
+  }
+  return { err: String(err) };
+}
+
+class Logger {
+  private level: LogLevel = getDefaultLevel();
 
   setLevel(level: LogLevel) {
     this.level = level;
@@ -48,21 +75,39 @@ class Logger {
     return LOG_LEVELS[level] >= LOG_LEVELS[this.level];
   }
 
-  debug(...args: unknown[]) {
-    if (this.shouldLog('debug')) console.log(...args);
+  private emit(level: LogLevel, args: unknown[]) {
+    if (!this.shouldLog(level)) return;
+
+    // Structured path: first arg is a non-empty string msg, second (optional) is a plain object of fields
+    const msg = typeof args[0] === 'string' ? args[0] : undefined;
+    const fields = args[1] !== undefined && isFieldsObject(args[1]) ? args[1] : undefined;
+    const isStructured = msg !== undefined && (args.length === 1 || (args.length === 2 && fields !== undefined));
+
+    if (isStructured && isProd()) {
+      const payload = {
+        level,
+        msg,
+        ts: new Date().toISOString(),
+        ...(fields ?? {}),
+      };
+      const line = JSON.stringify(payload, (_k, v) => (v instanceof Error ? serializeError(v) : v));
+      if (level === 'error') console.error(line);
+      else if (level === 'warn') console.warn(level === 'warn' ? line : line);
+      else console.log(line);
+      return;
+    }
+
+    // Legacy + dev-pretty path: pass-through to console
+    if (level === 'error') console.error(...args);
+    else if (level === 'warn') console.warn(...args);
+    else if (level === 'info') console.info(...args);
+    else console.log(...args);
   }
 
-  info(...args: unknown[]) {
-    if (this.shouldLog('info')) console.info(...args);
-  }
-
-  warn(...args: unknown[]) {
-    if (this.shouldLog('warn')) console.warn(...args);
-  }
-
-  error(...args: unknown[]) {
-    if (this.shouldLog('error')) console.error(...args);
-  }
+  debug(...args: unknown[]) { this.emit('debug', args); }
+  info(...args: unknown[]) { this.emit('info', args); }
+  warn(...args: unknown[]) { this.emit('warn', args); }
+  error(...args: unknown[]) { this.emit('error', args); }
 }
 
 export const logger = new Logger();

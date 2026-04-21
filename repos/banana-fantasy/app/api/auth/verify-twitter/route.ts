@@ -58,6 +58,14 @@ export async function POST(req: Request) {
       newUserPromoClaimed: false,
     });
 
+    // Fire-and-forget user event
+    try {
+      const { logUserEvent } = await import('@/lib/userEvents');
+      void logUserEvent(walletAddress, 'x_linked', { twitterHandle });
+    } catch {
+      // non-fatal
+    }
+
     // Trigger referral "verified" reward if this user was referred
     try {
       const { updateReferralRewards } = await import('@/lib/db');

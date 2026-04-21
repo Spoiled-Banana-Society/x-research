@@ -1,14 +1,18 @@
-import { rateLimit, RATE_LIMITS } from "@/lib/rateLimit";
+import { rateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 export const dynamic = 'force-dynamic';
 
-import { type CollectionReference, type DocumentData, type Timestamp } from 'firebase-admin/firestore';
+import { type CollectionReference, type DocumentData, type Query, type Timestamp } from 'firebase-admin/firestore';
 
 import { json, jsonError } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
 import { requireAdmin } from '@/lib/adminAuth';
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
+import { getRequestId } from '@/lib/requestId';
 
 type FirestoreTimestamp = Timestamp | { toDate: () => Date };
+
+const MOCK_SEED_WALLET = '0x1234567890abcdef1234567890abcdef12345678';
 
 function toIsoDate(value: unknown): string | null {
   if (typeof value === 'string' && value.trim()) return value;
@@ -29,74 +33,106 @@ function toNonNegativeInt(value: string | null, fallback: number): number {
 
 async function resolveUsersCollection(): Promise<CollectionReference<DocumentData>> {
   const db = getAdminFirestore();
-  const v2UsersRef = db.collection('v2_users');
-  const usersRef = db.collection('users');
+  const v2 = db.collection('v2_users');
+  const legacy = db.collection('users');
+  const v2Probe = await v2.limit(1).get();
+  if (!v2Probe.empty) return v2;
+  const legacyProbe = await legacy.limit(1).get();
+  if (!legacyProbe.empty) return legacy;
+  return v2;
+}
 
-  // Prefer v2_users — that's where real production users live.
-  // Legacy `users` collection contains old mock/seed data.
-  const v2Probe = await v2UsersRef.limit(1).get();
-  if (!v2Probe.empty) return v2UsersRef;
-
-  const usersProbe = await usersRef.limit(1).get();
-  if (!usersProbe.empty) return usersRef;
-
-  return v2UsersRef;
+function mapUserDoc(doc: FirebaseFirestore.QueryDocumentSnapshot<DocumentData>) {
+  const data = doc.data();
+  const storedWallet = typeof data.walletAddress === 'string' ? data.walletAddress : '';
+  const isStoredValid = storedWallet && storedWallet.toLowerCase() !== MOCK_SEED_WALLET;
+  return {
+    id: doc.id,
+    walletAddress: isStoredValid ? storedWallet : doc.id,
+    username: (typeof data.username === 'string' && !data.username.startsWith('User-')) ? data.username : null,
+    email:
+      (typeof data.blueCheckEmail === 'string' && data.blueCheckEmail) ||
+      (typeof data.email === 'string' && data.email) ||
+      null,
+    createdAt: toIsoDate(data.createdAt),
+    blueCheckVerified: data.blueCheckVerified === true || data.isBlueCheckVerified === true,
+    banned: data.banned === true,
+    freeDrafts: typeof data.freeDrafts === 'number' ? data.freeDrafts : 0,
+    wheelSpins: typeof data.wheelSpins === 'number' ? data.wheelSpins : 0,
+  };
 }
 
 export async function GET(req: Request) {
+  const requestId = getRequestId(req);
+  const start = Date.now();
   const rateLimited = rateLimit(req, RATE_LIMITS.admin);
   if (rateLimited) return rateLimited;
+
   try {
     await requireAdmin(req);
 
     const url = new URL(req.url);
     const limit = Math.min(toNonNegativeInt(url.searchParams.get('limit'), 50), 200);
     const offset = toNonNegativeInt(url.searchParams.get('offset'), 0);
+    const qRaw = (url.searchParams.get('q') ?? '').trim();
+    const q = qRaw.toLowerCase();
 
     const usersCollection = await resolveUsersCollection();
+
+    // Search mode: run three prefix queries (doc id, walletAddress field, username)
+    // and merge results. Firestore can only do prefix (startAt/endAt) — no substring.
+    if (q) {
+      const results = new Map<string, ReturnType<typeof mapUserDoc>>();
+
+      const prefixEnd = q + '\uf8ff';
+      const queries: Query<DocumentData>[] = [
+        usersCollection.where('walletAddress', '>=', q).where('walletAddress', '<=', prefixEnd).limit(20),
+        usersCollection.where('username', '>=', qRaw).where('username', '<=', qRaw + '\uf8ff').limit(20),
+      ];
+
+      // If q looks like a wallet or wallet-prefix, also try direct doc lookup
+      if (/^0x[0-9a-fA-F]+$/.test(q)) {
+        const direct = await usersCollection.doc(q).get();
+        if (direct.exists) {
+          results.set(direct.id, mapUserDoc(direct as unknown as FirebaseFirestore.QueryDocumentSnapshot<DocumentData>));
+        }
+      }
+
+      const snaps = await Promise.all(queries.map((qq) => qq.get().catch(() => null)));
+      for (const snap of snaps) {
+        if (!snap) continue;
+        for (const doc of snap.docs) {
+          if (!results.has(doc.id)) results.set(doc.id, mapUserDoc(doc));
+        }
+      }
+
+      const users = [...results.values()].slice(0, limit);
+      logger.info('admin.users.search_ok', { requestId, q, count: users.length, durationMs: Date.now() - start });
+      return json({
+        users,
+        pagination: { limit, offset: 0, total: users.length, hasMore: false },
+        requestId,
+      });
+    }
+
+    // Normal paginated list
     const totalSnap = await usersCollection.count().get();
     const total = totalSnap.data().count;
 
-    let query = usersCollection.orderBy('createdAt', 'desc').limit(limit);
+    let query = usersCollection.orderBy('createdAt', 'desc').limit(limit) as Query<DocumentData>;
     if (offset > 0) query = query.offset(offset);
-
     const snap = await query.get();
+    const users = snap.docs.map(mapUserDoc);
 
-    // The doc id is the user's wallet address (authoritative).
-    // The stored `walletAddress` field is often stale seed-template data
-    // (previously all new users got the mock `0x1234...5678` from seedUser1).
-    const MOCK_SEED_WALLET = '0x1234567890abcdef1234567890abcdef12345678';
-    const users = snap.docs.map((doc) => {
-      const data = doc.data();
-      const storedWallet = typeof data.walletAddress === 'string' ? data.walletAddress : '';
-      const isStoredValid = storedWallet && storedWallet.toLowerCase() !== MOCK_SEED_WALLET;
-      return {
-        id: doc.id,
-        walletAddress: isStoredValid ? storedWallet : doc.id,
-        email:
-          (typeof data.blueCheckEmail === 'string' && data.blueCheckEmail) ||
-          (typeof data.email === 'string' && data.email) ||
-          null,
-        createdAt: toIsoDate(data.createdAt),
-        blueCheckVerified: data.blueCheckVerified === true || data.isBlueCheckVerified === true,
-      };
+    logger.info('admin.users.list_ok', { requestId, offset, limit, count: users.length, total, durationMs: Date.now() - start });
+    return json({
+      users,
+      pagination: { limit, offset, total, hasMore: offset + users.length < total },
+      requestId,
     });
-
-    return json(
-      {
-        users,
-        pagination: {
-          limit,
-          offset,
-          total,
-          hasMore: offset + users.length < total,
-        },
-      },
-      200,
-    );
   } catch (err) {
-    if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('[admin/users] GET failed:', err);
-    return jsonError('Internal Server Error', 500);
+    logger.error('admin.users.failed', { requestId, err, durationMs: Date.now() - start });
+    if (err instanceof ApiError) return jsonError(err.message, err.status, { requestId });
+    return jsonError('Internal Server Error', 500, { requestId });
   }
 }

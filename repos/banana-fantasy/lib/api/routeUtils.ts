@@ -6,8 +6,8 @@ export function json(data: unknown, init?: number | ResponseInit) {
   return NextResponse.json(data, responseInit);
 }
 
-export function jsonError(message: string, status = 400) {
-  return json({ error: message }, status);
+export function jsonError(message: string, status = 400, extra?: Record<string, unknown>) {
+  return json({ error: message, ...(extra ?? {}) }, status);
 }
 
 export async function parseBody<T = Record<string, unknown>>(req: Request): Promise<T> {

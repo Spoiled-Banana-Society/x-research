@@ -6,6 +6,8 @@ import { json, jsonError } from '@/lib/api/routeUtils';
 import { ApiError } from '@/lib/api/errors';
 import { requireAdmin } from '@/lib/adminAuth';
 import { getAdminFirestore } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
+import { getRequestId } from '@/lib/requestId';
 
 type FirestoreTimestamp = Timestamp | { toDate: () => Date };
 
@@ -20,46 +22,63 @@ function toIsoDate(value: unknown): string | null {
 }
 
 export async function GET(req: Request) {
+  const requestId = getRequestId(req);
+  const start = Date.now();
   const rateLimited = rateLimit(req, RATE_LIMITS.admin);
   if (rateLimited) return rateLimited;
+
   try {
     await requireAdmin(req);
     const db = getAdminFirestore();
 
-    // Try multiple collection names
+    // Parallelize probes across all candidate collections (was sequential)
     const collections = ['drafts', 'v2_drafts', 'draftRooms'];
-    let drafts: Array<Record<string, unknown>> = [];
+    const snaps = await Promise.all(
+      collections.map((col) =>
+        db.collection(col).orderBy('createdAt', 'desc').limit(100).get().catch(() => null),
+      ),
+    );
+    const firstNonEmpty = snaps.findIndex((s) => s && !s.empty);
 
-    for (const col of collections) {
-      const snap = await db.collection(col).orderBy('createdAt', 'desc').limit(100).get();
-      if (!snap.empty) {
-        drafts = snap.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name || data.draftName || doc.id,
-            status: data.status || 'unknown',
-            playerCount: data.playerCount || data.participants?.length || 0,
-            maxPlayers: data.maxPlayers || data.seats || 10,
-            createdAt: toIsoDate(data.createdAt),
-            startedAt: toIsoDate(data.startedAt),
-            completedAt: toIsoDate(data.completedAt),
-            entryFee: data.entryFee || 0,
-            collection: col,
-          };
-        });
-        break;
-      }
+    let drafts: Array<Record<string, unknown>> = [];
+    if (firstNonEmpty >= 0 && snaps[firstNonEmpty]) {
+      const col = collections[firstNonEmpty];
+      drafts = snaps[firstNonEmpty]!.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || data.draftName || doc.id,
+          status: data.status || 'unknown',
+          playerCount: data.playerCount || data.participants?.length || 0,
+          maxPlayers: data.maxPlayers || data.seats || 10,
+          createdAt: toIsoDate(data.createdAt),
+          startedAt: toIsoDate(data.startedAt),
+          completedAt: toIsoDate(data.completedAt),
+          entryFee: data.entryFee || 0,
+          collection: col,
+        };
+      });
     }
 
     const active = drafts.filter((d) => d.status === 'active' || d.status === 'in_progress' || d.status === 'drafting');
     const completed = drafts.filter((d) => d.status === 'completed' || d.status === 'finished');
     const pending = drafts.filter((d) => d.status === 'pending' || d.status === 'waiting' || d.status === 'lobby');
 
-    return json({ drafts, summary: { active: active.length, completed: completed.length, pending: pending.length, total: drafts.length } }, 200);
+    logger.info('admin.drafts.ok', {
+      requestId,
+      total: drafts.length,
+      active: active.length,
+      durationMs: Date.now() - start,
+    });
+
+    return json({
+      drafts,
+      summary: { active: active.length, completed: completed.length, pending: pending.length, total: drafts.length },
+      requestId,
+    });
   } catch (err) {
-    if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('[admin/drafts] GET failed:', err);
-    return jsonError('Internal Server Error', 500);
+    logger.error('admin.drafts.failed', { requestId, err, durationMs: Date.now() - start });
+    if (err instanceof ApiError) return jsonError(err.message, err.status, { requestId });
+    return jsonError('Internal Server Error', 500, { requestId });
   }
 }

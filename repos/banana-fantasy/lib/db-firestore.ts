@@ -191,6 +191,15 @@ async function ensureUserSeeded(userId: string): Promise<User> {
   }
 
   await batch.commit();
+
+  // Fire-and-forget signup event (first-time seed)
+  try {
+    const { logUserEvent } = await import('@/lib/userEvents');
+    void logUserEvent(userId, 'signup');
+  } catch {
+    // non-fatal
+  }
+
   return seed.user;
 }
 

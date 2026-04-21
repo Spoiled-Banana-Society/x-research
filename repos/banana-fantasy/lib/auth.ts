@@ -168,5 +168,15 @@ export async function getPrivyUser(req: Request): Promise<{ userId: string; wall
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!token) throw new ApiError(401, 'Missing authorization token');
 
-  return verifyPrivyJwt(token);
+  const user = await verifyPrivyJwt(token);
+
+  // Fire-and-forget throttled login event (at most once per 6h per user)
+  const loginId = user.walletAddress || user.userId;
+  if (loginId) {
+    import('@/lib/userEvents')
+      .then(({ logLoginIfFresh }) => logLoginIfFresh(loginId))
+      .catch(() => { /* non-fatal */ });
+  }
+
+  return user;
 }
