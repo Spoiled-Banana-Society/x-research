@@ -22,7 +22,7 @@ export function Logo({ size = 'md' }: LogoProps) {
   const fontSize = Math.round(imgSize * 0.45);
 
   return (
-    <Link href="/" className="flex items-center gap-1 transition-transform hover:scale-105">
+    <Link href="/" className="flex items-center gap-0 transition-transform hover:scale-105">
       <Image
         src="/sbs-logo.png"
         alt="SBS Fantasy"
