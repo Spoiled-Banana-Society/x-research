@@ -352,12 +352,23 @@ export function DraftRoomDrafting({
                       {activeQueue.map((player, i) => (
                         <div
                           key={player.playerId}
-                          className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors cursor-pointer text-xs"
-                          onClick={() => onTabChange('queue')}
+                          className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-xs group"
                         >
                           <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex flex-col gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (i > 0) { const q = [...activeQueue]; [q[i-1], q[i]] = [q[i], q[i-1]]; onQueueSync(q); engine.reorderQueue(q); }}}
+                                disabled={i === 0}
+                                className="text-white/40 hover:text-white disabled:opacity-20 leading-none text-[8px]"
+                              >▲</button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (i < activeQueue.length - 1) { const q = [...activeQueue]; [q[i], q[i+1]] = [q[i+1], q[i]]; onQueueSync(q); engine.reorderQueue(q); }}}
+                                disabled={i === activeQueue.length - 1}
+                                className="text-white/40 hover:text-white disabled:opacity-20 leading-none text-[8px]"
+                              >▼</button>
+                            </div>
                             <span className="text-white/30 w-4 text-center flex-shrink-0">{i + 1}</span>
-                            <span className="text-white/80 font-medium truncate">{player.playerId}</span>
+                            <span className="text-white/80 font-medium truncate cursor-pointer" onClick={() => onTabChange('queue')}>{player.playerId}</span>
                           </div>
                           <span className="text-white/30 flex-shrink-0 ml-2">#{player.rank}</span>
                         </div>
