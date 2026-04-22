@@ -722,13 +722,27 @@ export function useDraftingPageState() {
   }, [isLive, user?.walletAddress]);
 
   const activeDrafts = useMemo(() => {
+    // Not signed in → don't show anyone else's drafts cached in localStorage.
+    // The drafting list belongs to the authenticated wallet only.
+    if (!user?.walletAddress) {
+      return [] as Draft[];
+    }
+
+    const currentWallet = user.walletAddress.toLowerCase();
+    // Filter cached local drafts to the current wallet so switching accounts
+    // in the same browser doesn't bleed another user's placeholders.
+    const ownedLocalDrafts = localDrafts.filter(d => {
+      if (!d.liveWalletAddress) return true; // legacy entries without wallet stamp — allow
+      return d.liveWalletAddress.toLowerCase() === currentWallet;
+    });
+
     let base: Draft[];
     if (!isLive) {
-      base = localDrafts;
+      base = ownedLocalDrafts;
     } else {
-      const localIds = new Set(localDrafts.map(d => d.id));
+      const localIds = new Set(ownedLocalDrafts.map(d => d.id));
       const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
-      base = [...localDrafts, ...apiOnly];
+      base = [...ownedLocalDrafts, ...apiOnly];
     }
 
     const storeByDraftId = new Map(base.map(d => [d.id, d]));
@@ -764,7 +778,7 @@ export function useDraftingPageState() {
     return [...remainingBase, ...mergedQueueDrafts].filter(
       d => (d.specialType || !hiddenDraftIds.has(d.id)) && d.status !== 'completed',
     );
-  }, [hiddenDraftIds, isLive, liveDrafts, localDrafts, queueDrafts]);
+  }, [hiddenDraftIds, isLive, liveDrafts, localDrafts, queueDrafts, user?.walletAddress]);
 
   const sortedDrafts = [...activeDrafts].sort((a, b) => {
     if (a.isYourTurn && !b.isYourTurn) return -1;
