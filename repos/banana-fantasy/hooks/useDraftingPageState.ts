@@ -623,13 +623,7 @@ export function useDraftingPageState() {
 
             if (isTimerUpdateMessage(data)) {
               const payload = data.payload;
-              let endTs = payload.endOfTurnTimestamp;
-              if (draft.draftSpeed === 'slow' && payload.startOfTurnTimestamp && endTs) {
-                const serverPickLen = endTs - payload.startOfTurnTimestamp;
-                if (serverPickLen < 3600) {
-                  endTs = payload.startOfTurnTimestamp + 28800;
-                }
-              }
+              const endTs = payload.endOfTurnTimestamp;
               const currentDrafter = (payload.currentDrafter || '').toLowerCase();
               const isUserTurn = wallet === currentDrafter;
               draftStore.updateDraft(draftId, {

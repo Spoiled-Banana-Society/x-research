@@ -27,17 +27,6 @@ function countSummaryPicks(summary: draftApi.DraftSummary): number {
   return summary.filter((item) => Boolean(item.playerInfo?.playerId)).length;
 }
 
-function correctSlowDraftTimestamp(
-  endTime: number | null | undefined,
-  pickLength: number | null | undefined,
-  speed: 'fast' | 'slow' | null,
-) {
-  if (!endTime || !pickLength) return endTime ?? null;
-  if (speed !== 'slow' || pickLength <= 0 || pickLength >= 3600) return endTime;
-  const startOfTurn = endTime - pickLength;
-  return startOfTurn + 28800;
-}
-
 interface UseDraftLiveSyncParams {
   engine: ReturnType<typeof useDraftEngine>;
   isLiveMode: boolean;
@@ -94,11 +83,7 @@ export function useDraftLiveSync({
   useEffect(() => {
     if (!firebaseActive || !firebaseRtdb.data) return;
 
-    const rtdb = firebaseRtdb.data;
-    engine.setFirebaseState({
-      ...rtdb,
-      pickEndTime: correctSlowDraftTimestamp(rtdb.pickEndTime, rtdb.pickLength, speedParam) ?? rtdb.pickEndTime,
-    });
+    engine.setFirebaseState(firebaseRtdb.data);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data]);
 
@@ -113,13 +98,8 @@ export function useDraftLiveSync({
 
   const firebaseEndOfTurn = firebaseRtdb.data?.pickEndTime ?? null;
   const firebaseDraftStart = firebaseRtdb.data?.draftStartTime ?? null;
-  const correctedFirebaseEndOfTurn = correctSlowDraftTimestamp(
-    firebaseEndOfTurn,
-    firebaseRtdb.data?.pickLength,
-    speedParam,
-  );
   const firebaseTimeRemaining = useTimeRemaining(
-    firebaseActive ? correctedFirebaseEndOfTurn : null,
+    firebaseActive ? firebaseEndOfTurn : null,
     firebaseActive ? firebaseDraftStart : null,
   );
 
@@ -301,16 +281,7 @@ export function useDraftLiveSync({
         pendingWsMessagesRef.current.push({ type: 'timer_update', payload });
         return;
       }
-      engine.handleTimerUpdate({
-        ...payload,
-        endOfTurnTimestamp: correctSlowDraftTimestamp(
-          payload.endOfTurnTimestamp,
-          payload.endOfTurnTimestamp && payload.startOfTurnTimestamp
-            ? payload.endOfTurnTimestamp - payload.startOfTurnTimestamp
-            : null,
-          speedParam,
-        ) ?? payload.endOfTurnTimestamp,
-      });
+      engine.handleTimerUpdate(payload);
       lastWsUpdateRef.current = Date.now();
     },
     onNewPick: (payload) => {
@@ -444,15 +415,11 @@ export function useDraftLiveSync({
           throw new Error('Required draft data not available yet');
         }
 
-        const correctedPickLength = speedParam === 'slow' && draftInfo.pickLength < 3600
-          ? 28800
-          : draftInfo.pickLength;
-
         const serverDraftInfo = {
           draftId: draftInfo.draftId,
           displayName: draftInfo.displayName,
           draftStartTime: draftInfo.draftStartTime,
-          pickLength: correctedPickLength,
+          pickLength: draftInfo.pickLength,
           currentDrafter: draftInfo.currentDrafter,
           pickNumber: draftInfo.pickNumber,
           roundNum: draftInfo.roundNum,
@@ -516,16 +483,7 @@ export function useDraftLiveSync({
                 engine.handleNewPick(msg.payload);
                 break;
               case 'timer_update':
-                engine.handleTimerUpdate({
-                  ...msg.payload,
-                  endOfTurnTimestamp: correctSlowDraftTimestamp(
-                    msg.payload.endOfTurnTimestamp,
-                    msg.payload.endOfTurnTimestamp && msg.payload.startOfTurnTimestamp
-                      ? msg.payload.endOfTurnTimestamp - msg.payload.startOfTurnTimestamp
-                      : null,
-                    speedParam,
-                  ) ?? msg.payload.endOfTurnTimestamp,
-                });
+                engine.handleTimerUpdate(msg.payload);
                 break;
               case 'draft_info_update':
                 engine.handleDraftInfoUpdate(msg.payload as unknown as Parameters<typeof engine.handleDraftInfoUpdate>[0]);
