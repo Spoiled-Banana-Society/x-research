@@ -375,11 +375,19 @@ export function useDraftingPageState() {
         const mapped: Draft[] = activeTokens.map((t, i) => {
           const { players, isDrafting } = stateResults[i];
           const draftSpeed: 'fast' | 'slow' = t.leagueId.includes('-slow-') ? 'slow' : 'fast';
+          // Type is only known after the draft fills and the backend classifies
+          // it (slot-machine reveal). While filling, the token still reports
+          // level: "Pro" by default — use null to mark unrevealed so the UI
+          // shows "Unrevealed" instead of lying "PRO ✓ Verified".
+          let type: Draft['type'];
+          if (t.level === 'Jackpot') type = 'jackpot';
+          else if (t.level === 'Hall of Fame') type = 'hof';
+          else type = isDrafting ? 'pro' : null;
           return {
             id: t.leagueId || t.cardId,
             contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
             status: isDrafting ? 'drafting' : 'filling',
-            type: t.level === 'Jackpot' ? 'jackpot' : t.level === 'Hall of Fame' ? 'hof' : 'pro',
+            type,
             draftSpeed,
             players,
             maxPlayers: 10,
@@ -388,11 +396,29 @@ export function useDraftingPageState() {
         });
 
         for (const d of mapped) {
-          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
+          if (hiddenDraftIds.has(d.id)) continue;
+          const existing = draftStore.getDraft(d.id);
+          if (!existing) {
             draftStore.addDraft({
               ...d,
               liveWalletAddress: user!.walletAddress!,
               phase: d.status === 'drafting' ? 'drafting' : 'filling',
+            });
+            continue;
+          }
+          // Refresh API-sourced fields on existing rows so stale localStorage
+          // (e.g. draftSpeed: 'fast' or type: 'pro' from pre-fix deploys)
+          // gets corrected. Don't clobber in-progress state like phase,
+          // preSpinStartedAt, randomizingStartedAt, engine snapshots, etc.
+          if (existing.phase !== 'drafting' && existing.status !== 'drafting' && !existing.preSpinStartedAt && !existing.randomizingStartedAt) {
+            draftStore.updateDraft(d.id, {
+              status: d.status,
+              type: d.type,
+              draftSpeed: d.draftSpeed,
+              players: d.players,
+              // Clear legacy draftType so DraftRow's resolvedType fallthrough
+              // stops promoting stale 'pro' over our fresh null.
+              draftType: d.type,
             });
           }
         }
@@ -714,13 +740,27 @@ export function useDraftingPageState() {
   }, [isLive, user?.walletAddress]);
 
   const activeDrafts = useMemo(() => {
+    // Not signed in → don't show anyone else's drafts cached in localStorage.
+    // The drafting list belongs to the authenticated wallet only.
+    if (!user?.walletAddress) {
+      return [] as Draft[];
+    }
+
+    const currentWallet = user.walletAddress.toLowerCase();
+    // Filter cached local drafts to the current wallet so switching accounts
+    // in the same browser doesn't bleed another user's placeholders.
+    const ownedLocalDrafts = localDrafts.filter(d => {
+      if (!d.liveWalletAddress) return true; // legacy entries without wallet stamp — allow
+      return d.liveWalletAddress.toLowerCase() === currentWallet;
+    });
+
     let base: Draft[];
     if (!isLive) {
-      base = localDrafts;
+      base = ownedLocalDrafts;
     } else {
-      const localIds = new Set(localDrafts.map(d => d.id));
+      const localIds = new Set(ownedLocalDrafts.map(d => d.id));
       const apiOnly = liveDrafts.filter(d => !localIds.has(d.id));
-      base = [...localDrafts, ...apiOnly];
+      base = [...ownedLocalDrafts, ...apiOnly];
     }
 
     const storeByDraftId = new Map(base.map(d => [d.id, d]));
@@ -756,7 +796,7 @@ export function useDraftingPageState() {
     return [...remainingBase, ...mergedQueueDrafts].filter(
       d => (d.specialType || !hiddenDraftIds.has(d.id)) && d.status !== 'completed',
     );
-  }, [hiddenDraftIds, isLive, liveDrafts, localDrafts, queueDrafts]);
+  }, [hiddenDraftIds, isLive, liveDrafts, localDrafts, queueDrafts, user?.walletAddress]);
 
   const sortedDrafts = [...activeDrafts].sort((a, b) => {
     if (a.isYourTurn && !b.isYourTurn) return -1;
