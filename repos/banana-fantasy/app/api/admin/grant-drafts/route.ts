@@ -13,6 +13,7 @@ import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/admi
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 
 const USERS_COLLECTION = 'v2_users';
+const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
 
 function normalizeWallet(raw: string): string {
   return raw.trim().toLowerCase();
@@ -44,71 +45,87 @@ export async function POST(req: Request) {
     logger.info('admin.grant_drafts.request', { requestId, actor: actorWallet, identifier: rawIdentifier, count });
 
     const db = getAdminFirestore();
+
+    // Resolution strategy:
+    //   - If admin typed a wallet address: mint directly to that wallet. That is the
+    //     authoritative target — no "look up doc.walletAddress and use that instead"
+    //     (which used to mint to the seeded mock wallet if the doc had stale data).
+    //     Look up or create a user doc with that wallet as the doc id so counters
+    //     and notifications still work.
+    //   - If admin typed a username: look up the user doc by username and use the
+    //     wallet on file (must exist). If none, error.
+    let targetWallet: string | null = null;
     let userDocId: string | null = null;
-    let resolvedWallet: string | null = null;
     let resolvedUsername: string | null = null;
     let beforeFreeDrafts = 0;
 
-    if (/^0x[0-9a-fA-F]{40}$/.test(rawIdentifier)) {
-      const wallet = normalizeWallet(rawIdentifier);
-      const direct = await db.collection(USERS_COLLECTION).doc(wallet).get();
+    if (WALLET_REGEX.test(rawIdentifier)) {
+      targetWallet = normalizeWallet(rawIdentifier);
+      userDocId = targetWallet;
+      const direct = await db.collection(USERS_COLLECTION).doc(targetWallet).get();
       if (direct.exists) {
-        userDocId = wallet;
         const data = direct.data();
-        resolvedWallet = (data?.walletAddress as string) ?? wallet;
         resolvedUsername = (data?.username as string) ?? null;
         beforeFreeDrafts = (data?.freeDrafts as number | undefined) ?? 0;
+      }
+      // No doc yet is fine — we'll create one lazily in the update below.
+    } else {
+      const snap = await db
+        .collection(USERS_COLLECTION)
+        .where('username', '==', rawIdentifier)
+        .limit(1)
+        .get();
+      if (snap.empty) {
+        throw new ApiError(404, `User not found for "${rawIdentifier}"`);
+      }
+      userDocId = snap.docs[0].id;
+      const data = snap.docs[0].data();
+      const docWallet = typeof data.walletAddress === 'string' ? normalizeWallet(data.walletAddress) : null;
+      // Prefer the doc's wallet field if it looks real; otherwise fall back to the
+      // doc id (which is the wallet in most of our data). Never use the mock seed.
+      if (docWallet && WALLET_REGEX.test(docWallet) && !docWallet.startsWith('0x1234567890abcdef')) {
+        targetWallet = docWallet;
+      } else if (WALLET_REGEX.test(userDocId)) {
+        targetWallet = normalizeWallet(userDocId);
       } else {
-        const snap = await db.collection(USERS_COLLECTION).where('walletAddress', '==', wallet).limit(1).get();
-        if (!snap.empty) {
-          userDocId = snap.docs[0].id;
-          const data = snap.docs[0].data();
-          resolvedWallet = (data.walletAddress as string) ?? wallet;
-          resolvedUsername = (data.username as string) ?? null;
-          beforeFreeDrafts = (data.freeDrafts as number | undefined) ?? 0;
-        }
+        throw new ApiError(422, `User "${rawIdentifier}" has no real wallet on file — ask them to log in once first`);
       }
+      resolvedUsername = (data.username as string) ?? null;
+      beforeFreeDrafts = (data.freeDrafts as number | undefined) ?? 0;
     }
-
-    if (!userDocId) {
-      const snap = await db.collection(USERS_COLLECTION).where('username', '==', rawIdentifier).limit(1).get();
-      if (!snap.empty) {
-        userDocId = snap.docs[0].id;
-        const data = snap.docs[0].data();
-        resolvedWallet = (data.walletAddress as string) ?? null;
-        resolvedUsername = (data.username as string) ?? null;
-        beforeFreeDrafts = (data.freeDrafts as number | undefined) ?? 0;
-      }
-    }
-
-    if (!userDocId) throw new ApiError(404, `User not found for "${rawIdentifier}"`);
 
     const userRef = db.collection(USERS_COLLECTION).doc(userDocId);
 
-    // When the on-chain admin mint is wired up, grants produce real BBB4 NFTs.
-    // Until Richard hands off ownership, fall back to the legacy Firestore
-    // counter so staging keeps working.
+    // On-chain mint happens first so we don't move the Firestore counter if the
+    // tx fails. We still dual-write the counter so read paths that haven't been
+    // moved to on-chain-derived counts (admin UI, user balance) stay accurate.
     const mintOnChain = isAdminMintConfigured() && count > 0;
     let txHash: string | undefined;
     let mintedTokenIds: string[] = [];
 
     if (mintOnChain) {
-      if (!resolvedWallet) {
-        throw new ApiError(422, 'User has no wallet on file — cannot mint NFT grant');
-      }
-      const res = await reserveTokensToWallet({ to: resolvedWallet, count });
+      const res = await reserveTokensToWallet({ to: targetWallet, count });
       txHash = res.txHash;
       mintedTokenIds = res.tokenIds;
       await recordPassOrigins({
         tokenIds: mintedTokenIds,
         origin: 'admin_grant',
-        ownerAtMint: resolvedWallet,
+        ownerAtMint: targetWallet,
         txHash,
         reason: `admin_grant:${actorWallet}`,
       });
-    } else {
-      await userRef.set({ freeDrafts: FieldValue.increment(count) }, { merge: true });
     }
+
+    // Counter update — happens whether we minted or fell back. Also ensures the
+    // user doc exists (merge:true creates it if missing) and carries the wallet
+    // so subsequent lookups resolve correctly.
+    await userRef.set(
+      {
+        walletAddress: targetWallet,
+        freeDrafts: FieldValue.increment(count),
+      },
+      { merge: true },
+    );
 
     const fresh = await userRef.get();
     const newFreeDrafts = (fresh.data()?.freeDrafts as number | undefined) ?? 0;
@@ -126,33 +143,31 @@ export async function POST(req: Request) {
       requestId,
     });
 
-    const notifyWallet = (resolvedWallet ?? userDocId).toLowerCase();
-    if (notifyWallet) {
-      try {
-        const title = count > 0 ? 'Free Drafts Granted!' : 'Drafts Adjusted';
-        const message = mintOnChain
-          ? `We just minted ${count} free draft pass NFT${count !== 1 ? 's' : ''} to your wallet.`
-          : count > 0
-            ? `You received ${count} free draft${count !== 1 ? 's' : ''}. You now have ${newFreeDrafts} total.`
-            : `An admin adjusted your free drafts by ${count}. You now have ${newFreeDrafts} total.`;
-        await db.collection('marketplace_notifications').add({
-          wallet: notifyWallet,
-          type: 'promo',
-          title,
-          message,
-          link: '/drafting',
-          read: false,
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      } catch (notifyErr) {
-        logger.warn('admin.grant_drafts.notify_failed', { requestId, err: notifyErr });
-      }
+    try {
+      const title = count > 0 ? 'Free Drafts Granted!' : 'Drafts Adjusted';
+      const message = mintOnChain
+        ? `We just minted ${count} free draft pass NFT${count !== 1 ? 's' : ''} to your wallet.`
+        : count > 0
+          ? `You received ${count} free draft${count !== 1 ? 's' : ''}. You now have ${newFreeDrafts} total.`
+          : `An admin adjusted your free drafts by ${count}. You now have ${newFreeDrafts} total.`;
+      await db.collection('marketplace_notifications').add({
+        wallet: targetWallet,
+        type: 'promo',
+        title,
+        message,
+        link: '/drafting',
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (notifyErr) {
+      logger.warn('admin.grant_drafts.notify_failed', { requestId, err: notifyErr });
     }
 
     logger.info('admin.grant_drafts.ok', {
       requestId,
       actor: actorWallet,
       target: userDocId,
+      recipient: targetWallet,
       before: beforeFreeDrafts,
       after: newFreeDrafts,
       granted: count,
@@ -165,7 +180,7 @@ export async function POST(req: Request) {
     return json({
       success: true,
       userId: userDocId,
-      walletAddress: resolvedWallet,
+      walletAddress: targetWallet,
       username: resolvedUsername,
       granted: count,
       freeDrafts: newFreeDrafts,

@@ -237,11 +237,13 @@ export async function POST(req: Request) {
       const balanceUpdate: Record<string, FieldValue | number> = {
         wheelSpins: FieldValue.increment(-1),
       };
-      // When the on-chain mint path is live we award via reserveTokens post-tx;
-      // otherwise fall back to the legacy freeDrafts counter inside the tx.
-      if (draftPassCount > 0 && !mintOnChain) {
+      // Counter update mirrors the on-chain mint (dual-write) so the admin UI,
+      // entry flow, and user balance views stay accurate. The counter and the
+      // NFT both get consumed when the user enters a draft, so they stay in sync.
+      if (draftPassCount > 0) {
         balanceUpdate.freeDrafts = FieldValue.increment(draftPassCount);
-      } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
+      }
+      if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
         balanceUpdate.jackpotEntries = FieldValue.increment(1);
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
         balanceUpdate.hofEntries = FieldValue.increment(1);

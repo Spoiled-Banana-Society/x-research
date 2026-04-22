@@ -186,6 +186,52 @@ export function useAdminDrafts(enabled: boolean) {
   });
 }
 
+export interface ZeroFreeDraftsResponse {
+  success: boolean;
+  zeroedUsers: number;
+  totalFreeDraftsCleared: number;
+  requestId?: string;
+}
+export function useZeroFreeDrafts() {
+  const getHeaders = useAdminAuthHeaders();
+  const qc = useQueryClient();
+  return useMutation<ZeroFreeDraftsResponse, AdminApiError, void>({
+    mutationFn: () =>
+      adminFetch<ZeroFreeDraftsResponse>('/api/admin/zero-free-drafts', getHeaders, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'audit'] });
+    },
+  });
+}
+
+export interface AdminAuditRecord {
+  actor: string;
+  action: string;
+  target: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  requestId: string;
+  timestamp: string;
+}
+export interface AdminAuditResponse {
+  records: AdminAuditRecord[];
+  requestId?: string;
+}
+export function useAdminAudit(enabled: boolean, limit = 100, action = '') {
+  const getHeaders = useAdminAuthHeaders();
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (action) params.set('action', action);
+  return useQuery<AdminAuditResponse>({
+    queryKey: ['admin', 'audit', { limit, action }],
+    enabled,
+    refetchInterval: enabled ? 10_000 : false,
+    queryFn: () => adminFetch<AdminAuditResponse>(`/api/admin/audit?${params}`, getHeaders),
+  });
+}
+
 export function useAdminWithdrawals(enabled: boolean) {
   const getHeaders = useAdminAuthHeaders();
   return useQuery<AdminWithdrawalItem[]>({

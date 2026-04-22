@@ -7,6 +7,7 @@ import {
   useBanUser,
   useMarkKycVerified,
   useResetUser,
+  useZeroFreeDrafts,
   AdminApiError,
   type AdminUser,
 } from '@/hooks/admin/useAdminApi';
@@ -45,6 +46,7 @@ export function UsersTable({ enabled }: { enabled: boolean }) {
 
   return (
     <div className="space-y-4">
+      <ZeroFreeDraftsBanner />
       <div className="flex items-center gap-3">
         <input
           type="text"
@@ -177,12 +179,20 @@ function GrantInline({ userId }: { userId: string }) {
       const res = await grant.mutateAsync({ identifier: userId, count: n });
       const who = res.username || res.walletAddress || res.userId;
       const message = res.mintOnChain && res.txHash
-        ? `Minted ${n} NFT${n !== 1 ? 's' : ''} to ${who} — tx ${res.txHash.slice(0, 10)}…`
+        ? `✓ Minted ${n} NFT${n !== 1 ? 's' : ''} on Base to ${who} (now ${res.freeDrafts} free)`
         : `Granted ${n > 0 ? '+' : ''}${n} to ${who} — now ${res.freeDrafts}`;
       show({
         level: 'success',
         message,
         requestId: res.requestId,
+        ...(res.txHash
+          ? {
+              action: {
+                label: 'View on BaseScan ↗',
+                onClick: () => window.open(`https://basescan.org/tx/${res.txHash}`, '_blank', 'noopener'),
+              },
+            }
+          : {}),
       });
     } catch (err) {
       const e = err as AdminApiError;
@@ -269,6 +279,48 @@ function ResetButton({ userId }: { userId: string }) {
     >
       {reset.isPending ? '…' : 'Reset'}
     </button>
+  );
+}
+
+function ZeroFreeDraftsBanner() {
+  const zero = useZeroFreeDrafts();
+  const { show } = useToast();
+
+  const handle = async () => {
+    if (
+      !window.confirm(
+        'Zero ALL users freeDrafts counters? This clears every ghost free-draft that isn\'t backed by a real BBB4 NFT. Cannot be undone. Continue?',
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await zero.mutateAsync();
+      show({
+        level: 'success',
+        message: `Cleared ${res.totalFreeDraftsCleared} free drafts across ${res.zeroedUsers} user${res.zeroedUsers !== 1 ? 's' : ''}.`,
+        requestId: res.requestId,
+      });
+    } catch (err) {
+      const e = err as AdminApiError;
+      show({ level: 'error', message: e.message, requestId: e.requestId });
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3 flex items-center justify-between gap-3">
+      <div className="text-xs text-orange-200/90 leading-snug">
+        <span className="font-semibold text-orange-100">Danger zone:</span> zero every user&apos;s{' '}
+        <code className="font-mono">freeDrafts</code> counter. Use once to clear pre-NFT ghost passes — from this point on the counter is dual-written with on-chain mints.
+      </div>
+      <button
+        onClick={handle}
+        disabled={zero.isPending}
+        className="shrink-0 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold disabled:opacity-50"
+      >
+        {zero.isPending ? 'Zeroing…' : 'Zero All Free Drafts'}
+      </button>
+    </div>
   );
 }
 

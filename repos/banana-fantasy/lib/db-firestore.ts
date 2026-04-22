@@ -315,17 +315,17 @@ export async function claimPromo(userId: string, promoId: string) {
     if (spinsAdded <= 0) throw new ApiError(400, 'Nothing to claim');
 
     // Buy-bonus awards free drafts, everything else awards wheel spins.
-    // When on-chain admin mint is configured, free-draft awards are minted
-    // as real BBB4 NFTs after the tx commits (see post-commit hook below).
+    // When on-chain admin mint is configured, free-draft awards ALSO mint real
+    // BBB4 NFTs after the tx commits (dual-write — counter + NFT stay in sync).
     const draftPassCount =
       promo.type === 'buy-bonus'
         ? spinsAdded * API_CONFIG.promos.buyBonus.bonusFreeDrafts
         : 0;
     const mintOnChain = isAdminMintConfigured() && draftPassCount > 0;
 
-    if (draftPassCount > 0 && !mintOnChain) {
+    if (draftPassCount > 0) {
       user.freeDrafts = (user.freeDrafts || 0) + draftPassCount;
-    } else if (promo.type !== 'buy-bonus') {
+    } else {
       user.wheelSpins = (user.wheelSpins || 0) + spinsAdded;
     }
     promo.claimable = false;

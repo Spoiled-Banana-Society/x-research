@@ -10,6 +10,7 @@ export type AdminAction =
   | 'set-entries'
   | 'create-promo'
   | 'reset-queue'
+  | 'zero-free-drafts'
   | 'kyc-verify'
   | 'kyc-revoke'
   | 'reset-user';

@@ -20,8 +20,9 @@ import { ActivityCombined } from '@/components/admin/ActivityCombined';
 import { MetricsDashboard } from '@/components/admin/MetricsDashboard';
 import { ErrorLog } from '@/components/admin/ErrorLog';
 import { SupportInbox } from '@/components/admin/SupportInbox';
+import { AuditLog } from '@/components/admin/AuditLog';
 
-type TabKey = 'metrics' | 'errors' | 'support' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'activity';
+type TabKey = 'metrics' | 'errors' | 'support' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'activity' | 'audit';
 
 interface NavItem {
   key: TabKey;
@@ -38,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'withdrawals', label: 'Withdrawals', group: 'Manage' },
   { key: 'promos', label: 'Promos', group: 'Manage' },
   { key: 'activity', label: 'Activity', group: 'Records' },
+  { key: 'audit', label: 'Audit Log', group: 'Records' },
 ];
 
 function formatDate(value: string | null): string {
@@ -177,6 +179,7 @@ export default function AdminPage() {
           {activeTab === 'withdrawals' && <WithdrawalsPanel items={withdrawalsQuery.data ?? []} />}
           {activeTab === 'promos' && <PromosPanel items={promosQuery.data?.promos ?? []} />}
           {activeTab === 'activity' && <ActivityCombined enabled={isAuthorized} />}
+          {activeTab === 'audit' && <AuditLog enabled={isAuthorized} />}
         </div>
       </main>
     </div>
