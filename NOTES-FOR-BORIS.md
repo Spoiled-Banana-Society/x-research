@@ -101,7 +101,31 @@ Point me at the functions repo and I'll drop the full file. Didn't want to guess
 
 ---
 
-## Also reminding you of the two open questions in your April 22 notes
+## BBB4 ownership — handled, key sent separately
 
-1. **BBB4 ownership handoff** — we haven't decided. Richard, can you pick a path?
-2. **`passType: 'free'` verification after admin grant** — blocked on #1.
+Richard decided against a fresh ops-wallet handoff. The wallet that currently owns BBB4 is a clean account (no other ERC-20s, NFTs, or ETH beyond gas), so we're using it directly as the ops wallet. **No `transferOwnership` call needed.**
+
+**Richard sent you the owner wallet's private key via secure channel** (not in this file — do not paste it here or anywhere in git). Verify the key matches the `owner()` return from BaseScan on `0x14065412b3A431a660e6E576A14b104F1b3E463b` before doing anything with it.
+
+### Next steps on your side
+
+1. Paste the key into Vercel env as `BBB4_OWNER_PRIVATE_KEY` (Production at minimum; Preview too if you want free-mint flows to work on PR previews).
+2. Redeploy Vercel or wait for the next natural deploy.
+3. Run one admin grant on staging to verify end-to-end minting.
+4. Ping Richard with the resulting tokenId from BaseScan so he can curl `/owner/{wallet}/draftToken/all` and confirm `passType: "free"` on the returned token (your April 22 ask #2).
+
+### `withdraw` exposure — still need a plan
+
+Once the key is live in Vercel, anything with env-var access (you + Vercel infra) can call `withdraw()` on BBB4 and drain the contract's accumulated USDC balance to the owner wallet. That's user money ($25 per pass), not Richard's.
+
+Mitigation options we haven't picked yet:
+
+- **Skim cron**: a Vercel cron or Cloud Scheduler that calls `withdraw()` on a schedule and forwards the USDC to a cold treasury address. Blast radius = whatever accumulated between skims.
+- **Accept the risk** for staging/soft-launch, commit to a multisig handoff before real volume.
+- **Skim manually** — Richard calls withdraw from MetaMask periodically and moves USDC to a cold wallet.
+
+Tell Richard which you prefer and he'll set up the cold address / cron / whatever is needed.
+
+## `passType: 'free'` verification
+
+Still blocked until you deploy the key + run one admin grant. Covered in the next steps above.
