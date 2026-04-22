@@ -354,20 +354,46 @@ export function useDraftingPageState() {
           return true;
         });
 
-        const mapped: Draft[] = activeTokens.map((t) => ({
-          id: t.leagueId || t.cardId,
-          contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
-          status: 'drafting',
-          type: t.level === 'Jackpot' ? 'jackpot' : t.level === 'Hall of Fame' ? 'hof' : 'pro',
-          draftSpeed: 'fast',
-          players: 10,
-          maxPlayers: 10,
-          lastUpdated: Date.now(),
-        }));
+        // Fetch current player count + drafting-state for each active draft.
+        // numPlayers === 10 means the backend has created the draft state
+        // (via /state/info fallback), so the draft has actually started.
+        const stateResults = await Promise.all(
+          activeTokens.map(async (t): Promise<{ players: number; isDrafting: boolean }> => {
+            try {
+              const res = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(t.leagueId)}`);
+              if (!res.ok) return { players: 1, isDrafting: false };
+              const data = await res.json();
+              const numPlayers = Number(data.numPlayers) || 0;
+              return { players: Math.max(1, numPlayers), isDrafting: numPlayers >= 10 };
+            } catch {
+              return { players: 1, isDrafting: false };
+            }
+          }),
+        );
+        if (cancelled) return;
+
+        const mapped: Draft[] = activeTokens.map((t, i) => {
+          const { players, isDrafting } = stateResults[i];
+          const draftSpeed: 'fast' | 'slow' = t.leagueId.includes('-slow-') ? 'slow' : 'fast';
+          return {
+            id: t.leagueId || t.cardId,
+            contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
+            status: isDrafting ? 'drafting' : 'filling',
+            type: t.level === 'Jackpot' ? 'jackpot' : t.level === 'Hall of Fame' ? 'hof' : 'pro',
+            draftSpeed,
+            players,
+            maxPlayers: 10,
+            lastUpdated: Date.now(),
+          };
+        });
 
         for (const d of mapped) {
           if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
-            draftStore.addDraft({ ...d, liveWalletAddress: user!.walletAddress!, phase: 'drafting' });
+            draftStore.addDraft({
+              ...d,
+              liveWalletAddress: user!.walletAddress!,
+              phase: d.status === 'drafting' ? 'drafting' : 'filling',
+            });
           }
         }
         setLiveDrafts(mapped);
