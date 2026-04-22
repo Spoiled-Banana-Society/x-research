@@ -396,11 +396,29 @@ export function useDraftingPageState() {
         });
 
         for (const d of mapped) {
-          if (!draftStore.getDraft(d.id) && !hiddenDraftIds.has(d.id)) {
+          if (hiddenDraftIds.has(d.id)) continue;
+          const existing = draftStore.getDraft(d.id);
+          if (!existing) {
             draftStore.addDraft({
               ...d,
               liveWalletAddress: user!.walletAddress!,
               phase: d.status === 'drafting' ? 'drafting' : 'filling',
+            });
+            continue;
+          }
+          // Refresh API-sourced fields on existing rows so stale localStorage
+          // (e.g. draftSpeed: 'fast' or type: 'pro' from pre-fix deploys)
+          // gets corrected. Don't clobber in-progress state like phase,
+          // preSpinStartedAt, randomizingStartedAt, engine snapshots, etc.
+          if (existing.phase !== 'drafting' && existing.status !== 'drafting' && !existing.preSpinStartedAt && !existing.randomizingStartedAt) {
+            draftStore.updateDraft(d.id, {
+              status: d.status,
+              type: d.type,
+              draftSpeed: d.draftSpeed,
+              players: d.players,
+              // Clear legacy draftType so DraftRow's resolvedType fallthrough
+              // stops promoting stale 'pro' over our fresh null.
+              draftType: d.type,
             });
           }
         }
