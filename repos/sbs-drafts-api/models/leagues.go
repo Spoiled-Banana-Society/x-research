@@ -170,8 +170,54 @@ func JoinLeagues(ownerId string, numLeaguesToJoin int, draftType string) ([]Draf
 	return res, nil
 }
 
+// scanForPartialLeague walks backwards from startFrom looking for the lowest-numbered
+// league with 1-9 players that this owner is not already a member of. The per-type
+// draft counter (CurrentLiveDraftCount / CurrentSlowDraftCount) can drift ahead of
+// reality when league creations and fills desync (e.g. fill-bots paths), which leaves
+// partially-filled leagues stranded between the counter and the most recent create.
+// When that happens, a plain forward scan from the counter misses them entirely and
+// every new join creates its own empty league — two users never land together.
+//
+// Returns 0 if no eligible partial league is found within the lookback window; the
+// caller should then fall back to the counter-based forward iteration below.
+func scanForPartialLeague(startFrom int, draftType string, ownerId string) int {
+	const maxLookback = 30
+	lowest := 0
+	for n := startFrom; n > 0 && n > startFrom-maxLookback; n-- {
+		var l League
+		draftId := fmt.Sprintf("2024-%s-draft-%d", draftType, n)
+		if err := utils.Db.ReadDocument("drafts", draftId, &l); err != nil {
+			continue
+		}
+		if l.NumPlayers <= 0 || l.NumPlayers >= 10 {
+			continue
+		}
+		alreadyIn := false
+		for _, u := range l.CurrentUsers {
+			if u.OwnerId == ownerId {
+				alreadyIn = true
+				break
+			}
+		}
+		if alreadyIn {
+			continue
+		}
+		lowest = n
+	}
+	return lowest
+}
+
 func AddCardToLeague(token *DraftToken, expectedDraftNum int, draftType string) (int, error) {
+	// Prefer joining the oldest partially-filled league this owner isn't in, so
+	// drafts fill rather than scatter. Fall back to the counter's starting point
+	// only if no partial league exists within the lookback window. The inner
+	// transaction below still handles the race where two callers target the
+	// same league — whoever lands second sees the updated NumPlayers and
+	// either appends or bumps to the next league.
 	currentDraftNum := expectedDraftNum
+	if partial := scanForPartialLeague(expectedDraftNum, draftType, token.OwnerId); partial > 0 {
+		currentDraftNum = partial
+	}
 	var draftId string
 	var l League
 
