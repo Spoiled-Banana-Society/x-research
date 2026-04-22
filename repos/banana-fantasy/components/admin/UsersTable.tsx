@@ -77,7 +77,8 @@ export function UsersTable({ enabled }: { enabled: boolean }) {
               <th className="px-4 py-3">Wallet</th>
               <th className="px-4 py-3">Username</th>
               <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3 text-right">Free Drafts</th>
+              <th className="px-4 py-3 text-right">Paid</th>
+              <th className="px-4 py-3 text-right">Free</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 min-w-[220px]">Grant</th>
@@ -89,7 +90,7 @@ export function UsersTable({ enabled }: { enabled: boolean }) {
           <tbody>
             {users.length === 0 && !query.isLoading ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                   {q ? `No users match "${q}"` : 'No users found'}
                 </td>
               </tr>
@@ -133,6 +134,7 @@ function UserRow({ user }: { user: AdminUser }) {
       <td className="px-4 py-3 font-mono text-xs">{formatWallet(user.walletAddress)}</td>
       <td className="px-4 py-3 text-gray-300 text-xs">{user.username || '—'}</td>
       <td className="px-4 py-3 text-gray-300 text-xs">{user.email || '—'}</td>
+      <td className="px-4 py-3 text-right font-semibold text-white">{user.paidDrafts}</td>
       <td className="px-4 py-3 text-right font-semibold text-[#F3E216]">{user.freeDrafts}</td>
       <td className="px-4 py-3 text-xs">
         {user.banned ? (
@@ -174,9 +176,12 @@ function GrantInline({ userId }: { userId: string }) {
     try {
       const res = await grant.mutateAsync({ identifier: userId, count: n });
       const who = res.username || res.walletAddress || res.userId;
+      const message = res.mintOnChain && res.txHash
+        ? `Minted ${n} NFT${n !== 1 ? 's' : ''} to ${who} — tx ${res.txHash.slice(0, 10)}…`
+        : `Granted ${n > 0 ? '+' : ''}${n} to ${who} — now ${res.freeDrafts}`;
       show({
         level: 'success',
-        message: `Granted ${n > 0 ? '+' : ''}${n} to ${who} — now ${res.freeDrafts}`,
+        message,
         requestId: res.requestId,
       });
     } catch (err) {

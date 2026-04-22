@@ -91,6 +91,33 @@ export const BBB4_ABI = [
     inputs: [{ name: 'numberOfTokens', type: 'uint256' }],
     outputs: [],
   },
+  {
+    type: 'function',
+    stateMutability: 'nonpayable',
+    name: 'reserveTokens',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'numberOfTokens', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    stateMutability: 'view',
+    name: 'balanceOf',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'event',
+    name: 'Transfer',
+    inputs: [
+      { name: 'from', type: 'address', indexed: true },
+      { name: 'to', type: 'address', indexed: true },
+      { name: 'tokenId', type: 'uint256', indexed: true },
+    ],
+    anonymous: false,
+  },
 ] as const satisfies Abi;
 
 export const USDC_ABI = [

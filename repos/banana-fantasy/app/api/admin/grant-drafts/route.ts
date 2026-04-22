@@ -9,6 +9,8 @@ import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { getRequestId } from '@/lib/requestId';
 import { logAdminAction } from '@/lib/adminAudit';
+import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 
 const USERS_COLLECTION = 'v2_users';
 
@@ -82,7 +84,31 @@ export async function POST(req: Request) {
     if (!userDocId) throw new ApiError(404, `User not found for "${rawIdentifier}"`);
 
     const userRef = db.collection(USERS_COLLECTION).doc(userDocId);
-    await userRef.set({ freeDrafts: FieldValue.increment(count) }, { merge: true });
+
+    // When the on-chain admin mint is wired up, grants produce real BBB4 NFTs.
+    // Until Richard hands off ownership, fall back to the legacy Firestore
+    // counter so staging keeps working.
+    const mintOnChain = isAdminMintConfigured() && count > 0;
+    let txHash: string | undefined;
+    let mintedTokenIds: string[] = [];
+
+    if (mintOnChain) {
+      if (!resolvedWallet) {
+        throw new ApiError(422, 'User has no wallet on file — cannot mint NFT grant');
+      }
+      const res = await reserveTokensToWallet({ to: resolvedWallet, count });
+      txHash = res.txHash;
+      mintedTokenIds = res.tokenIds;
+      await recordPassOrigins({
+        tokenIds: mintedTokenIds,
+        origin: 'admin_grant',
+        ownerAtMint: resolvedWallet,
+        txHash,
+        reason: `admin_grant:${actorWallet}`,
+      });
+    } else {
+      await userRef.set({ freeDrafts: FieldValue.increment(count) }, { merge: true });
+    }
 
     const fresh = await userRef.get();
     const newFreeDrafts = (fresh.data()?.freeDrafts as number | undefined) ?? 0;
@@ -92,23 +118,28 @@ export async function POST(req: Request) {
       action: 'grant-drafts',
       target: userDocId,
       before: { freeDrafts: beforeFreeDrafts },
-      after: { freeDrafts: newFreeDrafts, granted: count },
+      after: {
+        freeDrafts: newFreeDrafts,
+        granted: count,
+        ...(txHash ? { txHash, tokenIds: mintedTokenIds } : {}),
+      },
       requestId,
     });
 
-    // Notify the user via the bell on their next poll (shared `marketplace_notifications`
-    // collection is what NotificationWidget polls every 30s).
     const notifyWallet = (resolvedWallet ?? userDocId).toLowerCase();
     if (notifyWallet) {
       try {
+        const title = count > 0 ? 'Free Drafts Granted!' : 'Drafts Adjusted';
+        const message = mintOnChain
+          ? `We just minted ${count} free draft pass NFT${count !== 1 ? 's' : ''} to your wallet.`
+          : count > 0
+            ? `You received ${count} free draft${count !== 1 ? 's' : ''}. You now have ${newFreeDrafts} total.`
+            : `An admin adjusted your free drafts by ${count}. You now have ${newFreeDrafts} total.`;
         await db.collection('marketplace_notifications').add({
           wallet: notifyWallet,
           type: 'promo',
-          title: count > 0 ? 'Free Drafts Granted!' : 'Drafts Adjusted',
-          message:
-            count > 0
-              ? `You received ${count} free draft${count !== 1 ? 's' : ''}. You now have ${newFreeDrafts} total.`
-              : `An admin adjusted your free drafts by ${count}. You now have ${newFreeDrafts} total.`,
+          title,
+          message,
           link: '/drafting',
           read: false,
           createdAt: FieldValue.serverTimestamp(),
@@ -125,6 +156,9 @@ export async function POST(req: Request) {
       before: beforeFreeDrafts,
       after: newFreeDrafts,
       granted: count,
+      mintOnChain,
+      txHash,
+      tokenIds: mintedTokenIds,
       durationMs: Date.now() - start,
     });
 
@@ -135,6 +169,9 @@ export async function POST(req: Request) {
       username: resolvedUsername,
       granted: count,
       freeDrafts: newFreeDrafts,
+      mintOnChain,
+      txHash,
+      tokenIds: mintedTokenIds,
       requestId,
     });
   } catch (err) {

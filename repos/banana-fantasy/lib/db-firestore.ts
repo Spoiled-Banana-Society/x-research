@@ -6,6 +6,9 @@ import { ApiError } from '@/lib/api/errors';
 import { seedDb } from '@/lib/api/seed';
 import { logger } from '@/lib/logger';
 import { verifyPurchaseTx } from '@/lib/onchain/verifyPurchaseTx';
+import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { recordPassOrigins } from '@/lib/onchain/passOrigin';
+import { FieldValue } from 'firebase-admin/firestore';
 import type {
   CompletedDraft,
   Contest,
@@ -311,10 +314,18 @@ export async function claimPromo(userId: string, promoId: string) {
 
     if (spinsAdded <= 0) throw new ApiError(400, 'Nothing to claim');
 
-    // Buy-bonus awards free drafts, everything else awards wheel spins
-    if (promo.type === 'buy-bonus') {
-      user.freeDrafts = (user.freeDrafts || 0) + spinsAdded * API_CONFIG.promos.buyBonus.bonusFreeDrafts;
-    } else {
+    // Buy-bonus awards free drafts, everything else awards wheel spins.
+    // When on-chain admin mint is configured, free-draft awards are minted
+    // as real BBB4 NFTs after the tx commits (see post-commit hook below).
+    const draftPassCount =
+      promo.type === 'buy-bonus'
+        ? spinsAdded * API_CONFIG.promos.buyBonus.bonusFreeDrafts
+        : 0;
+    const mintOnChain = isAdminMintConfigured() && draftPassCount > 0;
+
+    if (draftPassCount > 0 && !mintOnChain) {
+      user.freeDrafts = (user.freeDrafts || 0) + draftPassCount;
+    } else if (promo.type !== 'buy-bonus') {
       user.wheelSpins = (user.wheelSpins || 0) + spinsAdded;
     }
     promo.claimable = false;
@@ -327,8 +338,46 @@ export async function claimPromo(userId: string, promoId: string) {
     tx.set(userRef, stripUndefined(user), { merge: true });
     tx.set(promoRef, stripUndefined(promo), { merge: true });
 
-    return { promo: deepClone(promo), spinsAdded, user: deepClone(user) };
+    return { promo: deepClone(promo), spinsAdded, user: deepClone(user), draftPassCount, mintOnChain };
   }).then(async (result) => {
+    // Post-commit: mint free-draft NFTs for buy-bonus when the ops wallet
+    // is wired up. Best-effort — failures land in `failed_mints` for retry.
+    if (result.mintOnChain && result.draftPassCount > 0) {
+      try {
+        const mintRes = await reserveTokensToWallet({ to: userId, count: result.draftPassCount });
+        await recordPassOrigins({
+          tokenIds: mintRes.tokenIds,
+          origin: 'spin_reward',
+          ownerAtMint: userId,
+          txHash: mintRes.txHash,
+          reason: `promo_claim:${promoId}`,
+        });
+        logger.info('promo.claim.mint_ok', {
+          userId,
+          promoId,
+          count: result.draftPassCount,
+          txHash: mintRes.txHash,
+          tokenIds: mintRes.tokenIds,
+        });
+      } catch (mintErr) {
+        logger.error('promo.claim.mint_failed', { userId, promoId, err: mintErr });
+        try {
+          const db2 = getAdminFirestore();
+          await db2.collection('failed_mints').doc(`promo_${userId}_${promoId}`).set({
+            userId,
+            promoId,
+            count: result.draftPassCount,
+            reason: `promo_claim:${promoId}`,
+            error: (mintErr as Error)?.message ?? String(mintErr),
+            createdAt: FieldValue.serverTimestamp(),
+            retryable: true,
+          });
+        } catch (logErr) {
+          logger.error('promo.claim.failed_mint_record_error', { userId, promoId, err: logErr });
+        }
+      }
+    }
+
     // Fire-and-forget user event for Metrics dashboard
     try {
       const { logUserEvent } = await import('@/lib/userEvents');

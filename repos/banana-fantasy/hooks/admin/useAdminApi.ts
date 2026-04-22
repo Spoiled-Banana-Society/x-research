@@ -22,6 +22,7 @@ export interface AdminUser {
   blueCheckVerified: boolean;
   banned: boolean;
   freeDrafts: number;
+  paidDrafts: number;
   wheelSpins: number;
 }
 
@@ -317,6 +318,9 @@ export interface GrantDraftsResponse {
   username: string | null;
   granted: number;
   freeDrafts: number;
+  mintOnChain?: boolean;
+  txHash?: string;
+  tokenIds?: string[];
   requestId?: string;
 }
 

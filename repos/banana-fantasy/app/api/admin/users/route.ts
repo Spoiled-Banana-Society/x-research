@@ -58,6 +58,7 @@ function mapUserDoc(doc: FirebaseFirestore.QueryDocumentSnapshot<DocumentData>) 
     blueCheckVerified: data.blueCheckVerified === true || data.isBlueCheckVerified === true,
     banned: data.banned === true,
     freeDrafts: typeof data.freeDrafts === 'number' ? data.freeDrafts : 0,
+    paidDrafts: typeof data.draftPasses === 'number' ? data.draftPasses : 0,
     wheelSpins: typeof data.wheelSpins === 'number' ? data.wheelSpins : 0,
   };
 }

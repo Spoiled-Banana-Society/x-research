@@ -10,6 +10,8 @@ import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
+import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
 const USERS_COLLECTION = 'v2_users';
@@ -208,6 +210,12 @@ export async function POST(req: Request) {
     const userRef = db.collection(USERS_COLLECTION).doc(userId);
     const spinRef = db.collection(WHEEL_SPINS_COLLECTION).doc(spinId);
 
+    const draftPassCount =
+      segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number'
+        ? segment.prizeValue
+        : 0;
+    const mintOnChain = isAdminMintConfigured() && draftPassCount > 0;
+
     await db.runTransaction(async (tx) => {
       const userDoc = await tx.get(userRef);
       const userData = userDoc.data();
@@ -229,8 +237,10 @@ export async function POST(req: Request) {
       const balanceUpdate: Record<string, FieldValue | number> = {
         wheelSpins: FieldValue.increment(-1),
       };
-      if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
-        balanceUpdate.freeDrafts = FieldValue.increment(segment.prizeValue);
+      // When the on-chain mint path is live we award via reserveTokens post-tx;
+      // otherwise fall back to the legacy freeDrafts counter inside the tx.
+      if (draftPassCount > 0 && !mintOnChain) {
+        balanceUpdate.freeDrafts = FieldValue.increment(draftPassCount);
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
         balanceUpdate.jackpotEntries = FieldValue.increment(1);
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
@@ -239,6 +249,41 @@ export async function POST(req: Request) {
       tx.set(userRef, balanceUpdate, { merge: true });
     });
 
+    // On-chain mint for draft_pass wins — happens outside the tx so a failed
+    // mint doesn't roll back the spin counter.
+    let mintTxHash: string | undefined;
+    let mintedTokenIds: string[] = [];
+    if (mintOnChain) {
+      try {
+        const res = await reserveTokensToWallet({ to: userId, count: draftPassCount });
+        mintTxHash = res.txHash;
+        mintedTokenIds = res.tokenIds;
+        await recordPassOrigins({
+          tokenIds: mintedTokenIds,
+          origin: 'spin_reward',
+          ownerAtMint: userId,
+          txHash: mintTxHash,
+          reason: `wheel_spin:${spinId}`,
+        });
+        logger.info('wheel.spin.mint_ok', { spinId, userId, count: draftPassCount, txHash: mintTxHash, tokenIds: mintedTokenIds });
+      } catch (mintErr) {
+        logger.error('wheel.spin.mint_failed', { spinId, userId, count: draftPassCount, err: mintErr });
+        try {
+          await db.collection('failed_mints').doc(spinId).set({
+            spinId,
+            userId,
+            count: draftPassCount,
+            reason: `wheel_spin:${spinId}`,
+            error: (mintErr as Error)?.message ?? String(mintErr),
+            createdAt: FieldValue.serverTimestamp(),
+            retryable: true,
+          });
+        } catch (logErr) {
+          logger.error('wheel.spin.failed_mint_record_error', { spinId, err: logErr });
+        }
+      }
+    }
+
     // Auto-queue for Jackpot/HOF — happens server-side so it can't be interrupted
     if (segment.prizeType === 'custom' && (segment.prizeValue === 'jackpot' || segment.prizeValue === 'hof')) {
       try {
@@ -246,12 +291,14 @@ export async function POST(req: Request) {
         await joinQueue(userId, segment.prizeValue as 'jackpot' | 'hof');
         logger.debug(`[wheel/spin] Auto-queued ${userId} for ${segment.prizeValue}`);
       } catch (qErr) {
-        // Don't fail the spin if queue join fails — entry is already awarded
         console.warn(`[wheel/spin] Auto-queue failed (entry still awarded):`, qErr);
       }
     }
 
-    return json({ spinId, result: segment.id, prize, angle }, 200);
+    return json(
+      { spinId, result: segment.id, prize, angle, mintOnChain, txHash: mintTxHash, tokenIds: mintedTokenIds },
+      200,
+    );
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     console.error('[wheel/spin] Unhandled error:', err);
