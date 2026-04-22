@@ -198,3 +198,60 @@ Same confirmation — key isn't in Vercel production env yet. Boris has the key 
 
 Also — nice catch on the `JoinLeagues` partial-league routing fix (`bfe7de8`). That unblocks multi-user fast drafts. I'll test it alongside the BBB4 verification once the env vars are in.
 
+---
+
+## BBB4 admin mint is live ✅ + your `passType` check (April 22, evening)
+
+Everything wired and verified end-to-end on staging. Thread by thread:
+
+### 1. On-chain mint flow — working
+
+- `BBB4_OWNER_PRIVATE_KEY` on Vercel, derives to `0xccdF79A51D292CF6De8807Abc1bB58D07D26441D`, matches `owner()` on BaseScan.
+- ETH you funded arrived (~$5).
+- Admin grant from the UI now mints real BBB4 NFTs via `reserveTokens`.
+- Fixed a bug along the way — the old grant resolver was using the user doc's `walletAddress` field, which was sometimes the mock seed `0x1234...`, so NFTs were going to a dead address. Now: if admin types a wallet, that wallet IS the recipient. User doc gets auto-created if it doesn't exist.
+- Counters and NFTs are dual-written so admin UI / user balance reflect reality immediately.
+
+### 2. `passType: 'free'` — please confirm on your side
+
+Test wallet `0xE7259AddF13489B4fC37EbDE0D8FE523cD38bEd1` has **BBB4 tokenIds 3 and 4** from two admin grants. Txs:
+
+- tokenId 3: `0xe92a4970ac2348055bb01e304f0fe1332aef93b5f188796088c314eec450c997`
+- tokenId 4: `0x682d8b92f23d6fffab2b1b1396a9cdc381af9832addf7d7a84b63ff176671c90`
+
+Both minted via `reserveTokens(recipient, 1)` — no USDC transferred to the contract, so your Go API shouldn't see the "paid" signature on these.
+
+Please curl:
+
+```
+curl -s "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/owner/0xE7259AddF13489B4fC37EbDE0D8FE523cD38bEd1/draftToken/all" | jq '.[] | {cardId, passType, leagueId}'
+```
+
+- If tokens 3 + 4 come back with `passType: "free"` → marketplace rule already works, we're done. Let me know and I'll close the loop.
+- If they come back with `passType: "paid"` → the API only looks at the paid-mint signature. Flag the tokenIds and I'll wire our `pass_origin/{tokenId}` Firestore collection into the marketplace listing check instead.
+
+### 3. Functions repo — go ahead
+
+Already answered above but restating so it's in one place: drop `onPickAdvance` into `~/sbs-staging-functions/functions/index.js` next to `onQueueUpdate`. Node 20, CommonJS, `firebase-admin` + `node-fetch@2` already in deps. Project is `sbs-staging-env`. Deploy with `firebase deploy --only functions:onPickAdvance`.
+
+OneSignal env vars on Vercel are now set (`NEXT_PUBLIC_ONESIGNAL_APP_ID`, `ONESIGNAL_REST_API_KEY`), so push notifications will actually fire once the Cloud Function is live.
+
+### 4. `withdraw()` protection — decision
+
+For staging + soft-launch: **accept risk**. Move to Safe multisig on Base for contract ownership before real volume hits.
+
+If you want me to set up a Vercel skim cron as a dress rehearsal on staging (calls `withdraw()` on a schedule → forwards accumulated USDC to a cold treasury address), drop a cold address and I'll wire it. Otherwise we punt.
+
+### 5. New admin plumbing worth knowing about
+
+Landed today, both under `/admin`:
+
+- **Audit Log tab** (Records group) — every grant, KYC flip, reset, ban, etc. with a clickable BaseScan tx link. Auto-refreshes every 10s. Filter by action type.
+- **Zero All Free Drafts** danger banner in the Users tab — one-time cleanup to wipe pre-NFT ghost counters. Past use of `freeDrafts` was an off-chain stub; from now on, `freeDrafts: 1` means an actual BBB4 NFT exists.
+- **Users table split** — now shows `Paid` and `Free` as separate columns.
+- **Grant toast** has a "View on BaseScan ↗" link on the mint tx.
+
+All gated behind your existing Privy-admin allowlist.
+
+Ping when you've done the `passType` curl and picked on the skim-cron question.
+
