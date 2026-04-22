@@ -1,38 +1,32 @@
-# Banana Fantasy - Project Context
+# Banana Fantasy — Shared Workspace
 
-> **Note to Claude:**
-> - Update this file when building new features, making design decisions, or changing important logic. This is your memory across sessions.
-> - If you cause an error, fix it immediately without waiting for the user to report it. Check the dev server output after edits.
-> - **Always commit and push after completing changes.** Push to your personal branch, not main.
+Bridge between Boris and Richard. Both work on banana-fantasy from their own machines using personal branches to avoid conflicts. Keep this file tight — if something is resolved or lives in code, don't write it here.
 
-## Shared Workspace Sync (IMPORTANT — Read First)
-
-This repo (`sbs-claude-shared-workspace`) is the bridge between Boris and Richard. Both work on banana-fantasy from their own machines using **personal branches** to avoid conflicts.
+## Shared Workspace Sync (Read First)
 
 ### Branch Structure
 - `main` — deployable code, only receives merges. **NEVER commit directly to main.**
-- `richard` — Richard's permanent working branch
-- `boris` — Boris's permanent working branch
+- `boris` — Boris's working branch.
+- `richard` — Richard's working branch.
 
 ### At the START of every session:
 ```bash
 cd ~/sbs-claude-shared-workspace
 git fetch origin
-git checkout <your-branch>          # richard or boris
+git checkout <your-branch>          # boris or richard
 git pull origin <your-branch>
 git merge origin/main --no-edit     # get the other person's deployed work
-# If merge conflict: resolve it, then git add + git commit
 ```
 
 ### At the END of every session (after ANY changes):
 ```bash
 cd ~/sbs-claude-shared-workspace
-git add -A
-git commit -m "<Name>: <brief description of what changed>"
-git push origin <your-branch>       # push to YOUR branch, not main
+git add <specific files>            # never -A or .
+git commit -m "<Name>: <short>"
+git push origin <your-branch>
 ```
 
-### To deploy (only when work is ready):
+### To deploy:
 ```bash
 cd ~/sbs-claude-shared-workspace
 git fetch origin
@@ -40,1257 +34,170 @@ git merge origin/main --no-edit
 git checkout main && git pull origin main
 git merge <your-branch> --no-edit && git push origin main
 git checkout <your-branch>
-
-# Sync to deploy repo — pushing to main triggers Vercel automatically
-cp -R repos/banana-fantasy/app repos/banana-fantasy/components repos/banana-fantasy/hooks repos/banana-fantasy/lib repos/banana-fantasy/e2e repos/banana-fantasy/public /tmp/sbs-frontend-v2/ 2>/dev/null
-cd /tmp/sbs-frontend-v2 && git add -A && git commit -m "<description>" && git push origin main
 ```
+Then push to `sbs-frontend-v2` (banana-fantasy remote) to trigger Vercel.
 
-### Rules:
-- **NEVER commit directly to main** — always work on your personal branch.
-- **ALWAYS pull and merge main at session start** — otherwise you'll miss the other person's work.
-- **ALWAYS push your branch at session end** — otherwise the other person can't see your progress.
-- **Only merge to main when deploying** — main should always be deployable.
-- If there's a merge conflict, resolve it carefully — don't discard either side without checking.
-- Commit messages start with your name: "Richard: ..." or "Boris: ..."
+### ⛔ Git Commit Safety (NON-NEGOTIABLE)
+Richard's commits have overwritten Boris's work multiple times from stale local files. Every commit, every time:
 
-### ⛔⛔⛔ Git Commit Safety (NON-NEGOTIABLE — HAS CAUSED MULTIPLE INCIDENTS) ⛔⛔⛔
-Richard's commits have REPEATEDLY overwritten Boris's work because of stale local files. This has happened multiple times and caused hours of rework. Follow these steps EVERY TIME — no exceptions:
+1. **`git pull origin main`** before committing — your local copies of files you didn't edit are stale.
+2. **Only stage files you actually changed** — `git add <specific-files>`. **NEVER `git add -A` or `git add .`**.
+3. **Before pushing, verify:** `git diff --stat HEAD~1`. If you see files you didn't touch, stop — you're about to overwrite someone's work.
+4. If pushing to sbs-frontend-v2: `cd ~/banana-fantasy && git pull origin main` there too before committing.
 
-1. **ALWAYS `git pull origin main` BEFORE committing.** Your local copies of files you didn't edit are stale. Without pulling, your commit includes old versions that silently revert the other person's changes.
-2. **ONLY stage files you actually changed:** `git add <specific-files>`. NEVER use `git add -A` or `git add .` — this stages every file in your working directory, including stale versions of files the other person changed.
-3. **BEFORE pushing, verify:** `git diff --stat HEAD~1` — if you see files you didn't touch, STOP. You're about to overwrite someone else's work. Unstage those files and re-commit.
-4. **If pushing to sbs-frontend-v2 (banana-fantasy remote), pull there too:** `cd ~/banana-fantasy && git pull origin main` before committing.
-
-### Pre-Push Hook (MANDATORY — Set Up On First Session)
-Both Boris and Richard have pre-push hooks that block pushes unless the other person's latest commits have been synced. The marker file must contain the actual commit hash — cannot be faked with `touch`. Run this ONCE:
+### Pre-Push Hook (MANDATORY — set up once per machine)
+Blocks pushes unless the other person's latest commits have been synced. Marker must be the actual commit hash — can't be faked with `touch`:
 
 ```bash
-# Create the pre-push hook (Richard's version checks origin/boris, Boris's checks origin/richard)
-# Replace YOUR_BRANCH with "boris" if you're Richard, or "richard" if you're Boris
-OTHER_BRANCH="boris"  # Richard checks Boris's branch; Boris checks Richard's branch
-
+# Richard: OTHER_BRANCH=boris ; Boris: OTHER_BRANCH=richard
+OTHER_BRANCH="<other>"
 cat > ~/banana-fantasy/.git/hooks/pre-push << HOOKEOF
 #!/bin/bash
 SHARED=~/sbs-claude-shared-workspace
 MARKER=~/banana-fantasy/.last-richard-sync
 LATEST=\$(cd "\$SHARED" && git fetch origin --quiet 2>/dev/null && git rev-parse origin/${OTHER_BRANCH} 2>/dev/null)
-if [ -z "\$LATEST" ]; then
-  echo ""; echo "⛔ PUSH BLOCKED — Could not fetch origin/${OTHER_BRANCH} from shared workspace."
-  echo "Run: cd ~/sbs-claude-shared-workspace && git fetch origin"; echo ""
-  exit 1
-fi
-if [ ! -f "\$MARKER" ]; then
-  echo ""; echo "⛔ PUSH BLOCKED — You haven't synced! Latest ${OTHER_BRANCH}: \$LATEST"
-  echo "Run the full sync, then set marker."; echo ""
-  exit 1
-fi
+if [ -z "\$LATEST" ]; then echo "⛔ Could not fetch origin/${OTHER_BRANCH}."; exit 1; fi
+if [ ! -f "\$MARKER" ]; then echo "⛔ Sync first. Latest: \$LATEST"; exit 1; fi
 SYNCED=\$(cat "\$MARKER" 2>/dev/null)
 if [ "\$SYNCED" != "\$LATEST" ]; then
-  echo ""; echo "⛔ PUSH BLOCKED — ${OTHER_BRANCH} pushed new commits since your last sync!"
-  echo "Your sync:  \$SYNCED"; echo "Latest:     \$LATEST"; echo ""
+  echo "⛔ ${OTHER_BRANCH} has new commits (\$LATEST) since your sync (\$SYNCED)."
   exit 1
 fi
-echo "✓ Sync verified (\${LATEST:0:7}) — push allowed."
+echo "✓ Sync verified (\${LATEST:0:7})"
 HOOKEOF
 chmod +x ~/banana-fantasy/.git/hooks/pre-push
 ```
 
-After syncing, set the marker with the actual commit hash (NOT `touch`):
+After syncing:
 ```bash
-cd ~/sbs-claude-shared-workspace && git rev-parse origin/boris > ~/banana-fantasy/.last-richard-sync
-# Or for Boris:
-cd ~/sbs-claude-shared-workspace && git rev-parse origin/richard > ~/banana-fantasy/.last-richard-sync
+cd ~/sbs-claude-shared-workspace && git rev-parse origin/<other> > ~/banana-fantasy/.last-richard-sync
 ```
 
-## Company Overview
-- **Company:** Spoiled Banana Society (SBS)
-- **Founded:** 2021
-- **Product:** Onchain fantasy football (best ball format)
-- **Website:** sbsfantasy.com
-- **NFT Collection:** opensea.io/collection/banana-best-ball-3
-- **Current Season:** Banana Best Ball 3
-
-## Team
-- **Boris Vagner** - Cofounder (primary contact, product/vision)
-- **Richard Vagner** - Cofounder (brother)
-- **Dev** - Full-stack developer (limited availability, handles backend)
-
-## What is Best Ball?
-- Draft a team, then hands-off for the season (no lineup management)
-- System auto-selects your best scoring players each week
-- Similar to Underdog Fantasy format
-- No scheduled drafts - draft starts immediately when 10 players join
-
-## Draft Types (Revealed via Pack Opening)
-| Type | Odds | Color | Style |
-|------|------|-------|-------|
-| **Jackpot** | 1% | Red (#ef4444) | Fire effects, intense glow, ultra rare |
-| **HOF (Hall of Fame)** | 5% | Gold (#D4AF37) | Gold sparkles, prestigious, apply gold filter to logo |
-| **Pro** | 94% | Purple (#a855f7) | Clean, standard, subtle |
-
-- Users don't know their draft type until they enter (pack reveal experience)
-- HOF logo is red but should display as GOLD (use CSS filter)
-- Jackpot logo is red gradient text
-
-### Draft Type Perks
-| Type | Perk |
-|------|------|
-| **Jackpot** | Win your league → skip straight to the finals (bypass 2 weeks of playoffs) |
-| **HOF** | Compete for additional prizes on top of regular weekly and season-long rewards |
-
-## Draft Type Odds System (Guaranteed Distribution)
-**This is NOT random odds - it's a guaranteed distribution system.**
-
-Every 100 drafts contains exactly:
-- **94 Pro drafts**
-- **5 HOF drafts**
-- **1 Jackpot draft**
-
-The order is randomized, but the distribution is guaranteed.
-
-### How Percentages Work
-- Percentages are **dynamic** and update in real-time as drafts complete
-- They reflect the remaining pool, not fixed odds
-- Percentages always add up to 100%
-- System resets every 100 drafts
-
-### Example Flow
-| Drafts Completed | Pro Left | HOF Left | Jackpot Left | Pro % | HOF % | Jackpot % |
-|------------------|----------|----------|--------------|-------|-------|-----------|
-| 0 | 94 | 5 | 1 | 94% | 5% | 1% |
-| 1 (was Pro) | 93 | 5 | 1 | 93.9% | 5.05% | 1.01% |
-| 10 (all Pro) | 84 | 5 | 1 | 93.3% | 5.6% | 1.1% |
-| 50 (45 Pro, 4 HOF, 1 Jackpot hit) | 49 | 1 | 0 | 98% | 2% | 0% |
-
-### UI Implications
-- Lobby should sync with backend to show current pool percentages
-- Percentages constantly fluctuate as drafts start
-- When Jackpot is hit, Jackpot % shows 0% until reset
-- Show dynamic percentages only (no perk details in odds display)
-
-### Where Guaranteed Distribution is Displayed
-The message "Every 100 drafts contains exactly 1 Jackpot, 5 HOF, and 94 Pro drafts. The order is randomized, but the distribution is guaranteed." appears in:
-- **Onboarding Tutorial** - Draft Reveal slide with slot machine visual
-- **Drafting Page** - Below the three type cards in empty state
-- **Contest Details Modal** - Below the Jackpot/HOF percentage cards
-- **Contest Card Tooltips** - "Guaranteed: 1 in every 100 drafts is a Jackpot" / "5 in every 100 drafts are HOF"
-- **FAQ Section** - New questions in Jackpot and HOF sections
-
-## Current Draft System
-- **Fast drafts:** 30 seconds per pick (currently live)
-- **Slow drafts:** 8 hours per pick (PLANNED - not built yet)
-- **Players per draft:** 10
-- **Draft start:** Immediately when 10/10 players join
-- **Format:** Snake draft, team-based positions (draft "DAL WR1" not "CeeDee Lamb")
-- **Position slots:** WR1, WR2, RB1, QB, etc. - you draft a team's position slot
-- **How it works:** You get the highest scoring player from that team's position each week (e.g., DAL WR1 = best of CeeDee, Pickens, etc.)
-
-## Technical Setup
-- **Frontend:** Next.js 14 (App Router) - this repo
-- **Backend:** Existing separate system (handles actual drafts)
-- **Current state:** Frontend uses mock data, needs API integration
-- **Mock data location:** `/lib/mockData.ts` (designed to be swapped with real APIs)
-
-## Design Preferences
-- Apple-like aesthetic (clean, minimal, premium)
-- Dark theme with subtle glows
-- Smooth animations with proper easing
-- No clutter - let the UI breathe
-- Yellow/banana brand color: #fbbf24
-- Avoid generic "AI look" - make it distinctive
-- Glassmorphism effects: backdrop-blur, subtle borders, inner highlights, soft shadows
-- No empty space in the middle of cards/rows - disperse content throughout
-- Use icons over text labels where universally understood (e.g., grid/list toggle)
-
-### Tailwind Custom Colors (tailwind.config.ts)
-Colors are correct as of the polish pass:
-- `jackpot`: `#ef4444` (red)
-- `hof`: `#D4AF37` (gold)
-- `pro`: `#a855f7` (purple)
-- Glow variants: `jackpot-glow`, `hof-glow`, `pro-glow`
-
-### CSS Utility Classes (globals.css)
-- `.glow-jackpot` / `.glow-hof` / `.glow-pro` / `.glow-banana` — standardized box-shadow glows
-- `.hof-gold-filter` — `sepia(100%) saturate(400%) brightness(110%) hue-rotate(10deg)` for HOF logo
-- `.glass-card` — unified glassmorphism: `bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-2xl` + shadow
-
-## Key Features Built
-1. **Pack Opening Reveal** - Hold to open pack, reveals draft type with animations
-2. **Drafting Page** - Card-based layout with Cards/List view toggle (icon buttons)
-3. **Onboarding Tutorial** - 10-step interactive guide for new users with slot machine explanation and guaranteed distribution info. Triggers on first sign-in only (checks `hasSeenOnboarding` in localStorage)
-4. **Exposure Tracking** - Track player/team exposure across drafts (multiple views)
-5. **Type Column** - Shows Jackpot/HOF/Pro or "Unrevealed" for filling drafts
-6. **Exit Draft** - Leave a filling draft with confirmation modal, returns draft pass
-7. **Unified Draft Room** - All-in-one room: filling → slot machine reveal → drafting (replaces separate lobby)
-8. **Guaranteed Distribution Display** - Shows "Every 100 drafts contains exactly 1 Jackpot, 5 HOF, 94 Pro" across the site
-9. **VRF Verification UI** - Mock UI for Chainlink VRF (Verifiable Random Function) proof system
-10. **Draft Room Chat** - Text and voice chat for players in draft room (collapsible, with unread badges)
-11. **Batch Progress Indicator** - Header component showing current batch progress (X/100), Jackpot remaining, HOF remaining with color-coded status
-12. **Minimal Home Page** - Removed stats section and "How It Works" section for cleaner experience
-13. **Unified Entry Flow Modal** - Single 2-step modal for pass type + speed selection (replaces 2 separate modals)
-14. **Shared Draft Type Constants** - Single source of truth in `/lib/draftTypes.ts` for colors, labels, odds across the site
-15. **Modal Stack Hook** - Stack-based modal management (`useModalStack`) replacing individual boolean states
-
-## VRF Verification (Chainlink VRF)
-**Status: UI MOCKED** ✅ (needs backend integration)
-
-Proves fairness of randomness using Chainlink VRF (Verifiable Random Function). Users can verify that draft type selection and draft order were truly random.
-
-### Components
-- `/components/ui/VerifiedBadge.tsx` - Small "Verified" badge with tooltip
-- `/components/modals/VerificationModal.tsx` - Detailed proof modal with Summary/Technical tabs
-
-### Where Verified Badges Appear
-- **Top bar**: Next to draft type badge (e.g., "JACKPOT ✓ Verified")
-- **Pick position**: Next to "Your pick position: #X"
-- **Slot machine result**: Next to the revealed draft type after spin
-
-### Badge Behavior
-- Hover: Shows tooltip with proof details (chain, block, TX hash, time)
-- Click: Opens block explorer (Basescan for Base chain)
-
-### Verification Modal Tabs
-**Summary Tab**:
-- Draft type result or pick position
-- Chain name (Base)
-- Block number
-- Transaction hash
-- "View on Basescan" button
-
-**Technical Tab**:
-- VRF Request ID
-- Random Seed
-- VRF Proof
-- Random Words (raw output)
-- "How to Verify" explanation
-- Links to TX and Chainlink VRF docs
-
-### What Gets Verified
-| Event | Type | Description |
-|-------|------|-------------|
-| Draft Type Reveal | `draft-type` | Jackpot/HOF/Pro assignment |
-| Draft Order | `draft-order` | Your pick position (1-10) |
-| Team (future) | `team` | NFT team verification |
-
-### Backend Requirements (Future)
-- Chainlink VRF integration on Base chain
-- Store VRF proof data: txHash, blockNumber, requestId, seed, proof, randomWords
-- API endpoint to fetch proof for any draft/event
-
-## Batch Progress Indicator (Header)
-**Status: BUILT** ✅ (uses mock data, needs backend integration)
-
-Shows current batch progress in the header, visible on all pages. Since JP/HOF percentages were removed from ContestCard, this is now the primary place users see remaining Jackpots/HOF.
-
-### Location
-- `/components/layout/Header.tsx` - `BatchProgressIndicator` component
-- Positioned before Draft Passes ticket in header right-side icons
-
-### Mechanics
-- Every 100 drafts = 1 batch
-- 1 Jackpot guaranteed per batch (random position)
-- 5 HOF guaranteed per batch (random positions)
-- Batch resets after 100 drafts
-
-### Display
-```
-[████████░░] 80/100
-🔥 JP: 1 left | 🏆 HOF: 2 left
-```
-
-### States
-| Jackpot | Display |
-|---------|---------|
-| Remaining | `🔥 JP: 1 left` (red text #ef4444) |
-| Hit | `🔥 JP: Hit! ✓` (green text) |
-
-| HOF | Display |
-|-----|---------|
-| Remaining | `🏆 HOF: X left` (gold text #D4AF37) |
-| All Hit | `🏆 HOF: All 5! ✓` (green text) |
-
-### Hover Tooltip
-- "Draft X of 100 in this batch"
-- "Jackpot must hit in next X drafts!" (if remaining)
-- "X HOF guaranteed in next X drafts!" (if remaining)
-- "Batch resets after 100 drafts"
-
-### Mock Data (Replace with API)
-```typescript
-const batchProgress = {
-  current: 80,
-  total: 100,
-  jackpotRemaining: 1,  // 0 or 1
-  hofRemaining: 2,      // 0-5
-};
-```
-
-### Backend Requirements (Future)
-- API endpoint to get current batch state
-- Real-time updates when drafts complete
-- Track: current draft number, jackpot hit status, HOF remaining count
-
-## Slot Machine Design (Used in Draft Room)
-- **3 reels** with purple gradient background (#a78bfa → #8b5cf6 → #7c3aed)
-- **Symbols**: JACKPOT (red text), HOF (gold text), Banana emoji (pro)
-- **Apple-like cabinet**: Dark, minimal, premium feel
-- **Horizontal lines** between each symbol row
-- **Center highlight** when reels stop (white glow on middle row)
-
-### Win Logic
-- **3 Jackpots** = JACKPOT win (1% base odds per reel)
-- **3 HOFs** = HOF win (5% base odds per reel)
-- **Any other combo** = PRO (regular draft, 94% base odds per reel)
-- **Never 3 bananas** - always at least one jackpot or HOF in the mix
-
-### Celebration Effects
-- **JACKPOT**: Screen shake, red flash, confetti, win fanfare
-- **HOF**: Screen shake, gold flash, confetti, win fanfare
-- **PRO**: No celebration, just shows "Pro Draft"
-
-### Testing Slot Machine
-To test specific outcomes in `/app/draft-room/page.tsx`, replace `generateReelResults()`:
-```typescript
-const reelResults: DraftType[] = ['jackpot', 'jackpot', 'jackpot']; // Force jackpot
-const reelResults: DraftType[] = ['hof', 'hof', 'hof']; // Force HOF
-const reelResults: DraftType[] = ['pro', 'jackpot', 'pro']; // Force PRO (mixed)
-```
-
-## Draft Room Flow (Unified - No Separate Lobby)
-**Status: BUILT** ✅
-
-Users go directly from contest card → draft room (`/app/draft-room/page.tsx`), which handles filling, reveal, and drafting all in one place. The separate lobby is deprecated.
-
-### URL Parameters
-The draft room accepts these URL params:
-- `id` - Draft ID
-- `name` - Contest name
-- `speed` - "fast" or "slow"
-- `players` - Initial player count (e.g., entering a 7/10 draft shows 7 players already there)
-- `type` - Draft type if already revealed (jackpot/hof/pro)
-
-### User Flow
-1. **Enter from Contest Box** - User clicks Enter → goes directly to `/draft-room` with `players` param
-2. **Filling Phase** - Draft board visible immediately (Underdog-style), starts with correct player count
-   - Explainer: "Room fills → Draft type revealed — Jackpot, HOF, or Pro → Draft begins"
-   - Your slot: Shows your profile picture + username (yellow)
-   - Other joined players: 🍌 emoji only (no text)
-   - Empty slots: Faded 🍌 emoji
-   - Big centered display: "X/10" with "Waiting for players..."
-3. **10/10 Players Joined** - Two timers start
-   - **Main countdown**: 60 seconds until draft starts (big, prominent)
-   - **Reveal countdown**: 15 seconds until slot machine (smaller, below)
-   - Draft order randomized, user position shown
-4. **Reveal Countdown Hits 0** - Slot machine overlay appears
-   - 3-reel slot machine animation (~6 seconds, reels stop at 2s, 4s, 6s)
-   - Main countdown continues running during animation
-   - X button appears after animation to close overlay
-   - Click outside overlay to close (only after animation done)
-   - Auto-closes at 15 seconds remaining on main timer
-5. **Post-Reveal** - Background color changes for Jackpot (red) or HOF (gold)
-   - Screen shake + continuous word rain (JACKPOT or HOF) until 15 seconds remaining
-   - Confetti effect
-6. **Draft Starts** - Main timer hits zero → drafting phase begins
-
-### Slot Machine Overlay Details
-- **Main countdown**: Visible inside overlay, continues counting down
-- **Close options**: X button (top-right) or click outside (only after animation)
-- **Auto-close**: At 15 seconds remaining
-- **Result display**: Draft type with perks explanation
-  - Jackpot: "Skip to the Finals" - win league and bypass 2 weeks of playoffs
-  - HOF: "Bonus Prizes" - additional prizes on top of regular rewards
-- **Celebration**: Screen shake, confetti, word rain for Jackpot/HOF (stops at 15s remaining)
-
-### File Location
-- `/app/draft-room/page.tsx` - Orchestrator (~600 lines, decomposed from 1224)
-- `/components/drafting/DraftBoard.tsx` - Draft grid component
-- `/components/drafting/SlotMachineOverlay.tsx` - Slot machine overlay
-- `/components/drafting/PositionPicker.tsx` - Position picker modal
-- `/hooks/useDraftAudio.ts` - Sound effects hook
-- `/lib/draftRoomConstants.ts` - Constants, types, helpers
-- Routes changed from `/draft-lobby` to `/draft-room` in:
-  - `/app/page.tsx`
-  - `/app/drafting/page.tsx`
-
-## Planned Features (Not Yet Built)
-1. **Slow Drafts** - 8 hour pick timer, needs notifications + pre-queue system
-2. **Backend Integration** - Connect to real draft APIs
-3. **Real-time Updates** - Live draft data instead of mock data
-
-## File Structure Notes
-
-### Pages
-- `/app/draft-room/page.tsx` - **Main unified draft room** (filling → reveal → drafting), orchestrator using extracted components
-- `/app/drafting/page.tsx` - My Drafts page with DemoCard, DemoListRow components
-- `/app/page.tsx` - Home page (minimal: ContestCard + PromoCarousel + Footer + Onboarding trigger)
-- `/app/buy-drafts/page.tsx` - Buy draft passes page
-
-### Shared Constants & Types
-- `/lib/draftTypes.ts` - **Single source of truth** for draft type colors, labels, odds (`DRAFT_TYPE_COLORS`, `getDraftTypeColor()`)
-- `/lib/draftRoomConstants.ts` - Draft room constants: `ALL_POSITIONS`, `DRAFT_PLAYERS`, `DRAFT_TYPES`, `getPositionColor()`, `generateReelResults()`, `Pick` interface
-- `/lib/mockData.ts` - Mock data for all pages (replace with real APIs)
-
-### Hooks
-- `/hooks/useAuth.tsx` - Auth system (auto-login for testing)
-- `/hooks/useDraftAudio.ts` - AudioContext-based sound effects for draft room (spinning, reel stop, countdown, win)
-- `/hooks/useDraftStage.ts` - Shared draft stage cycling/timer/animation logic (used by DemoCard, DemoListRow)
-- `/hooks/useCountdown.ts` - Reusable countdown timer logic
-- `/hooks/useModalStack.ts` - Stack-based modal management (`push/pop/replace/closeAll/isOpen`)
-- `/hooks/useBatchProgress.ts` - Batch progress tracking for header indicator
-
-### Layout Components
-- `/components/layout/Header.tsx` - Header with batch progress indicator
-- `/components/layout/BatchProgressIndicator.tsx` - Batch progress (X/100), Jackpot remaining, HOF remaining
-
-### Draft Room Components (extracted from draft-room/page.tsx)
-- `/components/drafting/DraftBoard.tsx` - Draft grid with player headers + pick cells (snake draft board)
-- `/components/drafting/SlotMachineOverlay.tsx` - Slot machine 3-reel animation + result display overlay
-- `/components/drafting/PositionPicker.tsx` - Position selection modal for making draft picks
-
-### Other Drafting Components
-- `/components/drafting/PackReveal.tsx` - Pack opening animation (hold to reveal draft type)
-- `/components/drafting/SlotMachineReveal.tsx` - Slot machine reveal component (used in drafting page)
-- `/components/drafting/DraftRoomChat.tsx` - Chat/voice panel for draft room (collapsible)
-- `/components/drafting/DraftLobby.tsx` - Old lobby (deprecated, kept for reference)
-
-### Modal Components
-- `/components/modals/EntryFlowModal.tsx` - Unified 2-step modal: pass type + draft speed selection
-- `/components/modals/VerificationModal.tsx` - Detailed VRF proof modal
-
-### UI Components
-- `/components/ui/VerifiedBadge.tsx` - VRF verification badge with tooltip
-
-### Assets
-- `/public/jackpot-logo.png` - Jackpot logo (red)
-- `/public/hof-logo.jpg` - HOF logo (red, display as gold with `.hof-gold-filter`)
-
-## Brand Assets
-- Jackpot logo: Red gradient text on black
-- HOF logo: Red stamp-style badge (apply gold filter: `sepia(100%) saturate(400%) brightness(110%) hue-rotate(10deg)`)
-- SBS logos in `/public/sbs-logo.*`
-
-## Onboarding Tutorial (`/components/onboarding/OnboardingTutorial.tsx`)
-**Status: BUILT** ✅
-
-### Trigger Behavior
-- **Triggers on first sign-in only** - not on first visit
-- Checks `hasSeenOnboarding` in localStorage
-- Only shows when `isLoggedIn` is true AND flag is not set
-- Sets flag after user completes or dismisses tutorial
-- Logged-out visitors don't see the tutorial
-
-### Slides (10 total)
-1. **Intro** - "Fantasy Football Evolved" welcome screen
-2. **Contest** - Banana Best Ball IV details ($100k prize pool, $25 entry)
-3. **Best Ball** - Draft-and-done format explanation
-4. **Team Positions** - Draft KC QB not Patrick Mahomes
-5. **Injury Protection** - "One injury can destroy your season — Not Here."
-6. **Draft Reveal** - Slot machine visual showing Jackpot example with guaranteed distribution
-7. **Banana Wheel** - Spin for free drafts, Jackpot entries, HOF entries
-8. **Marketplace** - NFT teams you can buy/sell
-9. **USDC Prizes (Base)** - Stablecoin prize pools paid in USDC on Base
-10. **Ready** - "You're ready. Draft smart. Win big."
-
-### Layout
-- Fixed full-screen overlay with flex-col layout
-- Scrollable content area with `pt-24 pb-12` padding
-- Fixed progress dots at bottom (`py-5`)
-- Back/Next buttons on all slides (except first has no Back)
-- Close X button in top-right corner
-
-### Slot Machine Visual (Draft Reveal Slide)
-- 3 reels showing varied symbols (not all same on top/bottom rows)
-- Example shows Jackpot win in center row
-- Explains each draft type:
-  - **Jackpot (1%)**: Win your league and skip to the finals
-  - **HOF (5%)**: Compete for bonus prizes on top of regular rewards
-  - **Pro (94%)**: Standard draft
-- Guaranteed distribution box at bottom
-
-## Testing Notes
-- Draft type odds are **1% JP / 5% HOF / 94% Pro** (production-correct, fixed 2026-03-13)
-- Test draft reveal: Go to /drafting → click Enter on 10/10 draft → hold pack
-
-## API Integration Notes (For Future)
-When connecting to real backend:
-1. Replace mock data in `/lib/mockData.ts` with API calls
-2. Draft rooms need: id, contestName, players, maxPlayers, status, type, draftSpeed
-3. Exposure data needs: player picks, team exposure percentages
-4. User auth already stubbed in `/hooks/useAuth.ts`
-
-## Owner Preferences
-- Wants addictive UX (pack opening > slot machine for engagement)
-- Values premium feel over flashy
-- Iterates quickly - build then refine
-- Existing product works - this is enhancement, not rebuild
-
-## Product-Market Fit & Competitive Advantages
-
-### Problems in Best Ball Fantasy (Industry-Wide)
-1. **Illiquidity** - Once drafted, users are stuck with their team
-2. **Injury devastation** - One key injury can eliminate a team entirely
-3. **Fixed prizes** - USD prizes don't appreciate
-4. **Boring entry** - Pay, draft, done. No excitement.
-5. **High barrier** - Expensive to enter meaningfully
-6. **Late-season disengagement** - Users forget about teams after drafting
-7. **Trust issues** - Centralized platforms control odds/outcomes
-
-### How SBS Solves These
-
-| Problem | SBS Solution |
-|---------|--------------|
-| Illiquidity | **NFT Teams on OpenSea** - Buy, sell, trade teams anytime. Recoup value from bad teams, buy contenders mid-season. *No other platform does this.* |
-| Injury devastation | **Team Positions Format** - Draft "KC QB" not "Patrick Mahomes". Backup players count. Users are *always in it*. |
-| Fixed prizes | **USDC Prize Pools (Base)** - Stablecoin prize pools paid in USDC on Base. |
-| Boring entry | **Pack Reveal + Jackpot/HOF** - 1% Jackpot chance creates real excitement. Gamified reveal animation. |
-| High barrier | **Banana Wheel + Free Drafts** - Easy onboarding, low risk entry. |
-| Trust issues | **Onchain** - Verifiable randomness, transparent odds. |
-
-### Key Differentiators to Emphasize
-- **"Never out of it"** - Team positions protect against injuries
-- **"Your team, your asset"** - NFT ownership + OpenSea liquidity
-- **"Win in USDC"** - Stablecoin prizes paid in USDC on Base
-- **"Every entry could be THE one"** - Jackpot/HOF excitement
-
-### Additional Opportunities
-1. Weekly "still alive" notifications to combat late-season disengagement
-2. Show case studies: teams that would be dead on Underdog but alive on SBS
-3. Display trading volume / average resale values to prove liquidity
-4. Emphasize stable USDC payouts on Base (no ETH price narrative)
-
-## User Segments
-
-| Segment | Description | Needs |
-|---------|-------------|-------|
-| **Web3 + Best Ball** | Ideal customer. Plays Underdog, has crypto | Team positions explainer, NFT liquidity as bonus |
-| **Web3 + No Best Ball** | Crypto native, new to best ball | Best ball 101 + team positions |
-| **Web2 + Best Ball** | Underdog/Sleeper player, no crypto | Team positions, zero crypto friction |
-| **Web2 + No Best Ball** | Traditional fantasy or new | Full onboarding, simplest flow |
-
-**Universal Hook**: Team Positions - "Draft KC QB, not Patrick Mahomes. Injuries don't kill your team."
-
-**Key Principle**: Product should feel like polished web2 fantasy app with web3 superpowers under the hood. Web2 users never need to know it's crypto. Web3 users can access everything.
-
-## Payment System
-
-**Entry Fee**: $25 fixed (**paid in USDC on Base**)
-
-**Payment Methods**:
-- Card (Coinbase Onramp via Privy → purchases USDC on Base)
-- Crypto wallet transfer: **USDC (Base)**
-
-**Payment Flow (USDC on Base)**:
-1. User selects USDC (Base)
-2. Connects wallet / opens Privy wallet
-3. Pays $25 in USDC on Base
-4. System mints/sends the Base NFT (draft pass) to their wallet
-5. Credits awarded to account
-
-**Withdrawal Methods**:
-- Bank/card (Coinbase Offramp)
-- Direct to wallet: **USDC (Base)**
-
-**UX Note**: All users see the same UI regardless of login method (no web2/web3 differentiation).
-
-### Card Payment Implementation (Coinbase Onramp)
-**Status: CODE DONE** — Dashboard config pending (needs CDP API keys)
-
-**Files changed:**
-- `lib/contracts/bbb4.ts` — Added `getUsdcBalance(address)` utility
-- `components/modals/BuyPassesModal.tsx` — Coinbase preferred provider, USDC polling, flow steps
-- `providers/PrivyProvider.tsx` — Added `fundingMethodConfig`
-
-**Card flow:**
-1. User selects "Card / Apple Pay" → clicks Buy
-2. `fundWallet()` opens Coinbase Onramp popup (not MoonPay)
-3. User completes payment → popup closes
-4. Poll USDC balance every 3s (max 2 min) — "Waiting for USDC..."
-5. Balance sufficient → approve USDC + mint NFT (gas sponsored)
-6. Success → transition to pick-speed phase
-
-**Dashboard setup needed:**
-- Privy Dashboard → Account Funding → Enable Coinbase Onramp
-- Requires CDP API Key ID + Private Key from portal.cdp.coinbase.com
-- Key format: Privy says ECDSA PEM; CDP may offer Ed25519 — try ECDSA first
-- If settings won't save: try Configuration > Integrations tab instead
-
-## Deployment & Infrastructure
-**Status: LIVE on staging**
-
-- **Frontend**: Vercel at `banana-fantasy-sbs.vercel.app`
-- **Drafts API**: Cloud Run at `sbs-drafts-api-staging-652484219017.us-central1.run.app`
-- **WebSocket**: Cloud Run at `sbs-drafts-server-w5wydprnbq-uc.a.run.app`
-- **Firebase**: `sbs-prod-env` project
-- Currently all Vercel traffic routes to staging Cloud Run backend
-- Staging mode: `?staging=true` param (persists in sessionStorage)
-
-## API Layer (`lib/api/`)
-**Status: BUILT** — wired to real backend
-
-- `client.ts` — Base HTTP client
-- `config.ts` — URL configuration
-- `leagues.ts` — League join, batch progress, bot filling
-- `owner.ts` — User profile CRUD
-- `drafts.ts` — Draft state
-- `websocket.ts` — Real-time draft updates
-- `firebase.ts` — Firebase Realtime DB
-
-## Drafting Page UX Decisions
-- **Most users have 1 draft** at a time, maybe a few slow drafts at most
-- **Type is UNKNOWN until draft fills** - You cannot know if it's Jackpot/HOF/Pro until 10/10 players join
-- **Filling drafts**: Show yellow accent (unrevealed), display player count
-- **Revealed drafts**: Show type with color + badge (JACKPOT/HOF/PRO)
-
-### Draft Sorting Rules (IMPORTANT)
-Drafts are sorted by urgency - most urgent at top:
-1. **Your turn drafts** - You're on the clock, needs immediate action
-2. **In-progress drafts** - Sorted by picks away (1 pick away before 5 picks away)
-3. **Filling drafts** - Sorted by join time (oldest first, newest at bottom) — new drafts start at the bottom and bubble up as they become urgent
-
-### Status Display
-- **Your turn**: Show countdown timer (e.g., "22s left to pick!")
-- **Waiting**: Show "X picks away"
-- **Filling**: Show "X/10 joined"
-
-### UI Rules
-- Button always visible (not just on hover)
-- **Your turn drafts**: Yellow border + yellow background tint + "Pick Now" button (yellow)
-- **Filling drafts**: Clickable "Enter" button (white with black text) - takes you to draft room with current player count
-- Fixed-width buttons (w-20) so "Pick Now" and "Enter" are same size
-- No emojis/icons in draft rows - keep it clean, start with contest name
-
-### Draft Type Naming
-- **Pro** pairs well with **Hall of Fame** (sports theme progression)
-- **Jackpot** is the exciting wildcard (casino/gambling themed - stands out)
-- Considered "Classic" but Pro has better thematic consistency with HOF
-
-## Buy Drafts Page (`/app/buy-drafts/page.tsx`)
-**Status: BUILT** ✅
-
-### Layout
-- Two-column layout on desktop (selection left, order summary right)
-- Full width max-w-5xl container
-- Spin promo banner at top (hero position, very prominent)
-
-### Pricing
-- **$25 per draft** (fixed USD price)
-- Quantity options: 1, 5, 10, 20, 30, 40
-- Custom quantity input (no spinner arrows)
-
-### Spin Promo (Buy 10 Get 1 Free Spin)
-- Hero banner at top of page - can't miss it
-- Progress bar showing X/10 toward next spin
-- Banana Wheel spin earned for every 10 drafts purchased
-- When quantity >= 10, shows "Free spins included: +X" in quantity section
-
-### Payment Methods
-- Crypto: **USDC (Base)**
-- Card (Visa, Mastercard)
-- Selectable with visual feedback
-
-### Order Summary (Right Column)
-- Sticky on scroll
-- Shows: Draft Passes count, Price per Pass ($25), Total
-- Big yellow "Buy X Drafts" button
-
-## Drafting Page (`/app/drafting/page.tsx`)
-**Status: BUILT** ✅
-
-### Active Drafts Display - Row Layout
-Two-column layout: drafts on left, promos sidebar on right.
-
-**Draft Row Columns** (evenly spaced with `justify-between`, fixed widths for alignment):
-
-| Element | Width | Alignment | Content |
-|---------|-------|-----------|---------|
-| Name | w-20 | left | "BBB #142" |
-| Speed | w-16 | center | "30 sec" or "8 hour" |
-| Type | w-28 | center | "PRO", "HALL OF FAME", "JACKPOT" or "Unrevealed" |
-| Status | w-28 | center | Progress bar + X/10, or "X picks away", or "Xs" with pulse |
-| Button | w-20 | right | "Enter" (grey) or "Pick Now" (yellow, pulsing) |
-
-### Row Styling
-- Left accent bar (3px) with type color
-- Left gradient based on type color (fades to transparent)
-- **Your turn rows**: Yellow border (`border-2 border-banana`) + yellow background tint (`bg-banana/10`)
-- Small progress bar (w-12) for filling drafts
-- Padding: px-5 py-3
-- Tight spacing between rows (space-y-1.5)
-- No dividers - use `justify-between` for even spacing
-
-### Button Styling
-- **Filling drafts**: White button with black text (`bg-white text-black`) - clickable, goes to draft room
-- **Your turn**: Yellow button with black text (`bg-banana text-black`) - "Pick Now"
-- **In progress (not your turn)**: Type-colored button - "Enter"
-
-### Join Timestamp Tooltip
-- Drafts you enter save a `joinedAt` timestamp
-- Hover over contest name to see "Joined X ago" (e.g., "Joined 5 min ago", "Joined just now")
-- Uses `formatRelativeTime()` helper function
-- Only shows on drafts with timestamps (not demo drafts)
-
-### Sequential BBB Numbering
-- New drafts get sequential BBB numbers (BBB #145, #146, #147, etc.)
-- System finds highest existing number from localStorage + demo drafts, then increments
-- Uses `getNextBBBNumber()` helper function
-- Demo drafts are BBB #142 and #144, so new drafts start at #145
-
-### Demo Drafts (For Testing)
-Currently only 2 demo drafts for cleaner testing:
-- **BBB #142** - Filling (7/10), Pro type
-- **BBB #144** - Your turn, Pro type, 22s remaining
-
-To clear user drafts: `localStorage.removeItem('banana-active-drafts')`
-
-### Promos Sidebar (Right)
-- Width: w-56, hidden on mobile (`hidden lg:block`)
-- Shows first 4 promos vertically stacked
-- Cards match home page style: light bg (#fbfbfd), dark text, rounded-[16px]
-- Progress bars, claim buttons same as PromoCarousel
-- Hover: banana border glow
-
-### Empty States (Active Tab)
-
-**When user has 0 Draft Passes:**
-- Shows contest info card with red warning "You have 0 Draft Passes"
-- Displays: Banana Best Ball 4, $100k prize pool, odds (94% Pro, 5% HOF, 1% Jackpot)
-- Entry info: 1 Draft Pass, 10 players, 30 second timer
-- "Buy Draft Pass" button → routes to /buy-drafts
-
-**When user HAS Draft Passes but 0 active drafts:**
-- Same contest info card with yellow "You have X Draft Passes"
-- "Join a draft to start playing" message
-- "Join Draft" button → enters draft room
-
-### Completed Tab Empty State
-- Clean empty state with checkmark icon
-- "No Completed Drafts" message
-- "Finished drafts will appear here" subtext
-
-### Draft Syncing
-- Active drafts persist to localStorage (`banana-active-drafts`)
-- Completed drafts persist to localStorage (`banana-completed-drafts`)
-- When user joins a draft, it saves to localStorage and shows in drafting page
-- To clear drafts for testing: tell Claude "clear my drafts"
-
-### Draft Type Generation
-- Random type assigned when joining: 94% Pro, 5% HOF, 1% Jackpot
-- Based on real odds from guaranteed distribution system
-
-## Buy Drafts Page Banana Wheel Icon
-- Custom SVG matching actual Banana Wheel design
-- 12 segments with real colors (gray, green, red, purple, gold, orange)
-- SBS logo in center
-- Yellow/banana glowing border
-
-## Home Page (`/app/page.tsx`)
-**Status: MINIMAL & CLEAN** ✅
-
-### Structure (After Cleanup)
-1. **ContestCard** - Prize pool, 1st place, entry fee, Enter button (no JP/HOF percentages)
-2. **PromoCarousel** - Scrolling promo cards
-3. **Footer** - Copyright, Terms, Privacy, Support, Discord links
-
-### Removed Sections
-- ~~Stats Section~~ - "$2.5M+ Prizes Paid", "50K+ Active Players", etc.
-- ~~How It Works~~ - 3-step cards explaining the platform
-
-### JP/HOF Display
-- **Removed from ContestCard** - No longer shows percentages in top-right corner
-- **Moved to Header** - BatchProgressIndicator shows batch progress and remaining JP/HOF
-- Users can still see JP/HOF details in Contest Details Modal (info button)
-
-### First-Time User Flow
-1. User visits site → sees clean minimal page (no tutorial for logged-out users)
-2. User signs in for the first time → Onboarding Tutorial pops up
-3. User completes/dismisses tutorial → `hasSeenOnboarding` flag set
-4. Future visits → straight to clean page
-
-## No Passes Modal (Home Page)
-When user tries to enter draft with 0 passes:
-- Modal pops up: "No Draft Passes" with ticket emoji
-- "You need a draft pass to enter. Buy one to join the action!"
-- Cancel and "Buy Passes" buttons
-
-## Pass Type Selection (`/components/modals/PassTypeModal.tsx`)
-**Status: BUILT** ✅
-
-When entering a draft, users choose which pass type to use:
-- **Paid Pass** - Purchased draft passes (yellow/banana themed)
-- **Free Pass** - From promos & rewards (green themed)
-
-### Flow
-1. User clicks Enter on a draft
-2. If user has BOTH paid and free passes → PassTypeModal appears
-3. If user has only one type → auto-selects and continues
-4. Selected pass is deducted when entering draft room
-
-### UI
-- Shows count of each pass type
-- Disabled state for pass types with 0 available
-- Appears before speed selection (home page) or directly enters (drafting page)
-
-## Auth System
-- **Auto-login enabled** for testing - user is always signed in on page load
-- Profile persists to localStorage (username, profile picture, NFL team)
-- Located in `/hooks/useAuth.tsx`
-- Default user: 5 paid passes, 3 free drafts
-
-## Testing Helpers
-- **Clear drafts**: Run in browser console: `localStorage.removeItem('banana-active-drafts')`
-- **Change passes**: Tell Claude to set specific pass count
-- Mock user data in `/lib/mockData.ts`
-- Demo drafts defined in `/app/drafting/page.tsx` around line 550
-
-## FAQ Updates (`/lib/mockData.ts`)
-Added new FAQ questions:
-- **Jackpot Drafts section**:
-  - "How does the guaranteed distribution work?" - Explains every 100 drafts system
-  - "What do I get if I win a Jackpot draft?" - Skip to finals perk
-- **HOF Drafts section**:
-  - "What are the odds of getting a HOF draft?" - 5% with guaranteed distribution
-
-## Backend Repositories (Downloaded)
-
-### Repository Locations
-All repositories are located at `/Users/borisvagner/`:
-1. **sbs-draft-web-main** - Old Next.js frontend (reference for API integration)
-2. **sbs-drafts-api-main** - Go API for draft management
-3. **SBS-Football-Drafts-main** - Go WebSocket server for real-time drafting
-4. **SBS-Backend-main** - Firebase Cloud Functions & admin scripts
-
-### API Documentation
-See `/API_INTEGRATION.md` for complete API documentation including:
-- All API endpoints and data structures
-- WebSocket events and real-time communication
-- Authentication flow (wallet-based)
-- Smart contract integration
-- How to replace mock data with real APIs
-
-### API Endpoints (Production)
-- **Drafts API**: `https://sbs-drafts-api-w5wydprnbq-uc.a.run.app`
-- **WebSocket Server**: `wss://sbs-drafts-server-w5wydprnbq-uc.a.run.app`
-- **Firebase Realtime DB**: `https://sbs-prod-env-default-rtdb.firebaseio.com`
-
-### Key Integrations Needed
-1. **Owner API** - Get user profile, draft passes, update profile
-2. **League API** - Join drafts, get leaderboards, leave drafts
-3. **Draft API** - Get draft state, rosters, player rankings
-4. **WebSocket** - Real-time draft updates (picks, timers, completion)
-5. **Firebase Realtime DB** - Live player counts in drafts
-6. **Privy** - Wallet authentication (embedded + external wallets) — DONE
-7. **OpenSea API** - NFT profile pictures
-8. **Smart Contract** - Minting draft passes (0x2BfF6f4284774836d867CEd2e9B96c27aAee55B7)
-
-### Environment Variables Required
-```
-NEXT_PUBLIC_ENVIRONMENT=prod
-NEXT_PUBLIC_DRAFTS_API_URL=https://sbs-drafts-api-w5wydprnbq-uc.a.run.app
-NEXT_PUBLIC_DRAFT_SERVER_URL=wss://sbs-drafts-server-w5wydprnbq-uc.a.run.app
-NEXT_PUBLIC_INFURA_KEY=
-NEXT_PUBLIC_OPENSEA_API_KEY=
-NEXT_PUBLIC_THIRDWEB_CLIENT_ID=
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_AUTH_DOMAIN=
-NEXT_PUBLIC_DATABASE_URL=https://sbs-prod-env-default-rtdb.firebaseio.com
-NEXT_PUBLIC_PROJECT_ID=sbs-prod-env
-NEXT_PUBLIC_STORAGE_BUCKET=
-NEXT_PUBLIC_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_APP_ID=
-NEXT_PUBLIC_MEASUREMENT_ID=
-```
-
-### Live Site
-- **URL**: https://draft.sbsfantasy.com
-- **Status**: Geared for last week of previous season (some empty states)
-- **Layout**: Leaderboard-focused with table view for player cards and scores
-
-## URGENT: Backend Fix Needed (Boris — Do This First)
-> **From Richard's session:** The Go API has a bug where slow draft `pickLength` is 8 minutes instead of 8 hours. A frontend workaround is deployed but the backend needs the real fix. Boris has gcloud installed — Richard doesn't.
-
-**Fix:** In `/Users/borisvagner/sbs-drafts-api-main/models/draft-state.go` line 33, change:
-```go
-pickLength = 60 * 8    // BUG: 480 seconds = 8 minutes
-```
-to:
-```go
-pickLength = 3600 * 8  // FIX: 28800 seconds = 8 hours
-```
-
-**Then deploy:**
+### Tests Before Deploy (run when practical)
+- Preferred: `cd ~/sbs-claude-shared-workspace/repos/banana-fantasy && npx playwright test e2e/draft-room.spec.ts`
+- Run when a change plausibly affects draft-room behavior or drafting page.
+- Skip for config-only, docs, or pure backend patches the frontend doesn't exercise.
+- If tests fail because of the diff: fix before deploying.
+
+---
+
+## Company & Product
+
+- **Company:** Spoiled Banana Society (SBS), founded 2021. `sbsfantasy.com`.
+- **Product:** Onchain fantasy football (best ball format) on Base chain.
+- **Current Season:** Banana Best Ball 4.
+- **NFT Collection:** `opensea.io/collection/banana-best-ball-3`.
+- **Team:** Boris Vagner (cofounder, product/vision) · Richard Vagner (cofounder) · Dev (full-stack, limited availability).
+
+### What is Best Ball?
+- Draft a team, hands off for the season. System auto-picks each week's best scoring players.
+- Similar to Underdog Fantasy. No lineup management.
+- Draft starts immediately when 10 players join.
+
+### Draft Format
+- **Snake draft, team-position-based** — draft "KC QB", not "Patrick Mahomes". Each week you get the highest-scoring player from that team's position slot.
+- 10 players per draft. 15 rounds.
+- **Fast drafts:** 30 seconds per pick.
+- **Slow drafts:** 8 hours per pick (Go API returns `pickLength: 28800`).
+
+### Draft Types (Guaranteed Distribution)
+| Type | Per 100 | Color | Perk |
+|------|---------|-------|------|
+| Jackpot | 1 | Red `#ef4444` | Win league → skip to finals |
+| HOF | 5 | Gold `#D4AF37` | Bonus prizes on top of regular rewards |
+| Pro | 94 | Purple `#a855f7` | Standard |
+
+Not random odds — guaranteed distribution per 100 drafts. Users don't know type until the draft fills (slot machine reveal). Backend owns the batch tracker (`models/leagues.go` → `DraftLeagueTracker`). Frontend reads `GET /league/batchProgress`.
+
+---
+
+## Tech Stack
+- **Frontend:** Next.js 14 (App Router), Tailwind. Repo: `banana-fantasy`.
+- **Backend:** Go APIs on Cloud Run. `sbs-drafts-api` (REST) + `SBS-Football-Drafts` (WebSocket).
+- **Data:** Firebase Realtime DB (live draft state) + Firestore (users, purchases, notifications, pass_origin, admin audit).
+- **Auth:** Privy (embedded wallets + external wallets).
+- **Chain:** Base mainnet (chain id 8453).
+- **Payments:** $25 USDC on Base. Card via Coinbase Onramp (Privy `useFundWallet`, `preferredProvider: 'moonpay'` historically — currently Coinbase).
+- **Push notifications:** OneSignal (app `SBS Fantasy`, Vercel vars `NEXT_PUBLIC_ONESIGNAL_APP_ID` + `ONESIGNAL_REST_API_KEY`).
+
+## Design
+- Apple-esque: clean, minimal, premium. Dark theme, subtle glows, glassmorphism (`backdrop-blur-xl` + soft borders).
+- Brand color: `#fbbf24` (banana yellow).
+- Tailwind custom colors: `jackpot #ef4444`, `hof #D4AF37`, `pro #a855f7` + glow variants.
+- CSS utilities (`globals.css`): `.glow-jackpot` / `.glow-hof` / `.glow-pro` / `.glow-banana` / `.hof-gold-filter` / `.glass-card`.
+- Product should feel like a polished web2 fantasy app with web3 superpowers under the hood.
+
+## Smart Contract
+- **BBB4 draft pass NFT:** `0x14065412b3A431a660e6E576A14b104F1b3E463b` on Base.
+- **USDC on Base:** `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
+- Public `mint(numberOfTokens)` — user pays $25 USDC per pass.
+- `reserveTokens(address, numberOfTokens)` — `onlyOwner` admin mint, no USDC. Used for admin grants + wheel prize + promo rewards.
+- Owner wallet: `0xccdF79A51D292CF6De8807Abc1bB58D07D26441D` (private key in Vercel env `BBB4_OWNER_PRIVATE_KEY`). Reserve for multisig handoff before prod volume.
+- Origin of free mints tracked in Firestore `pass_origin/{tokenId}` so marketplace rule (free passes can't list until season closes) can join against it.
+
+---
+
+## Deployment
+
+### Staging URLs
+| Service | URL |
+|---------|-----|
+| Frontend | `banana-fantasy-sbs.vercel.app` (Privy-whitelisted — use this, not `banana-fantasy.vercel.app`) |
+| Drafts API | `sbs-drafts-api-staging-652484219017.us-central1.run.app` |
+| WebSocket | `sbs-drafts-server-staging-652484219017.us-central1.run.app` |
+| Firebase RTDB | `sbs-staging-env-default-rtdb.firebaseio.com` |
+
+### Production URLs (READ ONLY — do not deploy)
+- Drafts API: `https://sbs-drafts-api-w5wydprnbq-uc.a.run.app`
+- WebSocket: `wss://sbs-drafts-server-w5wydprnbq-uc.a.run.app`
+- Firebase RTDB: `https://sbs-prod-env-default-rtdb.firebaseio.com`
+
+### GCP
+- Project: `sbs-staging-env` (`652484219017`), region `us-central1`.
+- VPC Connector: `staging-connector` (10.8.0.0/28).
+- Service Account: `firebase-adminsdk-fbsvc@sbs-staging-env.iam.gserviceaccount.com`.
+
+### Deploy Commands
 ```bash
-gcloud run deploy sbs-drafts-api-staging --source /Users/borisvagner/sbs-drafts-api-main --region us-central1 --project sbs-staging-env
+# Go API (deploy from local copy with configs/ secrets; shared workspace excludes them)
+gcloud run deploy sbs-drafts-api-staging --source ~/sbs-drafts-api-deploy --region us-central1 --project sbs-staging-env
+
+# WebSocket server
+gcloud run deploy sbs-drafts-server-staging --source ~/SBS-Football-Drafts-main --region us-central1 --project sbs-staging-env --port 8000 --timeout 3600 --min-instances 1 --vpc-connector staging-connector --allow-unauthenticated
+
+# Firebase Cloud Functions
+cd ~/sbs-staging-functions && firebase deploy --only functions
 ```
 
-## ALSO URGENT: Staging Bots Pick Too Slowly (Boris)
-> **From Richard's session:** Staging bots (filled via `/staging/fill-bots`) wait for the FULL timer to expire before auto-picking — 30 seconds per bot pick for fast drafts, 8 hours for slow drafts. This makes testing painfully slow. Bots should auto-pick immediately (or within 1-2 seconds) when it's their turn, not run down the entire clock.
+### Backend Repos (Reference)
+All at `~/borisvagner/`:
+- `sbs-drafts-api-deploy/` — Boris's deploy copy with configs. Has `playoff-scripts` branch that's currently live.
+- `sbs-drafts-api-main/` — reference.
+- `SBS-Football-Drafts-main/` — WebSocket server.
+- `SBS-Backend-main/` — **READ-ONLY** prod reference (Firebase Functions).
+- `sbs-staging-functions/` — staging Firebase Functions (`onQueueUpdate`, upcoming `onPickAdvance`). Deploys to `sbs-staging-env`.
 
-**Where to look:** The Go WebSocket server handles timer expiry and auto-pick logic. Check `SBS-Football-Drafts-main/websockets/timer.go` — bots likely go through the same `StartDraftTimerForCurrentPick` flow as real players. Need a check: if the current drafter is a bot wallet, skip the timer and pick immediately.
+---
 
-**Deploy:**
-```bash
-gcloud run deploy sbs-drafts-server-staging --source /Users/borisvagner/SBS-Football-Drafts-main --region us-central1 --project sbs-staging-env --port 8000 --timeout 3600 --min-instances 1 --vpc-connector staging-connector --allow-unauthenticated
-```
+## Do-Not-Reintroduce Rules
 
-## Backend Needed: Guaranteed Draft Type Distribution (Boris)
-> **From Richard's session:** The frontend now has a working guaranteed distribution system (1 Jackpot, 5 HOF, 94 Pro per 100 drafts) using `lib/batchManager.ts` in localStorage. It works for testing but is per-browser — not shared across users. The backend needs to own this.
+### Draft Room Race Conditions
+- **draftId race:** URL has no draftId — `joinDraft` sets it async. The "at 10" effect MUST guard `if (isLiveMode && !draftId) return` and include `draftId` in deps.
+- **Poll race:** 2.5s poll must NOT set `draftOrder` during filling — only `playerCount`. The "at 10" effect owns the randomize transition.
 
-**What the backend needs:**
-1. A batch tracker: shuffled sequence of 100 types, shared counter
-2. When a draft fills (10/10), atomically claim the next type from the batch
-3. Return the assigned type in the `GET /draft/{draftId}/state/info` response (new field: `draftType`)
-4. `GET /league/batchProgress` endpoint should return real data: `{ current, total, jackpotRemaining, hofRemaining }`
-5. When batch hits 100, auto-reset with a fresh shuffled sequence
+### Chain + payments
+- Entry fee is $25 USDC on Base. Never hard-code 0x1234… mock wallets into user resolution — admin grant must mint to the admin-typed recipient.
 
-**Frontend is ready to swap:** Replace `batchManager.claimNextType()` and `batchManager.getBatchProgress()` with API calls. The UI (slot machine, header indicator, drafting page type display) all work already.
+### Marketplace listing rule
+- `team.passType === 'free'` + `isDraftingOpen()` → block listing with "Available After Season" (`components/marketplace/SellTab.tsx`, `app/marketplace/page.tsx`). Needs server-side enforcement before real volume — currently client-only.
 
-**Where to build it:** Likely in `sbs-drafts-api-main` — the leagues/draft-state models. Store batch state in Redis or Firestore for atomicity.
+---
 
-## DONE: Special Draft Creation When Queue Fills (Boris → Richard)
-> **Built by Boris's session (2026-03-23).** Richard's request for backend draft creation is complete.
+## Current Open Threads
 
-**What was built:**
+See `NOTES-FOR-RICHARD.md` and `NOTES-FOR-BORIS.md` for active coordination between us. Keep those dated and trim resolved items.
 
-1. **Go API endpoint:** `POST /staging/create-special-draft`
-   - Accepts `{ type: "jackpot"|"hof", wallets: string[] }` (exactly 10 wallets)
-   - Creates a slow draft league with `Level: "Jackpot"` or `"Hall of Fame"`
-   - Finds an available token for each wallet, adds them all to the league
-   - Triggers `CreateLeagueDraftStateUponFilling` when all 10 are in
-   - Returns `{ draftId, level, numPlayers }`
-
-2. **Firestore Cloud Function:** `onQueueUpdate` (deployed to `sbs-staging-env`)
-   - Watches `v2_queues/{jackpot|hof}` for document changes
-   - When a round has `status === 'ready'` and no `draftId`, calls the Go endpoint
-   - Updates the round with `draftId` and sets `status: 'drafting'`
-   - Deployed from `~/sbs-staging-functions/` (separate from SBS-Backend-main)
-
-**Full flow:** Wheel win → user queued → 10th person joins → round.status='ready' → Cloud Function fires → Go API creates draft → round updated with draftId + status='drafting' → players enter draft room.
-
-**No frontend changes needed** — Richard's queue UI already handles `status: 'drafting'` and shows "Draft is live!".
-
-## NEXT: Create Special Draft at 1/10 Not 10/10 (Boris)
-> **From Richard:** Users should be able to enter the draft room as soon as they win (like regular drafts — see 1/10, watch it fill). Currently the draft only exists after all 10 join.
-
-**What needs to change:**
-1. When the **1st person** joins a queue round → create the slow draft immediately via Go API → store `draftId` in the round
-2. When persons **2-10** join → add them to the existing draft (need `POST /staging/join-special-draft?draftId=X&wallet=Y` or modify Cloud Function to call `joinDraft` for each new member)
-3. The Cloud Function should fire on EACH queue member addition, not just at 10/10
-4. The draft starts when 10/10 join (same as regular drafts)
-
-**Result:** Users click "Enter" → go to `/draft-room?draftId=X&special=true` → see filling phase (1/10, 2/10...) → at 10/10 draft starts. Same experience as regular drafts.
-
-## DONE: Staging API deployed with playoff-scripts ✅
-- `/draft-actions/` endpoints live and working
-- Cloud Tasks queue created, env vars set
-- Firebase RTDB staging credentials set on Vercel
-- `/staging/fill-bots` and `/staging/create-special-draft` routes restored ✅
-
-## BORIS RESPONSE TO 4 BACKEND ITEMS (2026-03-27)
-
-Richard's Claude ran exhaustive headless Chrome testing. **Frontend code is solid — all issues are backend/infrastructure.** Cloud Tasks auto-pick IS working (bots advanced picks during testing), confirming the draft engine works. Here's what's needed:
-
-### Item 1: `fill-bots` doesn't trigger draft state creation (CRITICAL)
-**Problem:** `POST /staging/fill-bots/{speed}` adds bot entries but does NOT update `CurrentUsers` array or `NumPlayers` in the Firestore league document. So `CreateLeagueDraftStateUponFilling` never fires and `GET /draft/{id}/state/info` returns 500 "not found".
-
-**Fix:** In the `fill-bots` handler, after adding each bot, update the league document's `CurrentUsers` array and `NumPlayers` count. When `NumPlayers` reaches 10, call `CreateLeagueDraftStateUponFilling(draftId)`.
-
-**Verify:** After running fill-bots to 10/10:
-```bash
-curl -s "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/draft/{draftId}/state/info"
-# Should return JSON with draftOrder, pickNumber, etc. — NOT 500 error
-```
-
-### Item 2: Backend doesn't write `realTimeDraftInfo` to Firebase RTDB (CRITICAL)
-**Problem:** The Go API only writes `numPlayers` to Firebase RTDB at `drafts/{draftId}/numPlayers`. It does NOT write the full `realTimeDraftInfo` object that the new timer system reads from. The dev's `new-timer-changes` branch frontend expects data at `drafts/{draftId}/realTimeDraftInfo`.
-
-**What needs to be written to RTDB** (at `drafts/{draftId}/realTimeDraftInfo`):
-```json
-{
-  "currentDrafter": "0xwallet...",
-  "currentPickNumber": 1,
-  "currentRound": 1,
-  "pickInRound": 1,
-  "pickEndTime": 1711000000,        // Unix seconds — when this pick expires
-  "pickLength": 30,                  // 30 for fast, 28800 for slow
-  "draftStartTime": 1710999970,     // Unix seconds — when draft started
-  "lastPick": {                      // Most recent pick info
-    "playerId": "KC-RB1",
-    "displayName": "KC-RB1",
-    "team": "KC",
-    "position": "RB",
-    "ownerAddress": "0xwallet...",
-    "pickNum": 1,
-    "round": 1
-  },
-  "isDraftComplete": false,
-  "isDraftClosed": false
-}
-```
-
-**Where to add this:** In `models/draft-actions.go`, inside `ProcessNewPick()`, after updating Firestore state, also write to Firebase RTDB:
-```go
-// After updating DraftInfo in Firestore, write to RTDB
-rtdbRef := fmt.Sprintf("drafts/%s/realTimeDraftInfo", draftId)
-rtdbData := map[string]interface{}{
-    "currentDrafter":    nextDrafter,
-    "currentPickNumber": newPickNumber,
-    "currentRound":      newRound,
-    "pickInRound":       newPickInRound,
-    "pickEndTime":       newPickEndTime,
-    "pickLength":        pickLength,
-    "draftStartTime":    draftStartTime,
-    "lastPick": map[string]interface{}{
-        "playerId":     pickedPlayer.PlayerId,
-        "displayName":  pickedPlayer.DisplayName,
-        "team":         pickedPlayer.Team,
-        "position":     pickedPlayer.Position,
-        "ownerAddress": pickerWallet,
-        "pickNum":      pickNumber,
-        "round":        round,
-    },
-    "isDraftComplete": isDraftComplete,
-    "isDraftClosed":   false,
-}
-// Write to Firebase RTDB using the existing database helper
-```
-
-Also write the initial `realTimeDraftInfo` in `CreateLeagueDraftStateUponFilling()` when the draft first starts.
-
-### Item 3: Firebase RTDB security rules need updating
-**Problem:** Client reads at `drafts/{draftId}/realTimeDraftInfo` get `permission_denied`.
-
-**Fix:** In Firebase Console → sbs-staging-env → Realtime Database → Rules:
-```json
-{
-  "rules": {
-    "drafts": {
-      "$draftId": {
-        "realTimeDraftInfo": {
-          ".read": true,
-          ".write": false
-        },
-        "numPlayers": {
-          ".read": true,
-          ".write": false
-        }
-      }
-    }
-  }
-}
-```
-
-### Item 4: Firebase env vars not reaching Vercel build
-**Problem:** Boris set the env vars on Vercel but they're not showing up in the deployed build. The frontend logs "Firebase env vars not configured" and falls back to WS.
-
-**Possible causes:**
-- Vars were set for "Preview" but not "Production" (or vice versa)
-- Vars need `NEXT_PUBLIC_` prefix to be available in client-side code
-- Vercel needs a redeploy AFTER setting the vars
-
-**Fix:** In Vercel dashboard → banana-fantasy → Settings → Environment Variables:
-1. Confirm ALL 7 vars exist with `NEXT_PUBLIC_` prefix
-2. Confirm they're set for **Production** environment (not just Preview)
-3. Trigger redeploy: `curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH"`
-4. Wait 90s, then check browser console on the site for "Firebase env vars not configured" — should be gone
-
-### Boris's findings (2026-03-27):
-
-**Item 1 — fill-bots DOES update CurrentUsers/NumPlayers.** Checked `models/leagues.go`: `AddCardToLeague()` (line 229) appends to `CurrentUsers`, increments `NumPlayers`, and at line 259 calls `CreateLeagueDraftStateUponFilling` when `NumPlayers == 10`. If it's not working for you, the issue might be in how the league document is being read/written, not in the fill-bots logic itself. Check Cloud Run logs after running fill-bots to see if `CreateLeagueDraftStateUponFilling` errors.
-
-**Item 2 — RTDB writes ALREADY EXIST in playoff-scripts.** `models/draft-actions.go` line 31-42 reads/writes `realTimeDraftInfo` to RTDB. `ProcessNewPick()` at line 67 calls `GetRealTimeDraftInfoForDraft()` which reads from RTDB. The `playoff-scripts` branch already has RTDB integration — this might just need `CreateLeagueDraftStateUponFilling` to write the initial `realTimeDraftInfo` (check if it does).
-
-**Item 3 — RTDB rules: DONE ✅** Boris published the rules in Firebase Console. `drafts/$draftId/realTimeDraftInfo` and `drafts/$draftId/numPlayers` are now publicly readable on staging.
-
-**Item 4 — Vercel env vars: Done.** All 7 vars set for Production. Redeploy triggered. If still not working, check browser console on the deployed site.
-
-### Richard's retest (2026-03-27): fill-bots STILL not creating state
-
-**Proof:**
-- Created `2024-fast-draft-30`: mint → join → fill-bots (9 bots added, confirmed `botsAdded: 9`)
-- Waited 10s → `GET /draft/2024-fast-draft-30/state/info` → **500 NotFound**
-- Old draft `2024-fast-draft-22` (from old API branch) works perfectly: 10 players, pick 150
-
-**Boris — please check Cloud Run logs for `2024-fast-draft-30`:**
-```bash
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=sbs-drafts-api-staging AND textPayload:2024-fast-draft-30" --project=sbs-staging-env --limit=50 --format="table(timestamp,textPayload)"
-```
-
-**Boris's Claude checked logs and Firestore (2026-03-27):**
-
-Cloud Run logs show all 9 bots logged "joined league 2024-fast-draft-30" but the Firestore document `2024-fast-draft-30` only has 1 player (the real user). The bots were NOT actually added to the league.
-
-**Root cause found:** The `fill-bots` handler passes `speed` ("fast") as `draftType` to `AddCardToLeague`. But `AddCardToLeague` uses `draftType` to construct the league ID: `fmt.Sprintf("2024-%s-draft-%d", draftType, currentDraftNum)`. The actual league might have been created as `"2024-paid-draft-30"` (via `JoinLeagues` which uses "paid"), not `"2024-fast-draft-30"`.
-
-When bots call `AddCardToLeague(bot.token, 29, "fast")`, it looks for `"2024-fast-draft-29"` first. If that doesn't exist, it CREATES a new empty league with that ID, adds the bot there, then moves on. The bots end up in newly created empty leagues, NOT in the user's actual league.
-
-**The fix in `staging.go` fill-bots:** When `leagueId` is provided, don't go through `AddCardToLeague` at all. Instead, directly update the league document (read it, append to `CurrentUsers`, increment `NumPlayers`, write it back). Then check if `NumPlayers == 10` and call `CreateLeagueDraftStateUponFilling`.
-
-**FIXED AND DEPLOYED (v10).** When `leagueId` is provided, fill-bots now:
-1. Directly updates the league document via Firestore transaction (append to CurrentUsers, increment NumPlayers)
-2. When NumPlayers reaches 10, calls `CreateLeagueDraftStateUponFilling`
-3. Otherwise updates RTDB with current player count
-No longer goes through `AddCardToLeague` which was creating wrong league IDs.
-
-**Richard — retest:** Create a draft, join it, then run `POST /staging/fill-bots/fast?count=9&leagueId=YOUR-LEAGUE-ID`. Should reach 10/10 and create draft state.
-
-## RESOLVED: /staging/ routes model updates (2026-03-27) ✅
-Boris fixed staging.go compilation errors and redeployed. fill-bots and create-special-draft routes working.
-
-## DONE: Firebase RTDB Credentials for Vercel (Boris, 2026-03-27) ✅
-
-## ARCHIVED: /staging/ routes model update details (2026-03-27)
-Boris cloned the actual repo (`playoff-scripts` branch) and tried adding the old `/staging/` package from the `main` branch. Build fails because `staging.go` references old model fields/methods that were refactored in `playoff-scripts`:
-
-```
-staging/staging.go:117  token.PassType undefined
-staging/staging.go:127  token.UpdateInUseDraftTokenInDatabase undefined
-staging/staging.go:426  too many arguments in call to models.JoinLeagues
-staging/staging.go:616  unknown field BatchStart in struct literal of type models.DraftLeagueTracker
-staging/staging.go:617  unknown field BatchJackpotHit
-staging/staging.go:618  unknown field BatchHofHitCount
-```
-
-**Richard's Claude analyzed both codebases. Here are the exact fixes for Boris:**
-
-In `~/sbs-drafts-api-deploy/staging/staging.go`:
-
-### Fix 1: `token.PassType` → `token.DraftType`
-```go
-// OLD: token.PassType
-// NEW: token.DraftType
-```
-
-### Fix 2: `token.UpdateInUseDraftTokenInDatabase()` → lowercase + add draftId param
-```go
-// OLD: token.UpdateInUseDraftTokenInDatabase()
-// NEW: token.updateInUseDraftTokenInDatabase(draftId)
-// NOTE: lowercase 'u' — it's a private method now, must be called from within models package
-// If staging.go is in a SEPARATE package, you need to either:
-//   a) Move the staging code into the models package, OR
-//   b) Export the method by capitalizing it in draft-token.go (add: func (t *DraftToken) UpdateInUseDraftTokenInDatabase(draftId string) error { return t.updateInUseDraftTokenInDatabase(draftId) })
-```
-
-### Fix 3: `models.JoinLeagues` — remove speed param
-```go
-// OLD: models.JoinLeagues(ownerId, numLeaguesToJoin, speedType, draftType)
-// NEW: models.JoinLeagues(ownerId, numLeaguesToJoin, draftType)
-// Just remove the speedType argument
-```
-
-### Fix 4: `models.DraftLeagueTracker` — remove batch fields
-```go
-// OLD struct fields that no longer exist:
-//   BatchStart, BatchJackpotHit, BatchHofHitCount
-
-// NEW struct fields available:
-//   CurrentLiveDraftCount int
-//   CurrentSlowDraftCount int (json: currentScheduledDraftCount)
-//   FilledLeaguesCount int
-//   HofLeagueIds []int
-//   JackpotLeagueIds []int
-
-// If staging.go creates a DraftLeagueTracker, just remove the batch fields from the struct literal
-```
-
-**After fixing, deploy:**
-```bash
-cd ~/sbs-drafts-api-deploy
-gcloud run deploy sbs-drafts-api-staging --source . --region us-central1 --project sbs-staging-env
-```
-
-**Verify:**
-```bash
-curl -s -X POST "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/staging/fill-bots/fast?count=1&leagueId=test"
-# Should NOT return 404
-```
-
-## DONE: Firebase RTDB Credentials for Vercel (Boris, 2026-03-27) ✅
-
-### What happened
-Richard's Claude completed the full Firebase RTDB migration — WebSocket replaced with Firebase Realtime DB for draft updates. Everything works, BUT the staging Vercel site (`banana-fantasy-sbs.vercel.app`) uses **prod Firebase credentials** while trying to read the **staging RTDB** (`sbs-staging-env-default-rtdb`). Different Firebase projects = `permission_denied`. The code auto-falls back to WebSocket, but we want Firebase RTDB to work properly.
-
-### Boris — set staging Firebase env vars on Vercel:
-
-**Option A (preferred): Set staging Firebase credentials on Vercel**
-1. Go to https://vercel.com → banana-fantasy project → Settings → Environment Variables
-2. Add/update these for the **Preview** and **Production** environments:
-```
-NEXT_PUBLIC_FIREBASE_API_KEY=<staging Firebase API key from sbs-staging-env>
-NEXT_PUBLIC_AUTH_DOMAIN=sbs-staging-env.firebaseapp.com
-NEXT_PUBLIC_DATABASE_URL=https://sbs-staging-env-default-rtdb.firebaseio.com
-NEXT_PUBLIC_PROJECT_ID=sbs-staging-env
-NEXT_PUBLIC_STORAGE_BUCKET=sbs-staging-env.appspot.com
-NEXT_PUBLIC_MESSAGING_SENDER_ID=<staging sender ID>
-NEXT_PUBLIC_APP_ID=<staging app ID>
-```
-3. Find these values in: Firebase Console → sbs-staging-env → Project Settings → General → Your apps → Web app config
-4. Redeploy after setting vars (or trigger: `curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH"`)
-
-**Option B (quick): Update RTDB rules to allow public read on staging**
-1. Firebase Console → sbs-staging-env → Realtime Database → Rules
-2. Set:
-```json
-{
-  "rules": {
-    "drafts": {
-      ".read": true,
-      ".write": false
-    }
-  }
-}
-```
-This allows any authenticated Firebase client to read draft data (staging only, not prod).
-
-### Boris completed (2026-03-27):
-All 7 staging Firebase env vars set on Vercel Production:
-- `NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyDqT3xD6T-5iUWlf688NZsuFu6CDZFR5cg`
-- `NEXT_PUBLIC_AUTH_DOMAIN=sbs-staging-env.firebaseapp.com`
-- `NEXT_PUBLIC_DATABASE_URL=https://sbs-staging-env-default-rtdb.firebaseio.com`
-- `NEXT_PUBLIC_PROJECT_ID=sbs-staging-env`
-- `NEXT_PUBLIC_STORAGE_BUCKET=sbs-staging-env.firebasestorage.app`
-- `NEXT_PUBLIC_MESSAGING_SENDER_ID=652484219017`
-- `NEXT_PUBLIC_APP_ID=1:652484219017:web:3763f82d12169f0e177658`
-Redeploy triggered. Richard — verify Firebase RTDB works on staging.
-
-## FIXED: /staging/create-special-draft (2026-03-28) ✅
-
-**Problem was:** It searched `draftTokens` collection for tokens with `LeagueId == ""` — but newly minted tokens live in `owners/{wallet}/validDraftTokens`, not in the top-level `draftTokens` collection with that query pattern.
-
-**Fix (deployed v11):** `create-special-draft` now mints a fresh token for each wallet (using `MintDraftTokenInDb`, same as `JoinLeagues` does) instead of searching for pre-minted ones. Each wallet gets a unique token ID like `special-{timestamp}-{index}`.
-
-Richard — retest `POST /staging/create-special-draft` with wallets. Should now properly mint + add players.
-
-## BACKEND FIX NEEDED (Boris): Old String-ID Tokens Crashing Go API
-> **From Richard's session (2026-03-31):** The Go API `/draftToken/all` endpoint crashes with `strconv.Atoi: parsing "staging-1771912537015-4": invalid syntax` because old tokens minted via the deprecated `/staging/mint-tokens/` endpoint have string-based IDs. The frontend now has a Firestore fallback so paid pass counts persist on reload, but the Go API is still broken for this wallet.
-
-**Two options:**
-1. **Clean up old tokens in Firestore** — delete all `staging-*` documents from:
-   - `draftTokens/{staging-*}` (top-level collection)
-   - `owners/{wallet}/validDraftTokens/{staging-*}` (subcollection)
-   - Wallet affected: `0xd3301bc039faf4223da98bceb5fb818c9993620`
-
-2. **Fix Go API to handle non-numeric card IDs** — in the `/draftToken/all` handler, skip tokens where `strconv.Atoi` fails instead of crashing. This is more robust long-term.
-
-**Verify after fix:**
-```bash
-curl -s "https://sbs-drafts-api-staging-652484219017.us-central1.run.app/owner/0xd3301bc039faf4223da98bceb5fb818c9993620/draftToken/all"
-# Should return JSON array, not strconv.Atoi error
-```
-
-## Richard's Session (2026-03-31): Comprehensive Code Review & 46 Bug Fixes
-Richard ran a full code review using Codex + Claude agents. Found and fixed 46 bugs:
-- **5 critical security fixes** (auth bypass on wheel/purchases/withdrawals, forceResult exploit, zero-address guard)
-- **WebSocket overhaul** (reconnect, duplicate connections, event normalization)
-- **State management fixes** (Redux resets, null guards, typed actions)
-- **Performance** (polling 10s→60s, API throttling, abort controllers)
-- **40+ TypeScript errors fixed** — `tsc --noEmit` now passes clean
-- **18 new Playwright security tests** added
-- All changes are on staging only (`banana-fantasy-sbs.vercel.app`)
-
-## Future Tasks (Boris's List)
-> Add items here for Claude to help with later. Just tell Claude to "add X to my list" or "show my list".
-
-1. Jackpot promo
-2. API Integration - Replace mock data with real backend APIs
-3. ~~WebSocket integration~~ → **DONE: Dev replaced WebSocket with Firebase RTDB + Cloud Tasks (see repos/sbs-draft-web and repos/sbs-drafts-api)**
+## When You Ship Something
+- Update this file when you add new conventions, move addresses, change deploy commands, or set do-not-reintroduce rules.
+- Do NOT dump session notes here. Those go in `NOTES-FOR-*.md`.
+- Trim aggressively — if the history is in git log or in the code, don't re-describe it here.
