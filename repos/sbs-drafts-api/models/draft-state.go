@@ -530,7 +530,7 @@ func CreateLeagueDraftStateUponFilling(draftId string, draftType string) error {
 	if strings.ToLower(leagueInfo.DraftType) == "fast" {
 		pickLength = 30
 	} else {
-		pickLength = 60 * 8
+		pickLength = 3600 * 8
 	}
 
 	info, err := CreateDraftInfoForDraft(draftId, pickLength, leagueInfo.CurrentUsers, &leagueInfo)
