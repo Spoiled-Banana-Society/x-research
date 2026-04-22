@@ -406,20 +406,28 @@ export function useDraftingPageState() {
             });
             continue;
           }
-          // Refresh API-sourced fields on existing rows so stale localStorage
-          // (e.g. draftSpeed: 'fast' or type: 'pro' from pre-fix deploys)
-          // gets corrected. Don't clobber in-progress state like phase,
-          // preSpinStartedAt, randomizingStartedAt, engine snapshots, etc.
-          if (existing.phase !== 'drafting' && existing.status !== 'drafting' && !existing.preSpinStartedAt && !existing.randomizingStartedAt) {
+          // Always refresh type / draftSpeed / draftType on rows that haven't
+          // actually transitioned into drafting yet. These fields don't depend
+          // on slot-machine / randomizing animation state, so stale values
+          // from pre-fix deploys should get corrected even if preSpinStartedAt
+          // or randomizingStartedAt happens to be lingering. We only guard
+          // players/status against the drafting-confirmed case so the in-room
+          // flow isn't reverted.
+          const isConfirmedDrafting = existing.phase === 'drafting' || existing.status === 'drafting';
+          if (!isConfirmedDrafting) {
             draftStore.updateDraft(d.id, {
               status: d.status,
               type: d.type,
               draftSpeed: d.draftSpeed,
               players: d.players,
-              // Clear legacy draftType so DraftRow's resolvedType fallthrough
-              // stops promoting stale 'pro' over our fresh null.
               draftType: d.type,
             });
+          } else {
+            // Even for drafting rows, heal speed/type if they were never set.
+            const patch: Partial<typeof existing> = {};
+            if (!existing.draftSpeed || existing.draftSpeed !== d.draftSpeed) patch.draftSpeed = d.draftSpeed;
+            if (existing.type == null && d.type != null) patch.type = d.type;
+            if (Object.keys(patch).length > 0) draftStore.updateDraft(d.id, patch);
           }
         }
         setLiveDrafts(mapped);
