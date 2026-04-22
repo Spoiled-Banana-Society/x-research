@@ -375,11 +375,19 @@ export function useDraftingPageState() {
         const mapped: Draft[] = activeTokens.map((t, i) => {
           const { players, isDrafting } = stateResults[i];
           const draftSpeed: 'fast' | 'slow' = t.leagueId.includes('-slow-') ? 'slow' : 'fast';
+          // Type is only known after the draft fills and the backend classifies
+          // it (slot-machine reveal). While filling, the token still reports
+          // level: "Pro" by default — use null to mark unrevealed so the UI
+          // shows "Unrevealed" instead of lying "PRO ✓ Verified".
+          let type: Draft['type'];
+          if (t.level === 'Jackpot') type = 'jackpot';
+          else if (t.level === 'Hall of Fame') type = 'hof';
+          else type = isDrafting ? 'pro' : null;
           return {
             id: t.leagueId || t.cardId,
             contestName: t.leagueDisplayName || `League #${t.leagueId || t.cardId}`,
             status: isDrafting ? 'drafting' : 'filling',
-            type: t.level === 'Jackpot' ? 'jackpot' : t.level === 'Hall of Fame' ? 'hof' : 'pro',
+            type,
             draftSpeed,
             players,
             maxPlayers: 10,
