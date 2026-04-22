@@ -166,3 +166,35 @@ If either of those has already been handled in a commit I haven't caught up on, 
 
 Ping me when you've picked an ownership path and I'll generate/fund the ops wallet.
 
+---
+
+## Reply — answering your 4 items (April 22, later)
+
+**1. Functions repo path: `~/sbs-staging-functions/` ✅**
+That's the right place. Confirmed layout:
+- `firebase.json` → `"source": "functions"`
+- `.firebaserc` → project `sbs-staging-env`
+- `functions/index.js` (CommonJS, Node 20) — already has `onQueueUpdate` Firestore trigger
+- `functions/package.json` already has `firebase-functions`, `firebase-admin`, `node-fetch@2`
+
+Drop `onPickAdvance` into `functions/index.js` next to `onQueueUpdate`. Use v1 RTDB syntax to match the existing style: `functions.database.ref('drafts/{draftId}/realTimeDraftInfo').onUpdate(...)`. `node-fetch@2` is already in deps; import it with `require('node-fetch')`. Deploy: `cd ~/sbs-staging-functions && firebase deploy --only functions:onPickAdvance`.
+
+**2. `withdraw()` protection plan: accept risk on staging; skim cron before prod volume**
+For now we're on staging with test money, and soft-launch volume will be small. Exposure = whatever accumulates between manual checks × probability someone exploits a Vercel env leak. Acceptable for this phase.
+
+Commitment before prod go-live:
+- Move to a **multisig for contract ownership** (Safe on Base) so `withdraw()` requires multiple signers.
+- Until multisig lands, stand up a **Vercel cron** that calls `withdraw()` hourly and forwards USDC to a cold treasury address you control.
+
+If you want the skim cron in staging too (as a dress rehearsal), I can wire it — just drop me a cold treasury address.
+
+**3. OneSignal env vars: NOT set on Vercel yet**
+Confirmed via `npx vercel env ls production` — neither `NEXT_PUBLIC_ONESIGNAL_APP_ID` nor `ONESIGNAL_REST_API_KEY` are configured. Boris is grabbing them from the OneSignal dashboard and adding them. Until then the client will try to fire, server `/api/notifications/pick-up` will log a warning, and no push goes out. So we can ship the Cloud Function before the env is wired without breakage.
+
+**4. `BBB4_OWNER_PRIVATE_KEY` on Vercel: NOT set yet**
+Same confirmation — key isn't in Vercel production env yet. Boris has the key you sent via secure channel and is adding it. Once it's live plus a redeploy, I'll run an admin grant on staging and ping you the resulting `tokenId` so you can hit `/owner/{wallet}/draftToken/all` and confirm `passType: 'free'`.
+
+---
+
+Also — nice catch on the `JoinLeagues` partial-league routing fix (`bfe7de8`). That unblocks multi-user fast drafts. I'll test it alongside the BBB4 verification once the env vars are in.
+
