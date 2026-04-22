@@ -32,6 +32,8 @@ function mapTokenToCompletedDraft(t: ApiDraftToken): CompletedDraft {
 
   const finalPlace = t.rank ? parseInt(t.rank, 10) : 0;
 
+  const draftSpeed: 'fast' | 'slow' = leagueId.includes('-slow-') ? 'slow' : 'fast';
+
   return {
     id: t.cardId,
     contestName,
@@ -41,7 +43,7 @@ function mapTokenToCompletedDraft(t: ApiDraftToken): CompletedDraft {
     score: t.seasonScore ? Number(t.seasonScore) : 0,
     prizeWon: t.prizes?.USDC ?? 0,
     completedDate: new Date().toISOString(),
-    draftSpeed: 'fast',
+    draftSpeed,
     topPlayers,
   };
 }

@@ -76,6 +76,45 @@ export function useDraftLiveSync({
   const pendingWsMessagesRef = useRef<PendingWsMessage[]>([]);
   const lastWsUpdateRef = useRef<number>(Date.now());
   const lastFirebaseUpdateRef = useRef<number>(Date.now());
+  // Dedup key -> highest pick# we've already fired a push for.
+  // Keyed by `${draftId}:${nextDrafterWallet}` so each drafter gets
+  // at most one push per pick. Server also dedups via Firestore.
+  const lastPickUpPushRef = useRef<Map<string, number>>(new Map());
+
+  // Fire a "your pick is up" push to the next drafter in a slow draft.
+  // Client-side trigger: fires from any tab watching the draft. For users
+  // who close their tab (the common slow-draft case), this alone is not
+  // enough — a Firebase Cloud Function on drafts/{id}/realTimeDraftInfo
+  // changes is needed server-side. Tracked in NOTES-FOR-RICHARD.md.
+  const maybeFirePickUpPush = useCallback(
+    (info: { draftId: string; displayName?: string; pickNumber: number; pickLength: number; currentDrafter: string }) => {
+      if (speedParam !== 'slow') return;
+      if (!info.currentDrafter || !info.draftId) return;
+      const nextWallet = info.currentDrafter.toLowerCase();
+      // Don't push to ourselves — we're already here.
+      if (nextWallet === walletParam.toLowerCase()) return;
+
+      const key = `${info.draftId}:${nextWallet}`;
+      const already = lastPickUpPushRef.current.get(key) ?? -1;
+      if (info.pickNumber <= already) return;
+      lastPickUpPushRef.current.set(key, info.pickNumber);
+
+      fetch('/api/notifications/pick-up', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: nextWallet,
+          draftId: info.draftId,
+          draftName: info.displayName,
+          pickNumber: info.pickNumber,
+          pickLengthSeconds: info.pickLength,
+        }),
+      }).catch(() => {
+        // Best effort; server has Firestore-backed dedup.
+      });
+    },
+    [speedParam, walletParam],
+  );
 
   const firebaseActive = isLiveMode && engineReady && !!draftId;
   const firebaseRtdb = useRealTimeDraftInfo(draftId || null, firebaseActive);
@@ -84,6 +123,17 @@ export function useDraftLiveSync({
     if (!firebaseActive || !firebaseRtdb.data) return;
 
     engine.setFirebaseState(firebaseRtdb.data);
+    // Fire pick-up push based on RTDB transitions too — covers cases where
+    // the WS isn't delivering draft_info_update reliably.
+    if (draftId) {
+      const rtdb = firebaseRtdb.data;
+      maybeFirePickUpPush({
+        draftId,
+        pickNumber: rtdb.pickNumber,
+        pickLength: rtdb.pickLength,
+        currentDrafter: rtdb.currentDrafter,
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data]);
 
@@ -301,6 +351,13 @@ export function useDraftLiveSync({
       }
       engine.handleDraftInfoUpdate(payload as unknown as Parameters<typeof engine.handleDraftInfoUpdate>[0]);
       lastWsUpdateRef.current = Date.now();
+      maybeFirePickUpPush({
+        draftId: payload.draftId,
+        displayName: payload.displayName,
+        pickNumber: payload.pickNumber,
+        pickLength: payload.pickLength,
+        currentDrafter: payload.currentDrafter,
+      });
     },
     onDraftComplete: () => {
       engine.handleDraftComplete();
