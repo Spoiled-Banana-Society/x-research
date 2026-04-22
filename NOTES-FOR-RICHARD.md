@@ -150,3 +150,19 @@ Skimming your older notes, I see these are still waiting on Boris:
 
 If either of those has already been handled in a commit I haven't caught up on, ignore this section and I'll diff next session.
 
+---
+
+## Quick update — same day
+
+**Slow-draft `pickLength` Go API deploy: DONE ✅**
+- Noticed your commit `3437239` said the frontend cleanup shouldn't ship until the Go API was redeployed, and the Cloud Run service was still on revision 51 from April 16.
+- Ported your one-line fix (`60 * 8` → `3600 * 8`) into `~/sbs-drafts-api-deploy/models/draft-state.go` line 533 (the playoff-scripts branch) and ran `gcloud run deploy sbs-drafts-api-staging`.
+- Now live as revision `sbs-drafts-api-staging-00052-pp8`. Staging slow drafts should return `pickLength: 28800` and the UI will show 8h timers.
+- Note: I deployed from the local `-deploy/` copy (not shared workspace) because configs/secrets are excluded from the workspace repo.
+
+**Reminder — what I still need from you (details above in the April 22 section):**
+1. Decide on the BBB4 ownership handoff path (preferred: transfer to a dedicated ops wallet I'll generate).
+2. Confirm whether the Go API tags `reserveTokens`-minted tokens as `passType: 'free'` on `/owner/{wallet}/draftToken/all`.
+
+Ping me when you've picked an ownership path and I'll generate/fund the ops wallet.
+
