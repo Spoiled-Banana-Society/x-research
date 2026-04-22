@@ -94,3 +94,59 @@ Richard, your CLAUDE.md note says the backend needs to be built for guaranteed d
 ```
 https://sbs-drafts-api-staging-652484219017.us-central1.run.app
 ```
+
+---
+
+# Notes for Richard — April 22, 2026
+
+## Free-draft awards now mint real BBB4 NFTs (when env is set)
+
+We're making staging mirror production: every draft pass in the system should be a real on-chain BBB4 NFT, whether the user paid for it or won it. Today, paid mints (USDC + MoonPay card) already go on-chain. Free drafts (admin grants, wheel spins, buy-bonus promo claims) were Firestore-only counters — that's fixed now, but it's gated on two things from you.
+
+**What I shipped (commit `1a8ebf5`):**
+- `lib/onchain/adminMint.ts` — server-side viem `writeContract` that calls `reserveTokens(to, count)` on BBB4.
+- `lib/onchain/passOrigin.ts` — writes `pass_origin/<tokenId>` Firestore docs when we admin-mint, so we can tell spin/grant NFTs apart from paid ones.
+- `app/api/admin/grant-drafts/route.ts`, `app/api/wheel/spin/route.ts`, and the buy-bonus path in `lib/db-firestore.ts` (`claimPromo`) all call the mint lib when `BBB4_OWNER_PRIVATE_KEY` is set, fall back to the legacy `freeDrafts` Firestore counter when it isn't. So nothing breaks on staging while this is unwired.
+- Admin users table now splits **Paid** and **Free** pass counts into separate columns.
+- `components/admin/UsersTable.tsx` + `hooks/admin/useAdminApi.ts` surface the tx hash to the UI when a grant mints on-chain.
+
+## What I need from you (two items)
+
+### 1. Contract ownership handoff
+
+`reserveTokens(address, uint256)` is `onlyOwner`. You deployed BBB4 so your wallet is the owner. Two paths:
+
+**Preferred — transfer ownership to a dedicated ops wallet:**
+- I'll generate a fresh key, fund ~$2 ETH on Base, and store it only in Vercel env as `BBB4_OWNER_PRIVATE_KEY`.
+- You call `transferOwnership(opsWallet)` on `0x14065412b3A431a660e6E576A14b104F1b3E463b` once. Gas on you (<$0.01 on Base).
+- Tradeoff: you lose the ability to call other `onlyOwner` functions (`setBaseURI`, `setPaused`, `flipMintState`, `withdraw`, `setProvenanceHash`) without another handoff. For prod we'd move to a multisig; for staging + soft-launch this is fine.
+
+**Alternative — share the current owner key:**
+- Faster, but we'd both be protecting the same secret. I'd rather not.
+
+Tell me which you prefer and I'll generate the ops wallet and send you the address + funding instructions.
+
+### 2. Confirm the Go API tags `reserveTokens` mints as `passType: 'free'`
+
+The marketplace already has a rule (`components/marketplace/SellTab.tsx:123`, `app/marketplace/page.tsx:331`): a team drafted with a free pass can't be listed until the season closes. That rule keys off `ApiDraftToken.passType === 'free'` coming back from `GET /owner/{wallet}/draftToken/all`.
+
+Question: when the Go API sees an NFT minted via `reserveTokens` (not `mint`), does it correctly tag it as `passType: 'free'`? Two scenarios:
+- **If yes:** we're done — users won't be able to list reserveTokens-origin teams during season, exactly as intended.
+- **If no:** I'll swap the marketplace check to join our `pass_origin` Firestore collection instead. Just a heads up.
+
+Easiest way to confirm: after the ownership handoff, I'll run one admin grant on staging, then you can curl `/owner/{testWallet}/draftToken/all` and tell me whether the new token comes back with `passType: "free"` or `"paid"`.
+
+## Until the key is set
+Admin grants/wheel spins/buy-bonus claims continue to use the legacy `freeDrafts` Firestore counter, so staging flows keep working for you. No rush — just flagging what's blocked on your side.
+
+---
+
+## Your open asks to me — status
+
+Skimming your older notes, I see these are still waiting on Boris:
+
+- **April 14 — `BORIS-GO-API-FIX.md`: league routing in `models/leagues.go` `JoinLeagues()`.** Two wallets joining the same fast draft still land in different leagues because the iteration doesn't prefer partially-filled leagues (1–9 players) over empty ones. I don't see a reply from Boris on this yet.
+- **March 31 (in `CLAUDE.md`) — old string-ID tokens crashing `/owner/.../draftToken/all`.** Tokens minted via the deprecated `/staging/mint-tokens/` have IDs like `staging-1771912537015-4` and trip `strconv.Atoi`. Either clean them up in Firestore or add a skip in the Go handler.
+
+If either of those has already been handled in a commit I haven't caught up on, ignore this section and I'll diff next session.
+
