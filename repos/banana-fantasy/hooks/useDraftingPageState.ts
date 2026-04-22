@@ -342,7 +342,7 @@ export function useDraftingPageState() {
         const tokens: ApiDraftToken[] = Array.isArray(raw) ? raw : [];
 
         const activeTokens = tokens.filter((t) => {
-          if (!t.leagueId || hiddenDraftIds.has(t.leagueId) || hiddenDraftIds.has(t.cardId)) return false;
+          if (!t.leagueId || hiddenDraftIds.has(t.leagueId)) return false;
           if (t.roster) {
             const rosterCount = (t.roster.QB?.length || 0)
               + (t.roster.RB?.length || 0)
@@ -944,8 +944,10 @@ export function useDraftingPageState() {
       if (user?.walletAddress) {
         const tokens = await getOwnerDraftTokens(user.walletAddress);
         for (const t of tokens) {
+          // Only hide by leagueId — cardId is the persistent NFT token which
+          // gets reassigned to future drafts. Hiding by cardId would also
+          // suppress any new draft that reuses the same NFT.
           if (t.leagueId) liveTokenIds.push(t.leagueId);
-          if (t.cardId) liveTokenIds.push(t.cardId);
         }
       }
     } catch {}
