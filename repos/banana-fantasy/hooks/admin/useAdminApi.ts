@@ -186,6 +186,33 @@ export function useAdminDrafts(enabled: boolean) {
   });
 }
 
+export interface ReconcilePassesResponse {
+  success: boolean;
+  wallet: string;
+  beforeCounter: number;
+  afterCounter: number;
+  onChainCount: number;
+  ownedTokenIds: string[];
+  registeredWithGoApi: number;
+  removedFromGoApi: number;
+  requestId?: string;
+}
+export function useReconcilePasses() {
+  const getHeaders = useAdminAuthHeaders();
+  const qc = useQueryClient();
+  return useMutation<ReconcilePassesResponse, AdminApiError, { wallet: string }>({
+    mutationFn: ({ wallet }) =>
+      adminFetch<ReconcilePassesResponse>('/api/admin/reconcile-passes', getHeaders, {
+        method: 'POST',
+        body: JSON.stringify({ wallet }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'audit'] });
+    },
+  });
+}
+
 export interface ZeroFreeDraftsResponse {
   success: boolean;
   zeroedUsers: number;

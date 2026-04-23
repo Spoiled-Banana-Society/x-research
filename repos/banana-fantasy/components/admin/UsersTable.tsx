@@ -8,6 +8,7 @@ import {
   useMarkKycVerified,
   useResetUser,
   useZeroFreeDrafts,
+  useReconcilePasses,
   AdminApiError,
   type AdminUser,
 } from '@/hooks/admin/useAdminApi';
@@ -86,13 +87,14 @@ export function UsersTable({ enabled }: { enabled: boolean }) {
               <th className="px-4 py-3 min-w-[220px]">Grant</th>
               <th className="px-4 py-3">KYC</th>
               <th className="px-4 py-3">Reset</th>
+              <th className="px-4 py-3">Sync</th>
               <th className="px-4 py-3">Ban</th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 && !query.isLoading ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
                   {q ? `No users match "${q}"` : 'No users found'}
                 </td>
               </tr>
@@ -158,9 +160,40 @@ function UserRow({ user }: { user: AdminUser }) {
         <ResetButton userId={user.id} />
       </td>
       <td className="px-4 py-3">
+        <SyncButton wallet={user.walletAddress} />
+      </td>
+      <td className="px-4 py-3">
         <BanButton userId={user.id} banned={user.banned} />
       </td>
     </tr>
+  );
+}
+
+function SyncButton({ wallet }: { wallet: string }) {
+  const reconcile = useReconcilePasses();
+  const { show } = useToast();
+  const handle = async () => {
+    try {
+      const res = await reconcile.mutateAsync({ wallet });
+      show({
+        level: 'success',
+        message: `Synced ${formatWallet(wallet)} — ${res.beforeCounter} → ${res.afterCounter} (on-chain: ${res.onChainCount})`,
+        requestId: res.requestId,
+      });
+    } catch (err) {
+      const e = err as AdminApiError;
+      show({ level: 'error', message: e.message, requestId: e.requestId });
+    }
+  };
+  return (
+    <button
+      onClick={handle}
+      disabled={reconcile.isPending || !/^0x[0-9a-fA-F]{40}$/.test(wallet)}
+      className="px-2 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs disabled:opacity-50"
+      title="Reconcile Firestore + Go API to match on-chain BBB4 ownership"
+    >
+      {reconcile.isPending ? '…' : 'Sync'}
+    </button>
   );
 }
 

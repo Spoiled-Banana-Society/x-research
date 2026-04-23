@@ -9,6 +9,7 @@ import { json, jsonError } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { BASE, BASE_RPC_URL, BBB4_ABI, BBB4_CONTRACT_ADDRESS } from '@/lib/contracts/bbb4';
 import { logger } from '@/lib/logger';
+import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
 
 const USERS_COLLECTION = 'v2_users';
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
@@ -66,21 +67,25 @@ export async function GET(req: Request) {
           args: [userId as Address],
         });
         const onchainN = Number(onchain);
-        if (onchainN > cached.draftPasses) {
-          logger.info('balance.drift_heal', { userId, cached: cached.draftPasses, onchain: onchainN });
-          draftPasses = onchainN;
-          // Self-heal the cache so subsequent reads are fast.
-          await db.collection(USERS_COLLECTION).doc(userId).set(
-            { draftPasses: onchainN, onchainSyncedAt: FieldValue.serverTimestamp() },
-            { merge: true },
-          );
-        } else if (onchainN < cached.draftPasses) {
-          logger.warn('balance.drift_downward', {
+        if (onchainN !== cached.draftPasses) {
+          logger.info('balance.drift_detected', {
             userId,
             cached: cached.draftPasses,
             onchain: onchainN,
-            note: 'cached counter is higher than on-chain — possible transfer out or stale counter',
           });
+          // Fire-and-forget full reconciliation — aligns Firestore + Go API
+          // to on-chain ownership. Doesn't block the current response.
+          // Next balance fetch picks up the reconciled value.
+          void reconcilePassesForWallet(userId).catch((err) => {
+            logger.warn('balance.reconcile_bg_failed', { userId, err: (err as Error).message });
+          });
+          // Return on-chain count immediately for a truthful first paint when
+          // on-chain is HIGHER (newly minted, cache hasn't caught up). For
+          // downward drift (transfer out), keep cached value — the reconciler
+          // will bring it down on the next read once Go API sync completes.
+          if (onchainN > cached.draftPasses) {
+            draftPasses = onchainN;
+          }
         }
       } catch (err) {
         logger.warn('balance.onchain_read_failed', { userId, err: (err as Error).message });
