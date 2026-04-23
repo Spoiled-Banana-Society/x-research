@@ -35,7 +35,10 @@ export async function createListing(
 ): Promise<ListingResult> {
   const signer = await provider.getSigner();
 
-  const seaport = new Seaport(signer, {
+  // See note in offer.ts — ethers ESM/CJS dual-package type mismatch with
+  // Seaport-js. Runtime behavior is identical; this cast silences the
+  // nominal-type clash that trips on cache-skipped npm installs.
+  const seaport = new Seaport(signer as unknown as ConstructorParameters<typeof Seaport>[0], {
     overrides: {
       defaultConduitKey: OPENSEA_CONDUIT_KEY,
       contractAddress: CROSS_CHAIN_SEAPORT_V1_6_ADDRESS,

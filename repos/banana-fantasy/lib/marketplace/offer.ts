@@ -39,7 +39,10 @@ export async function createOffer(
 ): Promise<OfferResult> {
   const signer = await provider.getSigner();
 
-  const seaport = new Seaport(signer, {
+  // Cast: ethers ships dual ESM/CommonJS builds and Seaport-js resolves the
+  // CJS Signer type while the browser provider gives us the ESM one. The two
+  // are runtime-compatible but TypeScript sees them as distinct nominal types.
+  const seaport = new Seaport(signer as unknown as ConstructorParameters<typeof Seaport>[0], {
     overrides: {
       defaultConduitKey: OPENSEA_CONDUIT_KEY,
       contractAddress: CROSS_CHAIN_SEAPORT_V1_6_ADDRESS,
