@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const { user, login, isLoading: authLoading, isEmbeddedWallet } = useAuth();
   const { exportWallet } = useExportWallet();
   const [copiedWallet, setCopiedWallet] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
 
   const PROMO_KEY = 'sbs-first-draft-promo-claimed';
   const promoClaimed = typeof window !== 'undefined' && localStorage.getItem(PROMO_KEY) === 'true';
@@ -127,6 +128,24 @@ export default function ProfilePage() {
             </div>
           </div>
         </motion.div>
+
+        {/* ─── Tabs ─── */}
+        <div className="flex items-center gap-1 mb-5 border-b border-white/[0.06]">
+          <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
+            Overview
+          </TabButton>
+          <TabButton active={activeTab === 'activity'} onClick={() => setActiveTab('activity')}>
+            Activity
+          </TabButton>
+        </div>
+
+        {activeTab === 'activity' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <ActivityHistory userId={user.walletAddress ?? user.id} />
+          </motion.div>
+        )}
+
+        {activeTab === 'overview' && <>
 
         {/* ─── Wallet Balance ─── */}
         <motion.div
@@ -237,15 +256,6 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
-        {/* ─── Activity History ─── */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.18 }}
-        >
-          <ActivityHistory userId={user.walletAddress ?? user.id} />
-        </motion.div>
-
         {/* ─── Promo Status ─── */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -288,7 +298,24 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
+        </>}
+
       </div>
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+        active ? 'text-white' : 'text-white/40 hover:text-white/70'
+      }`}
+    >
+      {children}
+      {active && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-banana" />}
+    </button>
   );
 }
