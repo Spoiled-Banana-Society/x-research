@@ -76,21 +76,22 @@ Still planning Safe multisig for pre-prod — the skim cron is the staging test 
 
 ---
 
-## End-of-day sign-off — April 22
+## April 22 evening — ack on your 4-item shipment
 
-Richard heading out. Saw your Alchemy webhook / `reconcilePasses` commits land while I was syncing — if that's wiring on-chain Transfer events into the Go/Firestore token ledger, it likely addresses the exact tokenId-3/4-don't-appear gap I flagged in the `passType` section above. If so, run another admin grant after the webhook is wired and I'll re-curl the ledger next session to verify the on-chain tokens now show up with origin tags.
+Saw all four land. Thanks — huge night.
 
-Unresolved / waiting on you:
-- `onPickAdvance` Cloud Function to deploy from `functions-for-boris/onPickAdvance.js`
-- Marketplace listing check swap to `pass_origin` Firestore collection (see passType section)
-- `withdraw()` skim cron wiring + pick a cadence; cold treasury `0xC0F982492c323Fcd314af56d6c1A35Cc9b0fC31E`
-- BBB4 Safe multisig plan for pre-prod
+- **JoinLeagues revision 00054-6x7**: noted, multi-user fast drafts should land together now.
+- **onPickAdvance Cloud Function live**: slow-draft push path is fully end-to-end — client trigger on drafts with tabs open, server trigger on closed-tab users. Will verify next session with a real slow-draft pick transition.
+- **Marketplace `pass_origin` overlay via `/api/pass-origin/free-tokens`**: clean solve, skips the Go `passType` field entirely. Didn't touch `SellTab.tsx:123` — good, since the overlay keeps the existing check site working.
+- **USDC skim cron**: hourly at `/api/crons/skim-bbb4-usdc` → BBB4.withdraw() → transfer to `0xC0F982492c323Fcd314af56d6c1A35Cc9b0fC31E`. Audit in Firestore `bbb4_usdc_sweeps`. Noted the CRON_SECRET auth.
+- **Bonus reconciler (`d29afd1`)**: `reserveTokens` mints auto-register into `owners/{wallet}/validDraftTokens` via `/draftToken/mint`. Appreciated.
 
-Richard already shipped today (on main):
-- JoinLeagues partial-league routing (`bfe7de8`) — needs gcloud deploy
-- Drafting page: Unrevealed tag for filling drafts, real type/speed/players parsed from token + API
-- Logged-out users no longer see stale localStorage drafts; cross-wallet isolation
-- Stale-row heal on loadLiveDrafts for legacy `type: 'pro'` entries
-- Slow-draft pick-up push scaffolding (client trigger + `/api/notifications/pick-up` + subscription persistence)
+### `passType` re-curl result
 
-Have a good one.
+Did the sanity re-curl on `0xE7259AddF13489B4fC37EbDE0D8FE523cD38bEd1`. Still no `passType` field returned, and on-chain tokenIds 3/4 still don't appear in the Go ledger for this wallet — only the pre-existing timestamp `cardId`s. That's consistent with your note that the reconciler catches future mints and historical ones need the admin **Sync** button clicked or a fresh grant. Not a problem — marketplace no longer depends on it. Noting for your awareness; we can clean up the test wallet's history on your next admin pass if you want completeness.
+
+### BBB4 Safe multisig — pre-prod plan
+
+Ack, non-urgent. Ping when you want to start the setup — I'll create the Safe (likely 2/3 with you + me + a recovery signer), transfer BBB4 ownership to it, and we migrate the admin-mint flow to route through the Safe's module/delegate path at that point. Staging skim cron is good enough until then.
+
+Nothing blocking on my side. Richard out for the day.
