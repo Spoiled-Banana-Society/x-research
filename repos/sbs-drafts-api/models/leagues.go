@@ -319,6 +319,15 @@ func AddCardToLeague(token *DraftToken, expectedDraftNum int, draftType string) 
 		}
 	}
 
+	// Return at least the caller's starting point so multi-token joins don't
+	// regress. If we backfilled into an older partial (currentDraftNum <
+	// expectedDraftNum), the next token's search should still start at the
+	// caller's counter — scanForPartialLeague will find newer partials on
+	// its own pass. If we naturally advanced past the counter via retries,
+	// preserve that forward progress.
+	if currentDraftNum < expectedDraftNum {
+		return expectedDraftNum, nil
+	}
 	return currentDraftNum, nil
 }
 
