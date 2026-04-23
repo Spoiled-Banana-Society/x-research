@@ -118,6 +118,13 @@ export const BBB4_ABI = [
     ],
     anonymous: false,
   },
+  {
+    type: 'function',
+    stateMutability: 'nonpayable',
+    name: 'withdraw',
+    inputs: [],
+    outputs: [],
+  },
 ] as const satisfies Abi;
 
 export const USDC_ABI = [
@@ -144,6 +151,16 @@ export const USDC_ABI = [
     name: 'approve',
     inputs: [
       { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    stateMutability: 'nonpayable',
+    name: 'transfer',
+    inputs: [
+      { name: 'to', type: 'address' },
       { name: 'amount', type: 'uint256' },
     ],
     outputs: [{ name: '', type: 'bool' }],

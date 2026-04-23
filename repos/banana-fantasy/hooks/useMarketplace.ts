@@ -240,10 +240,13 @@ export function useMyNfts(walletAddress: string | null): UseMyNftsResult {
 
     setIsLoading(true);
     try {
-      // Fetch OpenSea NFTs and SBS backend tokens in parallel
-      const [nftRes, tokens] = await Promise.all([
+      // Fetch OpenSea NFTs, SBS backend tokens, and free-origin tokenIds in parallel
+      const [nftRes, tokens, freeRes] = await Promise.all([
         fetch(`/api/marketplace/nfts?owner=${encodeURIComponent(walletAddress)}`),
         getOwnerDraftTokens(walletAddress).catch(() => [] as ApiDraftToken[]),
+        fetch(`/api/pass-origin/free-tokens?wallet=${encodeURIComponent(walletAddress)}`)
+          .then((r) => (r.ok ? r.json() : { tokenIds: [] }))
+          .catch(() => ({ tokenIds: [] as string[] })),
       ]);
 
       if (!nftRes.ok) throw new Error(`Failed to fetch NFTs: ${nftRes.status}`);
@@ -252,7 +255,15 @@ export function useMyNfts(walletAddress: string | null): UseMyNftsResult {
 
       // Enrich with backend data
       const enriched = enrichWithBackendData(rawNfts, tokens);
-      setData(enriched);
+
+      // Overlay pass_origin free-mint detection. Authoritative for any token
+      // minted via admin grant / spin / promo — takes precedence over the
+      // Go API `passType` field (which is absent for reserveTokens mints).
+      const freeTokenIds = new Set<string>(((freeRes as { tokenIds?: string[] }).tokenIds ?? []).map(String));
+      const finalData = enriched.map((team) =>
+        freeTokenIds.has(String(team.tokenId)) ? { ...team, passType: 'free' as const } : team,
+      );
+      setData(finalData);
       setError(null);
     } catch (err) {
       setError(err);
