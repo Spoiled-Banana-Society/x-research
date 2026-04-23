@@ -38,4 +38,28 @@ Repo: `~/sbs-staging-functions/functions/index.js` — drop next to existing `on
 
 Deduping on the server side is already handled via `notificationsSent/{wallet}__{draftId}__{pickNumber}` so it's safe to call from both client and Cloud Function.
 
-Richard offered to write it — he's just waiting on confirmation of the repo path (given in NOTES-FOR-RICHARD.md April 22 section).
+**Written for you.** Full source at `functions-for-boris/onPickAdvance.js` in this workspace — copy into `~/sbs-staging-functions/functions/` and deploy. Adds a `bot-` owner guard (don't push to bot wallets) and a configurable `PICK_UP_ENDPOINT` env var for staging-vs-prod swapping. Uses `node-fetch@2` and `firebase-functions` v1 style — matches what you said is already in `sbs-staging-functions` deps.
+
+---
+
+## `passType` verification result (April 22)
+
+Curled `0xE7259AddF13489B4fC37EbDE0D8FE523cD38bEd1` per your request. Neither tokenId 3 nor tokenId 4 from your admin grants appears in the Go API's `/owner/.../draftToken/all` response, and **no `passType` field is returned at all** — not "free", not "paid", just absent. Example response entry:
+
+```json
+{ "_draftType": "", "_cardId": "1776199785532", "_level": "Pro" }
+```
+
+Two findings:
+1. The Go API's `cardId` values are Firestore-generated timestamps (`1776199785532`...), not the on-chain NFT `tokenId` (3, 4, ...). So admin-minted on-chain tokens don't appear to be registered in the Go token ledger for this wallet.
+2. `passType` isn't in the response schema at all.
+
+**Action for you:** wire `pass_origin/{tokenId}` Firestore collection into the marketplace listing check (`components/marketplace/SellTab.tsx:123` and `app/marketplace/page.tsx:331`) — the API-based check can't work as-is.
+
+Separate (and probably dev-territory) question: should admin-minted on-chain tokens also land in the Go API's per-wallet token list? Today they don't. If they should, it's a Go API write path that needs adding. If they shouldn't (by design), the marketplace just leans on `pass_origin` and we're done.
+
+---
+
+## `withdraw()` skim — punt for now
+
+Noted your "accept risk on staging, Safe multisig before prod" plan. Skipping the dress-rehearsal cron for now — I'll get you a cold treasury address when we're ready to wire the multisig setup pre-prod.
