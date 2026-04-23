@@ -1,62 +1,73 @@
 export const dynamic = "force-dynamic";
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
-import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
-import { getStagingApiUrl } from '@/lib/staging';
-import { FieldValue } from 'firebase-admin/firestore';
+import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { logActivityEvent } from '@/lib/activityEvents';
 
-const USERS_COLLECTION = 'v2_users';
+const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
 
+/**
+ * POST /api/purchases/staging-mint
+ *
+ * Quick-mint helper for staging testing. Produces REAL BBB4 NFTs on Base
+ * via the `reserveTokens` onlyOwner admin-mint path — same contract call
+ * as admin grants — so the resulting passes are indistinguishable from
+ * the user-paid mint flow as far as on-chain state, Alchemy webhooks,
+ * the live balance endpoint, and activity stream are concerned.
+ *
+ * No card / USDC approve / payment UX — that's the only difference from
+ * the production path. Gated to `NEXT_PUBLIC_ENVIRONMENT === 'staging'`
+ * so it can never unlock free mints in prod.
+ */
 export async function POST(req: Request) {
   if (process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging') {
     return jsonError('Not available in this environment', 403);
   }
+  if (!isAdminMintConfigured()) {
+    return jsonError('Admin mint not configured (BBB4_OWNER_PRIVATE_KEY missing)', 503);
+  }
   try {
     const body = await parseBody(req);
-    const userId = requireString(body.userId, 'userId');
+    const userId = requireString(body.userId, 'userId').toLowerCase();
+    if (!WALLET_REGEX.test(userId)) {
+      return jsonError('userId must be a wallet address', 400);
+    }
 
     const quantityRaw = body.quantity;
     const quantity = typeof quantityRaw === 'number' ? quantityRaw : Number(quantityRaw);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       return jsonError('quantity must be a positive integer', 400);
     }
-
-    // 1. Mint tokens via Go API using the real mint endpoint (numeric IDs).
-    const goApiUrl = getStagingApiUrl();
-    const baseId = Date.now();
-    const mintedTokens: number[] = [];
-    for (let i = 0; i < quantity; i++) {
-      const tokenId = baseId + i;
-      const mintRes = await fetch(`${goApiUrl}/owner/${userId}/draftToken/mint`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minId: tokenId, maxId: tokenId }),
-      });
-      if (!mintRes.ok) {
-        const mintErr = await mintRes.text().catch(() => 'Unknown error');
-        return jsonError(`Go API mint failed (token ${i + 1}/${quantity}): ${mintErr}`, 502);
-      }
-      mintedTokens.push(tokenId);
+    if (quantity > 20) {
+      return jsonError('staging mint capped at 20 per call', 400);
     }
 
-    // 2. Increment draftPasses in Firestore so the count persists on reload
-    if (isFirestoreConfigured()) {
-      try {
-        const db = getAdminFirestore();
-        const userRef = db.collection(USERS_COLLECTION).doc(userId);
-        await userRef.set(
-          { draftPasses: FieldValue.increment(quantity) },
-          { merge: true }
-        );
-      } catch (dbErr) {
-        console.warn('staging-mint: Firestore draftPasses increment failed:', dbErr);
-      }
-    }
+    // Real on-chain mint. The reconciler, Alchemy webhook, and the
+    // /api/owner/balance SSE stream all take it from here — the user's
+    // header ticks the new count within ~200ms of the tx finalizing.
+    const { txHash, tokenIds } = await reserveTokensToWallet({ to: userId, count: quantity });
 
-    return json({ success: true, minted: quantity, tokenIds: mintedTokens }, 200);
+    // Record as an activity event so the live feed and user profile
+    // history pick up staging mints too. Tagged paymentMethod='free' so
+    // they're filterable separately from paid purchases.
+    await logActivityEvent({
+      type: 'pass_purchased',
+      userId,
+      walletAddress: userId,
+      paymentMethod: 'free',
+      quantity,
+      tokenIds,
+      txHash,
+      metadata: {
+        source: 'staging_mint_button',
+        mintedOnChain: true,
+      },
+    });
+
+    return json({ success: true, minted: quantity, tokenIds, txHash }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     console.error('staging-mint error:', err);
-    return jsonError('Internal Server Error', 500);
+    return jsonError((err as Error).message || 'Internal Server Error', 500);
   }
 }

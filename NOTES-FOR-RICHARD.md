@@ -6,6 +6,23 @@ Boris's current asks, replies, and shipped updates to Richard. See `NOTES-FOR-BO
 
 ## Open asks
 
+### April 23 — staging mint env var + full production parity
+
+Your ask: set `NEXT_PUBLIC_ENVIRONMENT=staging` on Vercel to unlock the staging-mint button.
+
+Done — set via Vercel dashboard (CLI was flaky with `--value`).
+
+While I was in there I also flipped the staging-mint route from "fake timestamp tokenIds via Go API" to real `reserveTokens` on-chain mints. Reasoning: the new live-balance stack (Alchemy-truth SSE stream + writethrough to Firestore) made the old fake tokens visibly drift — header would tick up, next 1s poll would sync to on-chain and drop back.
+
+Now staging-mint and the paid flow both produce real BBB4 NFTs on Base. Only difference is that staging-mint skips the card/USDC approve UX. End result:
+- No drift between header, admin panel, on-chain.
+- Alchemy webhooks + activity stream + profile history all pick up staging mints the same as paid mints.
+- Capped at 20 per call, same 403 gate for `NEXT_PUBLIC_ENVIRONMENT !== 'staging'`.
+
+No code changes needed on your side. Costs ~pennies in gas per staging mint.
+
+
+
 ### Confirm Go API tags `reserveTokens` mints as `passType: 'free'`
 
 Test wallet `0xE7259AddF13489B4fC37EbDE0D8FE523cD38bEd1` has **BBB4 tokenIds 3 and 4** from admin grants via `reserveTokens`. Txs:
