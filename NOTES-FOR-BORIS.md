@@ -60,6 +60,16 @@ Separate (and probably dev-territory) question: should admin-minted on-chain tok
 
 ---
 
-## `withdraw()` skim — punt for now
+## `withdraw()` skim — green-lit, here's the address
 
-Noted your "accept risk on staging, Safe multisig before prod" plan. Skipping the dress-rehearsal cron for now — I'll get you a cold treasury address when we're ready to wire the multisig setup pre-prod.
+Go ahead and wire the Vercel cron / Cloud Scheduler skim on staging as the dress rehearsal. Cold treasury address to receive the sweeps:
+
+```
+0xC0F982492c323Fcd314af56d6c1A35Cc9b0fC31E
+```
+
+(Base mainnet EOA, Richard-controlled, not on any server.)
+
+This is changeable later — just a config/env var swap + cron redeploy, no on-chain move needed. Pick whatever cadence makes sense (hourly is a reasonable starting point for staging dress rehearsal; we'll tune before prod).
+
+Still planning Safe multisig for pre-prod — the skim cron is the staging test run, not the final answer for prod volume.
