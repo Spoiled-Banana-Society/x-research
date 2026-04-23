@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useExportWallet } from '@privy-io/react-auth';
 import { SkeletonCard, Skeleton, SkeletonAvatar } from '@/components/ui/Skeleton';
+import { ActivityHistory } from '@/components/profile/ActivityHistory';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -234,6 +235,15 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+        </motion.div>
+
+        {/* ─── Activity History ─── */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.18 }}
+        >
+          <ActivityHistory userId={user.walletAddress ?? user.id} />
         </motion.div>
 
         {/* ─── Promo Status ─── */}

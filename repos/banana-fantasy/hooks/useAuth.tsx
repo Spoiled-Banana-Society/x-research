@@ -288,6 +288,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (a: { type: string; walletClientType?: string; walletClient?: string }) =>
           a.type === 'wallet' && a.walletClientType !== 'privy' && a.walletClient !== 'privy'
       );
+
+      // Record wallet type + device for activity analytics. One-shot per
+      // session — useful denormalized context on every activity event we
+      // write downstream (purchases, spins, grants, etc.).
+      const walletType = hasExternalWallet ? 'privy_external' : 'privy_embedded';
+      fetch('/api/user/metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: walletAddress.toLowerCase(),
+          walletType,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        }),
+      }).catch(() => { /* best-effort analytics */ });
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging') {
         logger.debug('[SBS Auth] hasExternalWallet:', hasExternalWallet);
       }

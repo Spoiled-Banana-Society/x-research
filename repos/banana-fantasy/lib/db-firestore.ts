@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { verifyPurchaseTx } from '@/lib/onchain/verifyPurchaseTx';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
+import { logActivityEvent } from '@/lib/activityEvents';
 import { FieldValue } from 'firebase-admin/firestore';
 import type {
   CompletedDraft,
@@ -387,6 +388,19 @@ export async function claimPromo(userId: string, promoId: string) {
         spinsAdded: result.spinsAdded,
       });
     } catch { /* non-fatal */ }
+
+    await logActivityEvent({
+      type: 'promo_claimed',
+      userId,
+      paymentMethod: 'free',
+      quantity: result.draftPassCount > 0 ? result.draftPassCount : result.spinsAdded,
+      metadata: {
+        promoId,
+        promoType: result.promo.type,
+        spinsAdded: result.spinsAdded,
+        draftPassesAdded: result.draftPassCount,
+      },
+    });
     return result;
   });
 }
@@ -899,6 +913,27 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
       freeDraftsAdded,
       freePassFromRewards,
     };
+  }).then(async (result) => {
+    // Record activity for the paid-mint. Done outside the transaction so
+    // a write failure here never rolls back the user credit.
+    await logActivityEvent({
+      type: 'pass_purchased',
+      userId: prePurchase.userId,
+      walletAddress: expectedFrom,
+      paymentMethod: prePurchase.paymentMethod,
+      quantity: prePurchase.quantity,
+      tokenIds: mintInfo.tokenIds,
+      txHash,
+      metadata: {
+        purchaseId,
+        unitPrice: prePurchase.unitPrice,
+        totalPrice: prePurchase.totalPrice,
+        currency: prePurchase.currency,
+        freeDraftsAdded: result.freeDraftsAdded,
+        spinsAdded: result.spinsAdded,
+      },
+    });
+    return result;
   });
 }
 

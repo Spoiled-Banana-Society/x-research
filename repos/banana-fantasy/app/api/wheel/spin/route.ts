@@ -11,6 +11,7 @@ import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { logActivityEvent } from '@/lib/activityEvents';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
@@ -285,6 +286,25 @@ export async function POST(req: Request) {
         }
       }
     }
+
+    // Activity event — tracks every spin win regardless of prize type so the
+    // admin feed + user history both surface spin outcomes with full context.
+    await logActivityEvent({
+      type: 'spin_won',
+      userId,
+      paymentMethod: 'free',
+      quantity: draftPassCount,
+      tokenIds: mintedTokenIds,
+      txHash: mintTxHash ?? null,
+      metadata: {
+        spinId,
+        prizeType: segment.prizeType,
+        prizeValue: segment.prizeValue,
+        segmentId: segment.id,
+        segmentLabel: segment.label,
+        mintOnChain,
+      },
+    });
 
     // Auto-queue for Jackpot/HOF — happens server-side so it can't be interrupted
     if (segment.prizeType === 'custom' && (segment.prizeValue === 'jackpot' || segment.prizeValue === 'hof')) {

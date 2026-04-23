@@ -17,12 +17,13 @@ import {
 } from '@/hooks/admin/useAdminApi';
 import { UsersTable } from '@/components/admin/UsersTable';
 import { ActivityCombined } from '@/components/admin/ActivityCombined';
+import { LiveActivity } from '@/components/admin/LiveActivity';
 import { MetricsDashboard } from '@/components/admin/MetricsDashboard';
 import { ErrorLog } from '@/components/admin/ErrorLog';
 import { SupportInbox } from '@/components/admin/SupportInbox';
 import { AuditLog } from '@/components/admin/AuditLog';
 
-type TabKey = 'metrics' | 'errors' | 'support' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'activity' | 'audit';
+type TabKey = 'metrics' | 'errors' | 'support' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'live' | 'activity' | 'audit';
 
 interface NavItem {
   key: TabKey;
@@ -38,7 +39,8 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'drafts', label: 'Drafts', group: 'Manage' },
   { key: 'withdrawals', label: 'Withdrawals', group: 'Manage' },
   { key: 'promos', label: 'Promos', group: 'Manage' },
-  { key: 'activity', label: 'Activity', group: 'Records' },
+  { key: 'live', label: 'Live Activity', group: 'Records' },
+  { key: 'activity', label: 'Admin + Signups', group: 'Records' },
   { key: 'audit', label: 'Audit Log', group: 'Records' },
 ];
 
@@ -178,6 +180,7 @@ export default function AdminPage() {
           {activeTab === 'drafts' && <DraftsPanel items={draftsQuery.data?.drafts ?? []} loading={draftsQuery.isLoading} />}
           {activeTab === 'withdrawals' && <WithdrawalsPanel items={withdrawalsQuery.data ?? []} />}
           {activeTab === 'promos' && <PromosPanel items={promosQuery.data?.promos ?? []} />}
+          {activeTab === 'live' && <LiveActivity enabled={isAuthorized} />}
           {activeTab === 'activity' && <ActivityCombined enabled={isAuthorized} />}
           {activeTab === 'audit' && <AuditLog enabled={isAuthorized} />}
         </div>

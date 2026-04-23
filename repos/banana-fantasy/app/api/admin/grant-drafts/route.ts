@@ -11,6 +11,7 @@ import { getRequestId } from '@/lib/requestId';
 import { logAdminAction } from '@/lib/adminAudit';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
+import { logActivityEvent } from '@/lib/activityEvents';
 
 const USERS_COLLECTION = 'v2_users';
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
@@ -161,6 +162,22 @@ export async function POST(req: Request) {
       });
     } catch (notifyErr) {
       logger.warn('admin.grant_drafts.notify_failed', { requestId, err: notifyErr });
+    }
+
+    if (count > 0) {
+      await logActivityEvent({
+        type: 'pass_granted',
+        userId: userDocId,
+        walletAddress: targetWallet,
+        paymentMethod: 'free',
+        quantity: count,
+        tokenIds: mintedTokenIds,
+        txHash: txHash ?? null,
+        metadata: {
+          adminActor: actorWallet.toLowerCase(),
+          mintedOnChain: mintOnChain,
+        },
+      });
     }
 
     logger.info('admin.grant_drafts.ok', {
