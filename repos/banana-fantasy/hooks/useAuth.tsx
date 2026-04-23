@@ -448,41 +448,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { /* silent */ });
   }, [walletAddress]);
 
-  // Fetch wheelSpins / freeDrafts / entries from Firestore on login.
-  // The Go backend (getOwnerUser) doesn't store these, so we need a
-  // separate Firestore read to hydrate them on page load.
-  const balanceFetchedRef = useRef<string | null>(null);
+  // Live balance sync — keeps the header/entry-flow counters always accurate
+  // without the user having to refresh. `/api/owner/balance` reads BBB4
+  // balanceOf on-chain via Alchemy for draftPasses, so this endpoint is the
+  // live source of truth. We refetch:
+  //   - On mount / userId change
+  //   - On window focus (user switches back to the tab)
+  //   - Every 15s in the background (bounded drift window)
   useEffect(() => {
     const userId = user?.id;
-    if (!userId) { balanceFetchedRef.current = null; return; }
-    if (balanceFetchedRef.current === userId) return;
-    balanceFetchedRef.current = userId;
+    if (!userId) return;
 
-    fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && typeof data.wheelSpins === 'number') {
-          setUser(prev => {
-            if (!prev || prev.id !== userId) return prev;
-            const updated = {
-              ...prev,
-              wheelSpins: data.wheelSpins,
-              freeDrafts: data.freeDrafts ?? prev.freeDrafts,
-              jackpotEntries: data.jackpotEntries ?? prev.jackpotEntries,
-              hofEntries: data.hofEntries ?? prev.hofEntries,
-              cardPurchaseCount: data.cardPurchaseCount ?? prev.cardPurchaseCount,
-            };
-            // Fallback: if Go API token fetch failed (draftPasses stuck at 0),
-            // use Firestore draftPasses count — same logic as refreshBalance()
-            if (prev.draftPasses === 0 && typeof data.draftPasses === 'number' && data.draftPasses > 0) {
-              updated.draftPasses = data.draftPasses;
-            }
-            return updated;
-          });
-        }
+    let cancelled = false;
+    const refetch = async () => {
+      try {
+        const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data || typeof data.wheelSpins !== 'number') return;
+        setUser((prev) => {
+          if (!prev || prev.id !== userId) return prev;
+          return {
+            ...prev,
+            wheelSpins: data.wheelSpins ?? prev.wheelSpins,
+            freeDrafts: data.freeDrafts ?? prev.freeDrafts,
+            jackpotEntries: data.jackpotEntries ?? prev.jackpotEntries,
+            hofEntries: data.hofEntries ?? prev.hofEntries,
+            cardPurchaseCount: data.cardPurchaseCount ?? prev.cardPurchaseCount,
+            // draftPasses from /api/owner/balance is on-chain BBB4.balanceOf —
+            // always trust it. No fallback to stale prev state.
+            draftPasses: typeof data.draftPasses === 'number' ? data.draftPasses : prev.draftPasses,
+          };
+        });
         setIsBalanceLoaded(true);
-      })
-      .catch(() => { setIsBalanceLoaded(true); /* silent — don't block auth */ });
+      } catch {
+        // silent — keep existing cached state if fetch fails
+      }
+    };
+
+    refetch();
+    const interval = setInterval(refetch, 15_000);
+    const onFocus = () => { void refetch(); };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
