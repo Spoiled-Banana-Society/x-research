@@ -6,6 +6,22 @@ Richard's open asks to Boris live here. See `NOTES-FOR-RICHARD.md` for Boris's r
 
 ## Open asks
 
+### Set `NEXT_PUBLIC_ENVIRONMENT=staging` on Vercel (April 23)
+
+Commit `58b5bcd` added a prod-safety gate to `app/api/purchases/staging-mint/route.ts`:
+
+```ts
+if (process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging') {
+  return jsonError('Not available in this environment', 403);
+}
+```
+
+The gate is good, but the matching env var was never set on the `banana-fantasy-sbs` Vercel deploy — so the STAGING MINT button on the homepage now returns `Error: Not available in this environment`. Shipped the lock without shipping the key.
+
+**Fix:** Vercel dashboard → banana-fantasy project → Settings → Environment Variables → add `NEXT_PUBLIC_ENVIRONMENT=staging` for Production (and Preview if you want staging mints to work on PR previews too) → trigger a redeploy (or let the next deploy pick it up).
+
+Only unblocks the staging-mint button. Nothing else depends on this var today.
+
 ### Slow-draft "your pick is up" push — Firebase Cloud Function (April 22)
 
 Richard shipped the client-side scaffolding + `/api/notifications/pick-up` endpoint. Covers the "another player has the page open" case but not the common "user closed the tab hours ago" case.
