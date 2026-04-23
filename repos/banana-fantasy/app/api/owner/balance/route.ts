@@ -2,7 +2,6 @@ import { rateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 export const dynamic = 'force-dynamic';
 
 import { createPublicClient, http, type Address } from 'viem';
-import { FieldValue } from 'firebase-admin/firestore';
 
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError } from '@/lib/api/routeUtils';
