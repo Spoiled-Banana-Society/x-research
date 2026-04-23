@@ -16,7 +16,7 @@ import { usePromos } from '@/hooks/usePromos';
 import { wheelSegments, type WheelSegment } from '@/lib/wheelConfig';
 
 export default function BananaWheelPage() {
-  const { user, updateUser, isLoading, isBalanceLoaded, refreshBalance } = useAuth();
+  const { user, updateUser, isLoading, isBalanceLoaded, refreshBalance, refreshBalanceUntil } = useAuth();
   const spinMutation = useSpin(user?.id);
   const promosQuery = usePromos({ userId: user?.id });
   const [queuedJP, setQueuedJP] = React.useState(0);
@@ -55,7 +55,15 @@ export default function BananaWheelPage() {
 
       if (!user || !segment) return;
       if (segment.prizeType === 'draft_pass' && typeof segment.prizeValue === 'number') {
+        const expectedDraftPasses = (user.draftPasses ?? 0) + segment.prizeValue;
         updateUser({ freeDrafts: (user.freeDrafts || 0) + segment.prizeValue });
+        // Live-sync: wait for the reserveTokens mint fired by the spin endpoint
+        // to be visible on-chain, then the UI reflects the new NFT without a
+        // refresh. Self-heals admin panel via Firestore writethrough too.
+        refreshBalanceUntil((b) => b.draftPasses >= expectedDraftPasses, {
+          timeoutMs: 15_000,
+          intervalMs: 1_000,
+        }).catch(() => {});
         pushNotification({
           type: 'promo',
           title: 'Free Drafts Won!',
@@ -89,7 +97,7 @@ export default function BananaWheelPage() {
         });
       }
     },
-    [updateUser, user, refreshBalance],
+    [updateUser, user, refreshBalance, refreshBalanceUntil],
   );
 
   const prizeSummary = useMemo(() => {

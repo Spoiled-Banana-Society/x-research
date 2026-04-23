@@ -30,7 +30,7 @@ export function BuyPassesModal({
   onPurchaseComplete,
 }: BuyPassesModalProps) {
   const _router = useRouter();
-  const { user, walletAddress, updateUser, refreshBalance } = useAuth();
+  const { user, walletAddress, updateUser, refreshBalance, refreshBalanceUntil } = useAuth();
   const { mint, isApproving, isMinting, error: mintError, txHash, tokenPrice, mintActive } = useMintDraftPass();
   const { fundWallet } = useFundWallet({
     onUserExited: ({ balance, fundingMethod }) => {
@@ -95,9 +95,10 @@ export function BuyPassesModal({
     // instead of waiting on the Firestore sync round-trip. Best-in-class crypto
     // UX pattern — never make the user stare at stale counters when the chain
     // has already proven ownership.
+    const expectedDraftPasses = (user?.draftPasses ?? 0) + qty;
     if (user) {
       updateUser({
-        draftPasses: (user.draftPasses ?? 0) + qty,
+        draftPasses: expectedDraftPasses,
       });
     }
 
@@ -133,6 +134,15 @@ export function BuyPassesModal({
         message: 'Your draft pass is in your wallet. The balance display will catch up shortly.',
       });
     }
+    // Live-sync: poll the balance endpoint until the on-chain count reflects
+    // the new mint. Covers the 1–2s window where Alchemy's RPC edge can still
+    // be serving the pre-mint balanceOf even though the tx has finalized.
+    // Self-heals Firestore via the balance endpoint's writethrough, so the
+    // header, admin panel, and any other Firestore-direct reader all converge.
+    await refreshBalanceUntil((b) => b.draftPasses >= expectedDraftPasses, {
+      timeoutMs: 10_000,
+      intervalMs: 1_000,
+    });
     await refreshBalance();
   };
 

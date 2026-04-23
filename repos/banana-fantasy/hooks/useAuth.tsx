@@ -41,6 +41,23 @@ interface AuthContextType {
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   refreshBalance: () => Promise<void>;
+  /**
+   * Poll /api/owner/balance every `intervalMs` until `predicate` returns true
+   * for the latest balance snapshot or `timeoutMs` elapses. Each poll updates
+   * the user state in place so the UI ticks the moment the on-chain truth
+   * catches up — removes the "mint confirmed but balance still shows old"
+   * 1–2s window caused by RPC edge caching.
+   */
+  refreshBalanceUntil: (
+    predicate: (balance: {
+      draftPasses: number;
+      freeDrafts: number;
+      wheelSpins: number;
+      jackpotEntries: number;
+      hofEntries: number;
+    }) => boolean,
+    opts?: { timeoutMs?: number; intervalMs?: number },
+  ) => Promise<boolean>;
   showLoginModal: boolean;
   setShowLoginModal: (show: boolean) => void;
   isEmbeddedWallet: boolean;
@@ -577,6 +594,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [walletAddress, user?.id]);
 
+  const refreshBalanceUntil = useCallback(
+    async (
+      predicate: (balance: {
+        draftPasses: number;
+        freeDrafts: number;
+        wheelSpins: number;
+        jackpotEntries: number;
+        hofEntries: number;
+      }) => boolean,
+      opts: { timeoutMs?: number; intervalMs?: number } = {},
+    ): Promise<boolean> => {
+      const userId = user?.id;
+      if (!userId) return false;
+      const timeoutMs = opts.timeoutMs ?? 10_000;
+      const intervalMs = opts.intervalMs ?? 1_000;
+      const deadline = Date.now() + timeoutMs;
+
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const snapshot = {
+              draftPasses: typeof data.draftPasses === 'number' ? data.draftPasses : 0,
+              freeDrafts: typeof data.freeDrafts === 'number' ? data.freeDrafts : 0,
+              wheelSpins: typeof data.wheelSpins === 'number' ? data.wheelSpins : 0,
+              jackpotEntries: typeof data.jackpotEntries === 'number' ? data.jackpotEntries : 0,
+              hofEntries: typeof data.hofEntries === 'number' ? data.hofEntries : 0,
+            };
+            setUser((prev) => (prev ? { ...prev, ...snapshot } : prev));
+            if (predicate(snapshot)) return true;
+          }
+        } catch {
+          // swallow — retry on next tick
+        }
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      return false;
+    },
+    [user?.id],
+  );
+
   // Trigger Privy's Twitter OAuth linking flow
   // linkTwitter() redirects to Twitter — when user returns, privy.user updates
   // with the new linkedAccount, which our effect above detects and verifies.
@@ -624,6 +683,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         updateUser,
         refreshBalance,
+        refreshBalanceUntil,
         showLoginModal,
         setShowLoginModal,
         isEmbeddedWallet: user?.loginMethod === 'social',
