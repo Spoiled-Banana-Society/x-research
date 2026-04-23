@@ -442,11 +442,23 @@ export function useDraftingPageState() {
     };
   }, [hiddenDraftIds, isLive, user]);
 
+  // Only poll filling drafts that belong to the currently-authenticated wallet.
+  // Legacy rows with no liveWalletAddress are intentionally excluded — a missed
+  // background poll is recoverable on the next mount; misattributing one is
+  // not (see cross-wallet guard on the syncLiveDrafts effect below).
   const fillingLiveDraftIds = useMemo(
-    () => localDrafts
-      .filter(d => d.phase === 'filling' || d.status === 'filling')
-      .map(d => d.id),
-    [localDrafts],
+    () => {
+      const currentWallet = user?.walletAddress?.toLowerCase();
+      if (!currentWallet) return [] as string[];
+      return localDrafts
+        .filter(d =>
+          (d.phase === 'filling' || d.status === 'filling')
+          && d.liveWalletAddress
+          && d.liveWalletAddress.toLowerCase() === currentWallet,
+        )
+        .map(d => d.id);
+    },
+    [localDrafts, user?.walletAddress],
   );
 
   useEffect(() => {
@@ -478,9 +490,20 @@ export function useDraftingPageState() {
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const syncLiveDrafts = async () => {
+      // Wallet-scope every iteration of this loop. Using the auth context's
+      // wallet (not the stale `banana-last-wallet` localStorage the useActiveDrafts
+      // hook reads) so the filter tracks auth state directly. Legacy rows with
+      // no liveWalletAddress are skipped: their promo attribution would be
+      // guessing, and misattributing promo credit across wallets is a real
+      // data-corruption risk, not cosmetic.
+      const currentWallet = user?.walletAddress?.toLowerCase();
+      if (!currentWallet) return;
+
       const allDrafts = draftStore.getActiveDrafts();
       const liveDraftsToSync = allDrafts.filter(
-        d => d.liveWalletAddress && (d.status === 'filling' || d.status === 'drafting' || d.phase === 'drafting'),
+        d => d.liveWalletAddress
+          && d.liveWalletAddress.toLowerCase() === currentWallet
+          && (d.status === 'filling' || d.status === 'drafting' || d.phase === 'drafting'),
       );
 
       for (const draft of liveDraftsToSync) {
@@ -499,7 +522,14 @@ export function useDraftingPageState() {
           const isFull = playerCount >= 10;
           const isPaid = draft.passType !== 'free';
 
-          if (isFull && user?.id && isPaid) {
+          // Promo side-effects: fire only when this draft unambiguously belongs
+          // to the authenticated user. Belt-and-suspenders on top of the outer
+          // wallet filter — if anything leaks through (race during wallet
+          // switch, future refactor), this guard prevents misattribution.
+          const draftOwnedByUser = draft.liveWalletAddress
+            && draft.liveWalletAddress.toLowerCase() === currentWallet;
+
+          if (isFull && user?.id && isPaid && draftOwnedByUser) {
             const trackedKey = `promo-tracked:${draft.id}`;
             if (!localStorage.getItem(trackedKey)) {
               localStorage.setItem(trackedKey, '1');
@@ -638,9 +668,17 @@ export function useDraftingPageState() {
     const serverUrl = getDraftServerUrl() || 'wss://sbs-drafts-server-staging-652484219017.us-central1.run.app';
 
     const syncConnections = () => {
+      // WS connections are opened with the current wallet as the `address` param
+      // — stale connections from a prior wallet would auth against the wrong
+      // user and leak events into the wrong account. Scope by current wallet
+      // and let the effect's cleanup (which re-runs on user.walletAddress
+      // change, see dep at bottom) close prior-wallet connections.
       const allDrafts = draftStore.getActiveDrafts();
       const draftingDrafts = allDrafts.filter(
-        d => d.liveWalletAddress && d.phase === 'drafting' && d.status === 'drafting',
+        d => d.liveWalletAddress
+          && d.liveWalletAddress.toLowerCase() === wallet
+          && d.phase === 'drafting'
+          && d.status === 'drafting',
       );
 
       const activeIds = new Set(draftingDrafts.map(d => d.id));
