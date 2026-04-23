@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useExportWallet } from '@privy-io/react-auth';
 import { SkeletonCard, Skeleton, SkeletonAvatar } from '@/components/ui/Skeleton';
@@ -27,7 +28,14 @@ export default function ProfilePage() {
   const { user, login, isLoading: authLoading, isEmbeddedWallet } = useAuth();
   const { exportWallet } = useExportWallet();
   const [copiedWallet, setCopiedWallet] = useState(false);
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
+
+  // Honor ?tab=activity deep link from the profile dropdown's "Activity →" shortcut.
+  useEffect(() => {
+    const tab = searchParams?.get('tab');
+    if (tab === 'activity' || tab === 'overview') setActiveTab(tab);
+  }, [searchParams]);
 
   const PROMO_KEY = 'sbs-first-draft-promo-claimed';
   const promoClaimed = typeof window !== 'undefined' && localStorage.getItem(PROMO_KEY) === 'true';

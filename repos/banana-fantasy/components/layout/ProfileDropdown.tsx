@@ -141,6 +141,30 @@ export function ProfileDropdown({ onEditProfile }: ProfileDropdownProps) {
             </div>
           </div>
 
+          {/* Pass counts + Activity shortcut */}
+          <div className="px-3 py-2.5 border-b border-bg-tertiary">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-text-muted text-xs uppercase tracking-wider">Your Passes</span>
+              <Link
+                href="/profile?tab=activity"
+                onClick={() => setIsOpen(false)}
+                className="text-[11px] text-banana hover:underline underline-offset-2 flex items-center gap-0.5"
+              >
+                Activity →
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-white/[0.03] px-2.5 py-1.5">
+                <p className="text-[10px] uppercase text-text-muted tracking-wider">Paid</p>
+                <p className="text-text-primary font-bold text-sm tabular-nums">{user.draftPasses ?? 0}</p>
+              </div>
+              <div className="rounded-lg bg-white/[0.03] px-2.5 py-1.5">
+                <p className="text-[10px] uppercase text-text-muted tracking-wider">Free</p>
+                <p className="text-text-primary font-bold text-sm tabular-nums">{user.freeDrafts ?? 0}</p>
+              </div>
+            </div>
+          </div>
+
           {/* Card Purchase Rewards — only show after first card purchase */}
           {(user.cardPurchaseCount || 0) > 0 && <div className="px-3 py-2.5 border-b border-bg-tertiary">
             <div className="flex items-center justify-between mb-1.5">
