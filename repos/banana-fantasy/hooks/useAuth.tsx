@@ -465,53 +465,105 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { /* silent */ });
   }, [walletAddress]);
 
-  // Live balance sync — keeps the header/entry-flow counters always accurate
-  // without the user having to refresh. `/api/owner/balance` reads BBB4
-  // balanceOf on-chain via Alchemy for draftPasses, so this endpoint is the
-  // live source of truth. We refetch:
-  //   - On mount / userId change
-  //   - On window focus (user switches back to the tab)
-  //   - Every 15s in the background (bounded drift window)
+  // Live balance sync — real-time push via Server-Sent Events.
+  //
+  // /api/owner/balance/stream is a long-lived SSE connection. The server
+  // subscribes to Firestore onSnapshot on the user doc with the Admin SDK,
+  // so any write — Alchemy Transfer webhook, balance writethrough, admin
+  // grant, spin mint, promo claim — pushes a fresh payload to the client
+  // within ~200ms of the on-chain event being confirmed.
+  //
+  // Replaces the old 15s polling loop. EventSource auto-reconnects if the
+  // serverless function times out (~55s) or the network blips, so the
+  // connection is effectively permanent from the client's perspective.
+  //
+  // Fallback: if SSE fails repeatedly (e.g. proxy strips streams), the
+  // 15s polling interval kicks back in.
   useEffect(() => {
     const userId = user?.id;
     if (!userId) return;
 
     let cancelled = false;
-    const refetch = async () => {
+    let eventSource: EventSource | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let consecutiveFailures = 0;
+
+    const applyPayload = (data: unknown) => {
+      if (cancelled || !data || typeof data !== 'object') return;
+      const d = data as Record<string, unknown>;
+      if (typeof d.wheelSpins !== 'number') return;
+      setUser((prev) => {
+        if (!prev || prev.id !== userId) return prev;
+        return {
+          ...prev,
+          wheelSpins: (d.wheelSpins as number) ?? prev.wheelSpins,
+          freeDrafts: (d.freeDrafts as number) ?? prev.freeDrafts,
+          jackpotEntries: (d.jackpotEntries as number) ?? prev.jackpotEntries,
+          hofEntries: (d.hofEntries as number) ?? prev.hofEntries,
+          cardPurchaseCount: (d.cardPurchaseCount as number) ?? prev.cardPurchaseCount,
+          draftPasses: typeof d.draftPasses === 'number' ? (d.draftPasses as number) : prev.draftPasses,
+        };
+      });
+      setIsBalanceLoaded(true);
+    };
+
+    const startPollingFallback = () => {
+      if (pollInterval) return;
+      const refetch = async () => {
+        try {
+          const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`);
+          if (res.ok) applyPayload(await res.json());
+        } catch { /* silent */ }
+      };
+      void refetch();
+      pollInterval = setInterval(refetch, 15_000);
+    };
+
+    const connect = () => {
+      if (cancelled || eventSource) return;
       try {
-        const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled || !data || typeof data.wheelSpins !== 'number') return;
-        setUser((prev) => {
-          if (!prev || prev.id !== userId) return prev;
-          return {
-            ...prev,
-            wheelSpins: data.wheelSpins ?? prev.wheelSpins,
-            freeDrafts: data.freeDrafts ?? prev.freeDrafts,
-            jackpotEntries: data.jackpotEntries ?? prev.jackpotEntries,
-            hofEntries: data.hofEntries ?? prev.hofEntries,
-            cardPurchaseCount: data.cardPurchaseCount ?? prev.cardPurchaseCount,
-            // draftPasses from /api/owner/balance is on-chain BBB4.balanceOf —
-            // always trust it. No fallback to stale prev state.
-            draftPasses: typeof data.draftPasses === 'number' ? data.draftPasses : prev.draftPasses,
-          };
-        });
-        setIsBalanceLoaded(true);
+        const es = new EventSource(`/api/owner/balance/stream?userId=${encodeURIComponent(userId)}`);
+        eventSource = es;
+
+        const onMessage = (ev: MessageEvent) => {
+          try { applyPayload(JSON.parse(ev.data)); } catch { /* ignore malformed */ }
+          consecutiveFailures = 0;
+        };
+        es.addEventListener('snapshot', onMessage);
+        es.addEventListener('update', onMessage);
+
+        es.onerror = () => {
+          consecutiveFailures++;
+          // After 3 consecutive failures, fall back to polling. EventSource
+          // keeps trying to reconnect in the background in case it recovers.
+          if (consecutiveFailures >= 3) startPollingFallback();
+        };
       } catch {
-        // silent — keep existing cached state if fetch fails
+        startPollingFallback();
       }
     };
 
-    refetch();
-    const interval = setInterval(refetch, 15_000);
-    const onFocus = () => { void refetch(); };
+    connect();
+    const onFocus = () => {
+      // On focus: if SSE was torn down, reconnect. Otherwise a no-op.
+      if (!eventSource || eventSource.readyState === 2 /* CLOSED */) {
+        eventSource = null;
+        connect();
+      }
+    };
     window.addEventListener('focus', onFocus);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
     };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
