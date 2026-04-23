@@ -75,79 +75,18 @@ export function useDraftLiveSync({
   const pendingWsMessagesRef = useRef<PendingWsMessage[]>([]);
   const lastWsUpdateRef = useRef<number>(Date.now());
   const lastFirebaseUpdateRef = useRef<number>(Date.now());
-  // Per-draft: what currentDrafter we last observed. Used to detect ACTUAL
-  // transitions (vs initial snapshot on tab load / reconnect) so we don't
-  // fire a fresh push every time a spectator refreshes.
-  const lastSeenDrafterRef = useRef<Map<string, string>>(new Map());
-  // Dedup key -> highest pick# we've already fired for. Paired with the
-  // prev-drafter check so the first time we see a non-us drafter we still
-  // only fire once per pick.
-  const lastPickUpPushRef = useRef<Map<string, number>>(new Map());
-
-  // Fire a "your pick is up" push to the next drafter in a slow draft.
-  // Client-side trigger: fires from any tab watching the draft. For users
-  // who close their tab (the common slow-draft case), this alone is not
-  // enough — the Firebase Cloud Function on drafts/{id}/realTimeDraftInfo
-  // changes handles that path server-side.
-  const maybeFirePickUpPush = useCallback(
-    (info: { draftId: string; displayName?: string; pickNumber: number; pickLength: number; currentDrafter: string }) => {
-      if (speedParam !== 'slow') return;
-      if (!info.currentDrafter || !info.draftId) return;
-      const nextWallet = info.currentDrafter.toLowerCase();
-
-      // Initial snapshot path: record who's up and exit without pushing.
-      // A push would be noise — the drafter may have been on the clock for
-      // hours before we connected. Server-side trigger already handled the
-      // real transition when it happened.
-      const prev = lastSeenDrafterRef.current.get(info.draftId);
-      lastSeenDrafterRef.current.set(info.draftId, nextWallet);
-      if (prev === undefined || prev === nextWallet) return;
-
-      // Don't push to ourselves — we're on the page by definition.
-      if (nextWallet === walletParam.toLowerCase()) return;
-
-      // Pick-level dedup so multiple WS/RTDB updates for the same pick
-      // don't spam. Server also dedups via Firestore as a belt.
-      const key = `${info.draftId}:${nextWallet}`;
-      const already = lastPickUpPushRef.current.get(key) ?? -1;
-      if (info.pickNumber <= already) return;
-      lastPickUpPushRef.current.set(key, info.pickNumber);
-
-      fetch('/api/notifications/pick-up', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: nextWallet,
-          draftId: info.draftId,
-          draftName: info.displayName,
-          pickNumber: info.pickNumber,
-          pickLengthSeconds: info.pickLength,
-        }),
-      }).catch(() => {
-        // Best effort; server-side trigger + Firestore dedup cover us.
-      });
-    },
-    [speedParam, walletParam],
-  );
+  // Slow-draft "your pick is up" push fires exclusively server-side via the
+  // Firebase Cloud Function listening on drafts/{id}/realTimeDraftInfo; a
+  // previous client-side trigger here was removed because proving "some
+  // logged-in user" doesn't prove "this push target is legitimate." The
+  // server path with a shared secret is the sole caller of /api/notifications/pick-up.
 
   const firebaseActive = isLiveMode && engineReady && !!draftId;
   const firebaseRtdb = useRealTimeDraftInfo(draftId || null, firebaseActive);
 
   useEffect(() => {
     if (!firebaseActive || !firebaseRtdb.data) return;
-
     engine.setFirebaseState(firebaseRtdb.data);
-    // Fire pick-up push based on RTDB transitions too — covers cases where
-    // the WS isn't delivering draft_info_update reliably.
-    if (draftId) {
-      const rtdb = firebaseRtdb.data;
-      maybeFirePickUpPush({
-        draftId,
-        pickNumber: rtdb.pickNumber,
-        pickLength: rtdb.pickLength,
-        currentDrafter: rtdb.currentDrafter,
-      });
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseActive, firebaseRtdb.data]);
 
@@ -362,13 +301,6 @@ export function useDraftLiveSync({
       }
       engine.handleDraftInfoUpdate(payload as unknown as Parameters<typeof engine.handleDraftInfoUpdate>[0]);
       lastWsUpdateRef.current = Date.now();
-      maybeFirePickUpPush({
-        draftId: payload.draftId,
-        displayName: payload.displayName,
-        pickNumber: payload.pickNumber,
-        pickLength: payload.pickLength,
-        currentDrafter: payload.currentDrafter,
-      });
     },
     onDraftComplete: () => {
       engine.handleDraftComplete();
