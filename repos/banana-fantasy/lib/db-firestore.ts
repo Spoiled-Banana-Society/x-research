@@ -787,8 +787,12 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
     purchase.verifiedAt = nowIso();
     purchase.txHash = txHash;
 
+    // draftPasses is NOT incremented here. On-chain BBB4 balanceOf is the
+    // source of truth — see app/api/owner/balance/route.ts, which reads
+    // Alchemy and writes the count through to Firestore. Dual-writing here
+    // caused drift (counter ballooning across many test purchases, never
+    // decrementing on use).
     const draftPassesAdded = purchase.quantity;
-    user.draftPasses = (user.draftPasses || 0) + draftPassesAdded;
 
     const spinsAdded = calcSpinsForPurchase(purchase.quantity);
     user.wheelSpins = (user.wheelSpins || 0) + spinsAdded;

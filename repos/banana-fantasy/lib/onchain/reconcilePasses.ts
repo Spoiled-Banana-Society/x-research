@@ -196,10 +196,12 @@ export async function reconcilePassesForWallet(wallet: string): Promise<Reconcil
   const registered = await registerTokensWithGoApi(w, missingFromGo);
   const removed = await removeTransferredOutFromGoApi(w, staleInGo);
 
-  // 5. Align Firestore counter. The authoritative "available passes" count is
-  //    what the Go API shows as available after our fixes. Re-read for accuracy.
-  const finalAvailable = await fetchGoApiAvailableTokenIds(w);
-  const afterCounter = finalAvailable.length;
+  // 5. Align Firestore counter. The authoritative count is on-chain
+  //    balanceOf — it's what the user actually holds, regardless of whether
+  //    Go API has caught up yet. Using Go API's "available" count here
+  //    caused the admin panel to show 0 when the user actually had 3 NFTs
+  //    (Go API lagged behind the real on-chain state).
+  const afterCounter = ownedNumericIds.length;
 
   await userRef.set(
     { draftPasses: afterCounter, onchainSyncedAt: FieldValue.serverTimestamp() },

@@ -110,10 +110,17 @@ export function BuyPassesModal({
         method: 'POST',
         body: JSON.stringify({ purchaseId: purchase.id, txHash: hash }),
       });
-      // Server confirmed — replace the optimistic value with authoritative state
-      // (includes any buy-bonus free drafts + wheel spins the user also earned).
+      // Server confirmed — merge buy-bonus free drafts + wheel spins + promo
+      // fields earned alongside the mint. Deliberately DO NOT clobber
+      // `draftPasses` here: on-chain is the source of truth, and the next
+      // refreshBalance() call will pull it from Alchemy. Overwriting with the
+      // Firestore value would cause a flicker (optimistic bump → stale
+      // cached value → real on-chain value).
       if (verifyRes.user) {
-        updateUser(verifyRes.user as Partial<import('@/types').User>);
+        const serverUser = verifyRes.user as Partial<import('@/types').User>;
+        const { draftPasses: _ignore, ...rest } = serverUser;
+        void _ignore;
+        updateUser(rest);
       }
     } catch (err) {
       // Verify failed after a successful on-chain mint. The NFT is real; the

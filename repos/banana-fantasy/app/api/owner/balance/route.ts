@@ -2,6 +2,7 @@ import { rateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 export const dynamic = 'force-dynamic';
 
 import { createPublicClient, http, type Address } from 'viem';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError } from '@/lib/api/routeUtils';
@@ -76,6 +77,17 @@ export async function GET(req: Request) {
             cached: cached.draftPasses,
             onchain: onchainN,
           });
+          // Write on-chain count through to Firestore so admin panel + other
+          // Firestore-direct readers see the correct value without having
+          // to wait for the background reconcile.
+          try {
+            await db.collection(USERS_COLLECTION).doc(userId).set(
+              { draftPasses: onchainN, onchainSyncedAt: FieldValue.serverTimestamp() },
+              { merge: true },
+            );
+          } catch (writeErr) {
+            logger.warn('balance.writethrough_failed', { userId, err: (writeErr as Error).message });
+          }
           // Fire-and-forget full reconciliation — aligns Go API + Firestore.
           // Doesn't block the current response.
           void reconcilePassesForWallet(userId).catch((err) => {
