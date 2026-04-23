@@ -55,11 +55,15 @@ func ReturnAllDraftTokensForOwner(ownerId string) (*UsersTokens, error) {
 	for i := 0; i < len(data); i++ {
 		var token DraftToken
 		data[i].DataTo(&token)
-		res.Available = append(res.Available, token)
 		tokenNum, err := strconv.Atoi(token.CardId)
 		if err != nil {
-			return nil, err
+			// Legacy tokens from the deprecated /staging/mint-tokens endpoint have
+			// non-numeric ids like "staging-1771912537015-4". They have no real
+			// NFT backing — skip them instead of returning 500 for the whole list.
+			fmt.Printf("draftToken/all: skipping non-numeric CardId %q for owner %s\n", token.CardId, ownerId)
+			continue
 		}
+		res.Available = append(res.Available, token)
 
 		// ISSUE this check is brekaing for users with multiple tokens with contract returning no owner
 		// TODO re-implement with more stable web3 connection

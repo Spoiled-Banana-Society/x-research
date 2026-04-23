@@ -703,11 +703,42 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
     throw new ApiError(400, 'This transaction has already been credited to another purchase');
   }
 
-  await verifyPurchaseTx({
+  const mintInfo = await verifyPurchaseTx({
     txHash,
     expectedFrom,
     expectedQuantity: prePurchase.quantity,
   });
+
+  // Record the minted tokenIds in the Go API so `/owner/{wallet}/draftToken/all`
+  // returns them as available passes. BBB4.mint is sequential so tokenIds are
+  // always contiguous within a single tx → minId/maxId range is exact.
+  // Best-effort — if the Go API rejects (e.g. already recorded from a retry),
+  // log and continue. The on-chain mint is the source of truth.
+  try {
+    const ids = mintInfo.tokenIds.map((t) => Number.parseInt(t, 10)).filter((n) => Number.isFinite(n));
+    if (ids.length > 0) {
+      const minId = Math.min(...ids);
+      const maxId = Math.max(...ids);
+      const apiBase = process.env.NEXT_PUBLIC_DRAFTS_API_URL?.trim();
+      if (apiBase) {
+        const res = await fetch(`${apiBase}/owner/${expectedFrom.toLowerCase()}/draftToken/mint`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ minId, maxId }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          logger.warn('verifyPurchase.record_tokens_failed', { status: res.status, body: text.slice(0, 200), txHash });
+        } else {
+          logger.info('verifyPurchase.record_tokens_ok', { minId, maxId, wallet: expectedFrom, txHash });
+        }
+      } else {
+        logger.warn('verifyPurchase.drafts_api_url_missing');
+      }
+    }
+  } catch (err) {
+    logger.warn('verifyPurchase.record_tokens_error', { err: (err as Error).message, txHash });
+  }
 
   return db.runTransaction(async (tx) => {
     const purchaseSnap = await tx.get(purchaseRef);
