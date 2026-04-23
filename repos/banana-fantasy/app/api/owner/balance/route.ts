@@ -51,11 +51,14 @@ export async function GET(req: Request) {
       cardPurchaseCount: (data.cardPurchaseCount as number | undefined) ?? 0,
     };
 
-    // On-chain drift detection + self-heal for draftPasses. Only runs for
-    // real wallet userIds (Privy DIDs get skipped) and only upward — if
-    // on-chain shows MORE NFTs than the counter, heal up. We never heal
-    // downward from this endpoint because "counter > on-chain" could mean
-    // the user transferred out, which needs admin attention, not silent loss.
+    // On-chain is the source of truth for draftPasses. We always read
+    // BBB4.balanceOf via Alchemy and return that — Firestore is a backup
+    // only for when Alchemy is briefly unreachable. This guarantees the
+    // user-facing count matches what's actually in their wallet, with no
+    // stale-cache drift in either direction.
+    //
+    // Background reconciliation still aligns the Go API's per-token ledger
+    // and the Firestore cache so downstream reads stay consistent.
     let draftPasses = cached.draftPasses;
     if (WALLET_REGEX.test(userId)) {
       try {
@@ -66,28 +69,25 @@ export async function GET(req: Request) {
           args: [userId as Address],
         });
         const onchainN = Number(onchain);
+        draftPasses = onchainN;
         if (onchainN !== cached.draftPasses) {
           logger.info('balance.drift_detected', {
             userId,
             cached: cached.draftPasses,
             onchain: onchainN,
           });
-          // Fire-and-forget full reconciliation — aligns Firestore + Go API
-          // to on-chain ownership. Doesn't block the current response.
-          // Next balance fetch picks up the reconciled value.
+          // Fire-and-forget full reconciliation — aligns Go API + Firestore.
+          // Doesn't block the current response.
           void reconcilePassesForWallet(userId).catch((err) => {
             logger.warn('balance.reconcile_bg_failed', { userId, err: (err as Error).message });
           });
-          // Return on-chain count immediately for a truthful first paint when
-          // on-chain is HIGHER (newly minted, cache hasn't caught up). For
-          // downward drift (transfer out), keep cached value — the reconciler
-          // will bring it down on the next read once Go API sync completes.
-          if (onchainN > cached.draftPasses) {
-            draftPasses = onchainN;
-          }
         }
       } catch (err) {
-        logger.warn('balance.onchain_read_failed', { userId, err: (err as Error).message });
+        // Alchemy read failed — fall back to the Firestore cache value.
+        logger.warn('balance.onchain_read_failed_using_cache', {
+          userId,
+          err: (err as Error).message,
+        });
       }
     }
 
