@@ -60,6 +60,37 @@ Separate (and probably dev-territory) question: should admin-minted on-chain tok
 
 ---
 
-## `withdraw()` skim — punt for now
+## `withdraw()` skim — green-lit, here's the address
 
-Noted your "accept risk on staging, Safe multisig before prod" plan. Skipping the dress-rehearsal cron for now — I'll get you a cold treasury address when we're ready to wire the multisig setup pre-prod.
+Go ahead and wire the Vercel cron / Cloud Scheduler skim on staging as the dress rehearsal. Cold treasury address to receive the sweeps:
+
+```
+0xC0F982492c323Fcd314af56d6c1A35Cc9b0fC31E
+```
+
+(Base mainnet EOA, Richard-controlled, not on any server.)
+
+This is changeable later — just a config/env var swap + cron redeploy, no on-chain move needed. Pick whatever cadence makes sense (hourly is a reasonable starting point for staging dress rehearsal; we'll tune before prod).
+
+Still planning Safe multisig for pre-prod — the skim cron is the staging test run, not the final answer for prod volume.
+
+---
+
+## End-of-day sign-off — April 22
+
+Richard heading out. Saw your Alchemy webhook / `reconcilePasses` commits land while I was syncing — if that's wiring on-chain Transfer events into the Go/Firestore token ledger, it likely addresses the exact tokenId-3/4-don't-appear gap I flagged in the `passType` section above. If so, run another admin grant after the webhook is wired and I'll re-curl the ledger next session to verify the on-chain tokens now show up with origin tags.
+
+Unresolved / waiting on you:
+- `onPickAdvance` Cloud Function to deploy from `functions-for-boris/onPickAdvance.js`
+- Marketplace listing check swap to `pass_origin` Firestore collection (see passType section)
+- `withdraw()` skim cron wiring + pick a cadence; cold treasury `0xC0F982492c323Fcd314af56d6c1A35Cc9b0fC31E`
+- BBB4 Safe multisig plan for pre-prod
+
+Richard already shipped today (on main):
+- JoinLeagues partial-league routing (`bfe7de8`) — needs gcloud deploy
+- Drafting page: Unrevealed tag for filling drafts, real type/speed/players parsed from token + API
+- Logged-out users no longer see stale localStorage drafts; cross-wallet isolation
+- Stale-row heal on loadLiveDrafts for legacy `type: 'pro'` entries
+- Slow-draft pick-up push scaffolding (client trigger + `/api/notifications/pick-up` + subscription persistence)
+
+Have a good one.
