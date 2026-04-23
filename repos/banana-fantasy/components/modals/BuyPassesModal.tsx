@@ -89,6 +89,18 @@ export function BuyPassesModal({
   const trackPurchase = async (qty: number, hash: string) => {
     const userId = walletAddress || user?.id;
     if (!userId) return;
+
+    // OPTIMISTIC UI: the on-chain tx has confirmed (we have a hash), which means
+    // the NFT is already in the user's wallet. Reflect it in the UI immediately
+    // instead of waiting on the Firestore sync round-trip. Best-in-class crypto
+    // UX pattern — never make the user stare at stale counters when the chain
+    // has already proven ownership.
+    if (user) {
+      updateUser({
+        draftPasses: (user.draftPasses ?? 0) + qty,
+      });
+    }
+
     try {
       const { purchase } = await fetchJson<{ purchase: { id: string } }>('/api/purchases/create', {
         method: 'POST',
@@ -98,11 +110,21 @@ export function BuyPassesModal({
         method: 'POST',
         body: JSON.stringify({ purchaseId: purchase.id, txHash: hash }),
       });
+      // Server confirmed — replace the optimistic value with authoritative state
+      // (includes any buy-bonus free drafts + wheel spins the user also earned).
       if (verifyRes.user) {
         updateUser(verifyRes.user as Partial<import('@/types').User>);
       }
     } catch (err) {
+      // Verify failed after a successful on-chain mint. The NFT is real; the
+      // counter sync is behind. Log visibly so the user understands their
+      // balance will catch up when the backend reconciles.
       console.warn('[BuyModal] Purchase tracking failed (mint succeeded):', err);
+      pushNotification({
+        type: 'system',
+        title: 'Pass minted but sync delayed',
+        message: 'Your draft pass is in your wallet. The balance display will catch up shortly.',
+      });
     }
     await refreshBalance();
   };

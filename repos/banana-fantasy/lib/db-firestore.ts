@@ -703,11 +703,35 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
     throw new ApiError(400, 'This transaction has already been credited to another purchase');
   }
 
-  const mintInfo = await verifyPurchaseTx({
-    txHash,
-    expectedFrom,
-    expectedQuantity: prePurchase.quantity,
-  });
+  let mintInfo;
+  try {
+    mintInfo = await verifyPurchaseTx({
+      txHash,
+      expectedFrom,
+      expectedQuantity: prePurchase.quantity,
+    });
+  } catch (verifyErr) {
+    // Verify rejected the tx. Surface it so admin can investigate + retry.
+    // If the user's BBB4 balance reflects the mint anyway, this is a sync
+    // issue (not a theft). We record the failure so nothing is silently lost.
+    try {
+      await db.collection('failed_mints').doc(purchaseId).set({
+        purchaseId,
+        userId: prePurchase.userId,
+        wallet: expectedFrom.toLowerCase(),
+        quantity: prePurchase.quantity,
+        txHash,
+        reason: 'verify_rejected',
+        error: (verifyErr as Error)?.message ?? String(verifyErr),
+        createdAt: FieldValue.serverTimestamp(),
+        retryable: true,
+        source: 'purchase_verify',
+      });
+    } catch (logErr) {
+      logger.error('verifyPurchase.failed_mint_record_error', { purchaseId, err: logErr });
+    }
+    throw verifyErr;
+  }
 
   // Record the minted tokenIds in the Go API so `/owner/{wallet}/draftToken/all`
   // returns them as available passes. BBB4.mint is sequential so tokenIds are
