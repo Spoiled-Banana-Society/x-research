@@ -71,9 +71,13 @@ export function useNotificationOptIn() {
       if (permission === 'granted') {
         setIsSubscribed(true);
 
-        // Tag the user with their wallet address for targeted notifications
+        // Tag the user with their wallet address for targeted notifications.
+        // Lowercase so the tag matches what the server sends to OneSignal —
+        // every push route in this app lowercases the walletAddress filter,
+        // and mixed-case tags would silently miss.
         if (walletAddress) {
-          await OneSignal.User.addTag('walletAddress', walletAddress);
+          const normalized = walletAddress.toLowerCase();
+          await OneSignal.User.addTag('walletAddress', normalized);
 
           // Register with our backend
           try {
@@ -82,7 +86,7 @@ export function useNotificationOptIn() {
               await fetch('/api/notifications/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ walletAddress, playerId }),
+                body: JSON.stringify({ walletAddress: normalized, playerId }),
               });
             }
           } catch (err) {

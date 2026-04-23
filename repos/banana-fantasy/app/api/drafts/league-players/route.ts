@@ -51,8 +51,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ numPlayers, players: [] });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[league-players] RTDB error:', msg);
-    return NextResponse.json({ numPlayers: 0, players: [], debug: `error:${msg}` }, { status: 200 });
+    console.error('[league-players] error:', err);
+    return NextResponse.json({ error: 'Failed to read draft state' }, { status: 502 });
   }
 }

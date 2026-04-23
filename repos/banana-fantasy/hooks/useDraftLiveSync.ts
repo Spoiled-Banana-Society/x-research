@@ -9,7 +9,6 @@ import { useDraftEngine } from '@/hooks/useDraftEngine';
 import * as draftApi from '@/lib/draftApi';
 import * as draftStore from '@/lib/draftStore';
 import { isStagingMode, getStagingApiUrl } from '@/lib/staging';
-import { isFirebaseAvailable } from '@/lib/api/firebase';
 import { logger } from '@/lib/logger';
 import type { RoomPhase } from '@/lib/draftRoomConstants';
 import type {
@@ -76,24 +75,39 @@ export function useDraftLiveSync({
   const pendingWsMessagesRef = useRef<PendingWsMessage[]>([]);
   const lastWsUpdateRef = useRef<number>(Date.now());
   const lastFirebaseUpdateRef = useRef<number>(Date.now());
-  // Dedup key -> highest pick# we've already fired a push for.
-  // Keyed by `${draftId}:${nextDrafterWallet}` so each drafter gets
-  // at most one push per pick. Server also dedups via Firestore.
+  // Per-draft: what currentDrafter we last observed. Used to detect ACTUAL
+  // transitions (vs initial snapshot on tab load / reconnect) so we don't
+  // fire a fresh push every time a spectator refreshes.
+  const lastSeenDrafterRef = useRef<Map<string, string>>(new Map());
+  // Dedup key -> highest pick# we've already fired for. Paired with the
+  // prev-drafter check so the first time we see a non-us drafter we still
+  // only fire once per pick.
   const lastPickUpPushRef = useRef<Map<string, number>>(new Map());
 
   // Fire a "your pick is up" push to the next drafter in a slow draft.
   // Client-side trigger: fires from any tab watching the draft. For users
   // who close their tab (the common slow-draft case), this alone is not
-  // enough — a Firebase Cloud Function on drafts/{id}/realTimeDraftInfo
-  // changes is needed server-side. Tracked in NOTES-FOR-RICHARD.md.
+  // enough — the Firebase Cloud Function on drafts/{id}/realTimeDraftInfo
+  // changes handles that path server-side.
   const maybeFirePickUpPush = useCallback(
     (info: { draftId: string; displayName?: string; pickNumber: number; pickLength: number; currentDrafter: string }) => {
       if (speedParam !== 'slow') return;
       if (!info.currentDrafter || !info.draftId) return;
       const nextWallet = info.currentDrafter.toLowerCase();
-      // Don't push to ourselves — we're already here.
+
+      // Initial snapshot path: record who's up and exit without pushing.
+      // A push would be noise — the drafter may have been on the clock for
+      // hours before we connected. Server-side trigger already handled the
+      // real transition when it happened.
+      const prev = lastSeenDrafterRef.current.get(info.draftId);
+      lastSeenDrafterRef.current.set(info.draftId, nextWallet);
+      if (prev === undefined || prev === nextWallet) return;
+
+      // Don't push to ourselves — we're on the page by definition.
       if (nextWallet === walletParam.toLowerCase()) return;
 
+      // Pick-level dedup so multiple WS/RTDB updates for the same pick
+      // don't spam. Server also dedups via Firestore as a belt.
       const key = `${info.draftId}:${nextWallet}`;
       const already = lastPickUpPushRef.current.get(key) ?? -1;
       if (info.pickNumber <= already) return;
@@ -110,7 +124,7 @@ export function useDraftLiveSync({
           pickLengthSeconds: info.pickLength,
         }),
       }).catch(() => {
-        // Best effort; server has Firestore-backed dedup.
+        // Best effort; server-side trigger + Firestore dedup cover us.
       });
     },
     [speedParam, walletParam],
@@ -311,9 +325,6 @@ export function useDraftLiveSync({
     });
   }, [isLiveMode, draftId, walletParam]);
 
-  const useWsParam = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('useWs') === 'true';
-  const firebaseConfigured = typeof window !== 'undefined' && isFirebaseAvailable();
-  const firebaseFailed = firebaseRtdb.hasError;
   // Always enable WS — Firebase RTDB client reads are blocked by security rules on staging.
   // WS provides real-time draft state (timer, current drafter, picks).
   // Firebase can still supplement if it works, but WS is the primary source.
@@ -412,17 +423,17 @@ export function useDraftLiveSync({
 
   useEffect(() => {
     if (!isLiveMode || !draftId) return;
+    // Cross-tab coordination: drafting page skips its own WS/poll for this
+    // draft if our heartbeat is fresh (< 10s old). Contract is a numeric
+    // timestamp. Ownership is handled by always overwriting — last writer
+    // wins, and readers only care about recency, not identity.
     const key = `draft-room-ws:${draftId}`;
-    const ownerToken = Math.random().toString(36);
-    localStorage.setItem(key, ownerToken);
-    const interval = setInterval(() => {
-      localStorage.setItem(key, ownerToken);
-    }, 3_000);
+    const writeHeartbeat = () => localStorage.setItem(key, String(Date.now()));
+    writeHeartbeat();
+    const interval = setInterval(writeHeartbeat, 3_000);
     return () => {
       clearInterval(interval);
-      if (localStorage.getItem(key) === ownerToken) {
-        localStorage.removeItem(key);
-      }
+      localStorage.removeItem(key);
     };
   }, [isLiveMode, draftId]);
 
