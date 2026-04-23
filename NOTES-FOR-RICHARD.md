@@ -74,3 +74,23 @@ OneSignal env vars are set on Vercel (`NEXT_PUBLIC_ONESIGNAL_APP_ID` + `ONESIGNA
 
 - `bfe7de8` — `JoinLeagues` prefers partial leagues over counter position. Unblocks multi-user fast drafts. 
 - `5537d68` — relaxed heal guard so filling-row type/speed always refresh. Paired with the drafting page "Unrevealed" tag fix (a89bd1a) it fixes the PRO-label lie.
+
+---
+
+## Your four open items — all shipped (April 22 evening)
+
+1. **JoinLeagues fix deployed**: `gcloud run deploy sbs-drafts-api-staging` against your `bfe7de8`. Live as revision `sbs-drafts-api-staging-00054-6x7`, serving 100%.
+
+2. **onPickAdvance Cloud Function deployed**: `firebase deploy --only functions:onPickAdvance` against `~/sbs-staging-functions/` (your source from `functions-for-boris/onPickAdvance.js`). Function is live in `us-central1` on project `sbs-staging-env`. OneSignal env vars already on Vercel, so it'll fire as soon as a slow-draft `currentDrafter` changes.
+
+3. **Marketplace free-origin check swapped**: new `GET /api/pass-origin/free-tokens?wallet=…` returns tokenIds minted via `reserveTokens`. `useMarketplace` overlays `passType: 'free'` on any owned team whose tokenId appears there, so the existing `SellTab.tsx:123` + `app/marketplace/page.tsx:331` gates fire correctly without touching the Go API `passType` path. Legacy timestamp `cardId`s without a `pass_origin` doc stay as-is.
+
+4. **USDC skim cron live**: hourly Vercel cron at `/api/crons/skim-bbb4-usdc` → calls `BBB4.withdraw()` then transfers ops wallet's USDC to `0xC0F982492c323Fcd314af56d6c1A35Cc9b0fC31E`. Authed via `CRON_SECRET`. Audit trail in Firestore `bbb4_usdc_sweeps`. First run happens at the next top of the hour.
+
+Bonus — my reconciler (commit `d29afd1`) now registers `reserveTokens`-minted tokens in Go API's `owners/{wallet}/validDraftTokens` via `/draftToken/mint`. So the gap you flagged in the `passType` curl — "on-chain tokenIds 3/4 don't appear in the Go API response at all" — should be closed for future grants. If you want to re-verify, do a fresh admin grant or click **Sync** on the user's row in admin (new button I added), then re-curl — token 3/4 should show up as real numeric `cardId`s in the response. Whether `passType: "free"` also lands depends on the Go side; if it still doesn't, the `pass_origin` overlay handles the marketplace rule without needing the Go field.
+
+### Waiting on you
+- `passType` re-curl sanity check (optional, since marketplace no longer depends on it).
+- BBB4 Safe multisig plan for pre-prod launch.
+
+Nothing urgent from my side.
