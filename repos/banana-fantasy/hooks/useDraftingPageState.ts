@@ -413,6 +413,16 @@ export function useDraftingPageState() {
           // or randomizingStartedAt happens to be lingering. We only guard
           // players/status against the drafting-confirmed case so the in-room
           // flow isn't reverted.
+          // Heal liveWalletAddress on any row where we've confirmed the
+          // current wallet owns this leagueId (the token came back from
+          // /owner/{currentWallet}/draftToken/all). Without this, legacy rows
+          // with no liveWalletAddress stamp get excluded from wallet-scoped
+          // background loops and never receive currentPick/timer updates —
+          // the UI falls back to generic "In progress" forever.
+          const currentWallet = user!.walletAddress!;
+          const needsWalletStamp = !existing.liveWalletAddress
+            || existing.liveWalletAddress.toLowerCase() !== currentWallet.toLowerCase();
+
           const isConfirmedDrafting = existing.phase === 'drafting' || existing.status === 'drafting';
           if (!isConfirmedDrafting) {
             draftStore.updateDraft(d.id, {
@@ -421,12 +431,15 @@ export function useDraftingPageState() {
               draftSpeed: d.draftSpeed,
               players: d.players,
               draftType: d.type,
+              ...(needsWalletStamp ? { liveWalletAddress: currentWallet } : {}),
             });
           } else {
-            // Even for drafting rows, heal speed/type if they were never set.
+            // For rows already drafting, we still heal speed/type if unset
+            // and stamp the wallet so background polls actually run.
             const patch: Partial<typeof existing> = {};
             if (!existing.draftSpeed || existing.draftSpeed !== d.draftSpeed) patch.draftSpeed = d.draftSpeed;
             if (existing.type == null && d.type != null) patch.type = d.type;
+            if (needsWalletStamp) patch.liveWalletAddress = currentWallet;
             if (Object.keys(patch).length > 0) draftStore.updateDraft(d.id, patch);
           }
         }
