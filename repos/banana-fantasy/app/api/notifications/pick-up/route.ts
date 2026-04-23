@@ -1,64 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getPrivyUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
 const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
-// Shared secret for server-to-server callers (the Cloud Function). If unset,
-// the route still accepts authenticated Privy users, but server callers are
-// blocked — set this in Vercel env to enable the backend trigger path.
 const INTERNAL_SECRET = process.env.NOTIFICATIONS_INTERNAL_SECRET;
 const SENT_COLLECTION = 'notificationsSent';
 
 /**
- * Callers must be either:
- *   (a) an authenticated Privy user (client-side trigger from a tab watching
- *       the draft) — we rely on the user being logged in, not on them being
- *       the next drafter, because the current drafter can't push to themself
- *       and dedup handles the rest
- *   (b) an internal server caller presenting the X-Internal-Secret header
- *       (the Cloud Function listening on RTDB)
- * If neither, 401. Prevents a random caller from spamming pushes to any
- * wallet via guessed (draftId, pickNumber) pairs.
- */
-async function authorize(req: NextRequest): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const secretHeader = req.headers.get('x-internal-secret');
-  if (INTERNAL_SECRET && secretHeader && secretHeader === INTERNAL_SECRET) {
-    return { ok: true };
-  }
-  try {
-    await getPrivyUser(req);
-    return { ok: true };
-  } catch {
-    return { ok: false, status: 401, error: 'Unauthorized' };
-  }
-}
-
-/**
  * POST /api/notifications/pick-up
- * Fires a "your pick is up" push to a user via OneSignal, targeted by their
- * lowercased walletAddress tag (set during opt-in).
+ *
+ * SERVER-TO-SERVER ONLY. The only legitimate caller is the Firebase
+ * Cloud Function listening on RTDB `drafts/{id}/realTimeDraftInfo`
+ * transitions; it presents a shared `x-internal-secret` header that
+ * matches `NOTIFICATIONS_INTERNAL_SECRET` on this deploy.
+ *
+ * A client-side caller was previously supported but removed: an authed
+ * user proving "I'm logged in" doesn't prove "this push is legitimate,"
+ * so the client path was an authenticated-spam vector. The server-side
+ * trigger covers all cases including users with tabs closed.
  *
  * Body: {
- *   walletAddress: string,
+ *   walletAddress: string,      // lowercased; OneSignal tag target
  *   draftId: string,
  *   draftName?: string,
- *   pickNumber?: number,      // for dedup; only send once per (wallet, draft, pick)
- *   pickLengthSeconds?: number, // e.g. 28800 for slow; used for push TTL + copy
+ *   pickNumber?: number,        // used for atomic (wallet,draft,pick) dedup
+ *   pickLengthSeconds?: number, // push TTL + copy
  * }
  *
- * Dedup is atomic: we try to CREATE a dedup doc first; if it already exists
- * (concurrent caller got there) we exit early without sending. We then send
- * the push and flag the doc as delivered. A transient OneSignal failure
- * marks the doc as failed instead of poisoning forever, so a retry can
- * still go through after the TTL expires.
+ * Dedup: we try `doc.create()` on `${wallet}__${draft}__${pick}`.
+ *   - If that succeeds, status='pending', we send, then flip to 'sent'.
+ *   - If Firestore returns ALREADY_EXISTS, we read the doc: if status is
+ *     'sent' → skip (real dedup), if status is 'failed' → reset to
+ *     'pending' and retry the send. Any other Firestore error → 502.
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = await authorize(req);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    // Auth: only the Cloud Function (or another trusted server) with the
+    // shared secret may call this. No Privy-user path.
+    if (!INTERNAL_SECRET) {
+      return NextResponse.json(
+        { error: 'NOTIFICATIONS_INTERNAL_SECRET not configured' },
+        { status: 503 },
+      );
+    }
+    const secretHeader = req.headers.get('x-internal-secret');
+    if (!secretHeader || secretHeader !== INTERNAL_SECRET) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
       return NextResponse.json({ error: 'OneSignal not configured' }, { status: 503 });
@@ -77,7 +67,8 @@ export async function POST(req: NextRequest) {
     if (!draftId) return NextResponse.json({ error: 'draftId required' }, { status: 400 });
 
     // Atomic dedup via Firestore create(). Only the first concurrent caller
-    // lands the doc; others bounce out with AlreadyExists.
+    // lands the doc; others bounce out on ALREADY_EXISTS, at which point
+    // we read the existing doc and decide whether to skip or retry.
     let dedupRef: FirebaseFirestore.DocumentReference | null = null;
     if (isFirestoreConfigured() && pickNumber != null) {
       const db = getAdminFirestore();
@@ -91,9 +82,42 @@ export async function POST(req: NextRequest) {
           status: 'pending',
           startedAt: FieldValue.serverTimestamp(),
         });
-      } catch {
-        // AlreadyExists — another caller is handling (or already handled) this pick.
-        return NextResponse.json({ ok: true, deduped: true });
+      } catch (err) {
+        const code = (err as { code?: number | string } | undefined)?.code;
+        // Firestore Admin SDK uses either numeric gRPC codes (6 = ALREADY_EXISTS)
+        // or the string 'already-exists' depending on transport. Anything else
+        // is a real Firestore failure and should not silently dedupe.
+        const isAlreadyExists = code === 6 || code === 'already-exists';
+        if (!isAlreadyExists) {
+          console.error('[pick-up] Firestore create() error (non-dedup):', err);
+          return NextResponse.json({ error: 'Dedup store unavailable' }, { status: 502 });
+        }
+
+        // Existing doc: inspect status to decide skip vs retry.
+        try {
+          const snap = await dedupRef.get();
+          const status = snap.exists ? snap.get('status') : null;
+          if (status === 'sent') {
+            return NextResponse.json({ ok: true, deduped: true });
+          }
+          if (status === 'failed') {
+            // Prior send failed; reopen the slot and proceed.
+            await dedupRef.set(
+              {
+                status: 'pending',
+                retriedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            );
+          } else {
+            // status === 'pending' (or missing): another worker may be in flight.
+            // Don't double-send; report dedup.
+            return NextResponse.json({ ok: true, deduped: true });
+          }
+        } catch (readErr) {
+          console.error('[pick-up] Firestore read after AlreadyExists failed:', readErr);
+          return NextResponse.json({ error: 'Dedup store unavailable' }, { status: 502 });
+        }
       }
     }
 
@@ -138,9 +162,11 @@ export async function POST(req: NextRequest) {
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
         console.error('[pick-up] OneSignal error:', response.status, errorBody);
-        // Flag the dedup doc as failed so a future retry isn't permanently blocked.
         if (dedupRef) {
-          await dedupRef.set({ status: 'failed', failedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+          await dedupRef.set(
+            { status: 'failed', failedAt: FieldValue.serverTimestamp() },
+            { merge: true },
+          ).catch(() => {});
         }
         return NextResponse.json({ error: 'Failed to send notification' }, { status: 502 });
       }
@@ -159,7 +185,10 @@ export async function POST(req: NextRequest) {
     } catch (sendErr) {
       console.error('[pick-up] send threw:', sendErr);
       if (dedupRef) {
-        await dedupRef.set({ status: 'failed', failedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+        await dedupRef.set(
+          { status: 'failed', failedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        ).catch(() => {});
       }
       return NextResponse.json({ error: 'Failed to send notification' }, { status: 502 });
     }

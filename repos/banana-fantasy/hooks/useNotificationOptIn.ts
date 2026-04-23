@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import OneSignal from 'react-onesignal';
+import { usePrivy } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 
 const DISMISSED_KEY = 'sbs_notif_dismissed';
@@ -15,6 +16,7 @@ export type NotifOptInTrigger = 'post-draft' | 'post-purchase' | 'manual';
  */
 export function useNotificationOptIn() {
   const { user } = useAuth();
+  const { getAccessToken } = usePrivy();
   const walletAddress = user?.walletAddress ?? null;
   const [showPrompt, setShowPrompt] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -83,9 +85,13 @@ export function useNotificationOptIn() {
           try {
             const playerId = await OneSignal.User.onesignalId;
             if (playerId) {
+              const token = await getAccessToken();
               await fetch('/api/notifications/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({ walletAddress: normalized, playerId }),
               });
             }
