@@ -11,6 +11,7 @@ import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
 import { logActivityEvent } from '@/lib/activityEvents';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 
@@ -268,6 +269,13 @@ export async function POST(req: Request) {
           txHash: mintTxHash,
           reason: `wheel_spin:${spinId}`,
         });
+        // Synchronous reconcile so the user's header reflects the new pass
+        // immediately. We can't depend on the Alchemy webhook firing.
+        try {
+          await reconcilePassesForWallet(userId);
+        } catch (reconcileErr) {
+          logger.warn('wheel.spin.reconcile_failed', { spinId, userId, err: (reconcileErr as Error).message });
+        }
         logger.info('wheel.spin.mint_ok', { spinId, userId, count: draftPassCount, txHash: mintTxHash, tokenIds: mintedTokenIds });
       } catch (mintErr) {
         logger.error('wheel.spin.mint_failed', { spinId, userId, count: draftPassCount, err: mintErr });

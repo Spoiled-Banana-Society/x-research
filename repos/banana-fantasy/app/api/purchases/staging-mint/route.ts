@@ -2,7 +2,9 @@ export const dynamic = "force-dynamic";
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
 import { logActivityEvent } from '@/lib/activityEvents';
+import { logger } from '@/lib/logger';
 
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
 
@@ -42,10 +44,18 @@ export async function POST(req: Request) {
       return jsonError('staging mint capped at 20 per call', 400);
     }
 
-    // Real on-chain mint. The reconciler, Alchemy webhook, and the
-    // /api/owner/balance SSE stream all take it from here — the user's
-    // header ticks the new count within ~200ms of the tx finalizing.
+    // Real on-chain mint.
     const { txHash, tokenIds } = await reserveTokensToWallet({ to: userId, count: quantity });
+
+    // Synchronous reconcile so Firestore + Go API match on-chain before we
+    // respond. The Alchemy webhook is best-effort (and isn't reliably
+    // configured for staging), so we cannot count on it firing — this
+    // guarantees the next /api/owner/balance read returns the new count.
+    try {
+      await reconcilePassesForWallet(userId);
+    } catch (reconcileErr) {
+      logger.warn('staging-mint.reconcile_failed', { userId, err: (reconcileErr as Error).message });
+    }
 
     // Record as an activity event so the live feed and user profile
     // history pick up staging mints too. Tagged paymentMethod='free' so

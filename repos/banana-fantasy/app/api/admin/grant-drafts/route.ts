@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { getRequestId } from '@/lib/requestId';
 import { logAdminAction } from '@/lib/adminAudit';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
+import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 import { logActivityEvent } from '@/lib/activityEvents';
 
@@ -115,6 +116,17 @@ export async function POST(req: Request) {
         txHash,
         reason: `admin_grant:${actorWallet}`,
       });
+      // Synchronous reconcile — admin sees the new count immediately and we
+      // don't depend on the Alchemy webhook firing.
+      try {
+        await reconcilePassesForWallet(targetWallet);
+      } catch (reconcileErr) {
+        logger.warn('admin.grant_drafts.reconcile_failed', {
+          actor: actorWallet,
+          target: targetWallet,
+          err: (reconcileErr as Error).message,
+        });
+      }
     }
 
     // Counter update — happens whether we minted or fell back. Also ensures the
