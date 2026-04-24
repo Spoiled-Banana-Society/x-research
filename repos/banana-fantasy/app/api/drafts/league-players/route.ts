@@ -7,16 +7,24 @@ const DRAFTS_API_URL = process.env.NEXT_PUBLIC_STAGING_DRAFTS_API_URL
 /**
  * GET /api/drafts/league-players?draftId=xxx
  *
- * Returns the current player count for a draft. Primary source is Firebase
- * RTDB `drafts/{draftId}/numPlayers` which the Go API writes on every join.
+ * Returns the current player count + real-time pick timer info for a draft.
+ * Primary source is Firebase RTDB `drafts/{draftId}/realTimeDraftInfo` which
+ * the Go API updates on every join and every pick — it carries the
+ * authoritative `pickEndTime` (absolute Unix seconds) that the drafting page
+ * needs to render per-row countdowns without racing the draft-room tab's
+ * intermittent store writes.
  *
- * Fallback: RTDB numPlayers is sometimes stale (fill-bots paths don't always
- * update it). Whenever RTDB reports < 10 OR the RTDB read fails entirely, we
- * also check the Go API's /state/info — if it has a full draftOrder and
- * draftStartTime we report 10; otherwise we take max(RTDB, order length).
+ * Fallback: `numPlayers` also available at `drafts/{draftId}/numPlayers` for
+ * drafts that haven't had `realTimeDraftInfo` written yet (filling phase
+ * pre-10/10). Go API `/state/info` is the last-resort fallback when RTDB
+ * reads fail entirely — ensures a transient RTDB outage doesn't take down
+ * the drafting page's polling loops.
  *
- * Only returns 502 when BOTH RTDB and Go /state/info fail or are silent, so a
- * transient RTDB outage doesn't take down the drafting page's filling poll.
+ * Response:
+ *   { numPlayers: number, pickEndTime?: number, pickLength?: number,
+ *     currentDrafter?: string, currentPickNumber?: number }
+ *
+ * Returns 502 only when all sources fail with no usable signal.
  */
 export async function GET(req: NextRequest) {
   const draftId = req.nextUrl.searchParams.get('draftId');
@@ -24,26 +32,44 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing draftId' }, { status: 400 });
   }
 
-  // Step 1 — RTDB read. Any failure here just leaves rtdbPlayers=0 and falls
-  // through to the Go fallback below. Isolated try/catch so it can't short
-  // circuit the route on a transient network/auth blip.
   let rtdbPlayers = 0;
   let rtdbOk = false;
+  let pickEndTime: number | undefined;
+  let pickLength: number | undefined;
+  let currentDrafter: string | undefined;
+  let currentPickNumber: number | undefined;
+
+  // Step 1 — read realTimeDraftInfo from RTDB for the rich timer + drafter
+  // fields. This is the source the draft-room uses in-tab; proxying it here
+  // lets the drafting page stay in sync without a parallel Firebase client.
   try {
     const app = getAdminApp();
-    const credential = app.options.credential;
-    const token = await credential?.getAccessToken();
-    const rtdbUrl = `https://sbs-staging-env-default-rtdb.firebaseio.com/drafts/${encodeURIComponent(draftId)}/numPlayers.json`;
-    const res = await fetch(`${rtdbUrl}?access_token=${token?.access_token}`, { cache: 'no-store' });
+    const token = await app.options.credential?.getAccessToken();
+    const infoUrl = `https://sbs-staging-env-default-rtdb.firebaseio.com/drafts/${encodeURIComponent(draftId)}/realTimeDraftInfo.json`;
+    const res = await fetch(`${infoUrl}?access_token=${token?.access_token}`, { cache: 'no-store' });
     if (res.ok) {
       const val = await res.json();
-      if (typeof val === 'number') {
-        rtdbPlayers = val;
+      if (val && typeof val === 'object') {
+        pickEndTime = typeof val.pickEndTime === 'number' ? val.pickEndTime : undefined;
+        pickLength = typeof val.pickLength === 'number' ? val.pickLength : undefined;
+        currentDrafter = typeof val.currentDrafter === 'string' ? val.currentDrafter : undefined;
+        currentPickNumber = typeof val.currentPickNumber === 'number' ? val.currentPickNumber : undefined;
         rtdbOk = true;
+        // realTimeDraftInfo only exists after draft has started — by definition 10 players.
+        rtdbPlayers = 10;
       } else if (val === null) {
-        // RTDB null = key absent (draft filling hasn't written yet). That's a
-        // normal state, not an error; keep numPlayers=0 and still attempt Go.
+        // realTimeDraftInfo absent — draft still filling. Fall through to numPlayers.
         rtdbOk = true;
+      }
+    }
+
+    // Step 1b — if realTimeDraftInfo was absent (filling phase), read numPlayers separately.
+    if (rtdbPlayers === 0 && rtdbOk) {
+      const numUrl = `https://sbs-staging-env-default-rtdb.firebaseio.com/drafts/${encodeURIComponent(draftId)}/numPlayers.json`;
+      const numRes = await fetch(`${numUrl}?access_token=${token?.access_token}`, { cache: 'no-store' });
+      if (numRes.ok) {
+        const numVal = await numRes.json();
+        if (typeof numVal === 'number') rtdbPlayers = numVal;
       }
     }
   } catch (rtdbErr) {
@@ -52,11 +78,9 @@ export async function GET(req: NextRequest) {
 
   let numPlayers = rtdbPlayers;
 
-  // Step 2 — Go /state/info fallback. Runs when RTDB says <10 (including the
-  // "not yet written" 0 case) OR when the RTDB read itself failed. If Go
-  // shows the draft has started (full draftOrder + draftStartTime) we report
-  // 10 so the drafting page can transition out of filling even if RTDB is
-  // behind. Otherwise we take whichever source is higher.
+  // Step 2 — Go /state/info fallback for numPlayers when RTDB is behind or
+  // silent. Still worth running even when RTDB succeeded but reported <10,
+  // since fill-bots can leave RTDB stale relative to the Go league doc.
   let goOk = false;
   if (numPlayers < 10) {
     try {
@@ -74,21 +98,23 @@ export async function GET(req: NextRequest) {
         }
         goOk = true;
       } else if (infoRes.status === 404) {
-        // Go responded but no draft-state doc exists yet — normal for filling
-        // drafts. We trust the RTDB value in this case (or 0 if it was silent).
-        goOk = true;
+        goOk = true; // draft-state doc not created yet — normal during filling
       }
     } catch (goErr) {
       console.warn('[league-players] Go /state/info fallback failed:', goErr);
     }
   }
 
-  // If both sources failed with no usable signal, 502. Otherwise return
-  // whatever we got — 0 is a valid "draft exists but nobody's joined yet"
-  // signal that callers handle gracefully.
   if (!rtdbOk && !goOk) {
     return NextResponse.json({ error: 'Failed to read draft state' }, { status: 502 });
   }
 
-  return NextResponse.json({ numPlayers, players: [] });
+  return NextResponse.json({
+    numPlayers,
+    players: [],
+    pickEndTime,
+    pickLength,
+    currentDrafter,
+    currentPickNumber,
+  });
 }

@@ -582,8 +582,23 @@ export function useDraftingPageState() {
               continue;
             }
 
+            // /state/info doesn't carry the current pick's absolute
+            // end-timestamp, so fetch it from league-players which proxies
+            // RTDB `realTimeDraftInfo.pickEndTime`. Authoritative source —
+            // overrides any stale value from a previous draft-room write.
+            let rtdbPickEnd: number | undefined;
+            try {
+              const lpRes = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draft.id)}`);
+              if (lpRes.ok) {
+                const lpData = await lpRes.json();
+                if (typeof lpData.pickEndTime === 'number' && lpData.pickEndTime > 0) {
+                  rtdbPickEnd = lpData.pickEndTime;
+                }
+              }
+            } catch { /* ignore — fall back to prior computation */ }
+
             const nowMs = Date.now();
-            const effectivePickEnd = pickEndTimestamp || fresh.pickEndTimestamp;
+            const effectivePickEnd = rtdbPickEnd ?? pickEndTimestamp ?? fresh.pickEndTimestamp;
             const animStillRunning = (() => {
               if (fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
                 return (nowMs - fresh.randomizingStartedAt) < 63000;
