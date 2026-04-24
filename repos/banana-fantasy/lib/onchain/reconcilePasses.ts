@@ -75,7 +75,7 @@ async function fetchOwnedBbb4TokenIds(wallet: string): Promise<string[]> {
  * Reads Go API's current view of a wallet's passes: which tokenIds it has
  * recorded as `available` (unused, mintable for draft entry).
  */
-async function fetchGoApiAvailableTokenIds(wallet: string): Promise<string[]> {
+export async function fetchGoApiAvailableTokenIds(wallet: string): Promise<string[]> {
   const apiBase = (process.env.NEXT_PUBLIC_DRAFTS_API_URL ?? '').trim();
   if (!apiBase) return [];
   const res = await fetch(`${apiBase}/owner/${wallet.toLowerCase()}/draftToken/all`);
@@ -87,6 +87,30 @@ async function fetchGoApiAvailableTokenIds(wallet: string): Promise<string[]> {
   return (body.available ?? [])
     .map((t) => t._cardId ?? t.CardId ?? '')
     .filter((id) => /^\d+$/.test(id));
+}
+
+/**
+ * Returns the Go API's authoritative count of available draft passes for a
+ * wallet, or `null` if the Go API is unreachable / unconfigured. Used by the
+ * balance endpoints so the user-facing pass count comes from the same source
+ * of truth that `getOwnerDraftTokens` uses on the client. A 200 with zero
+ * available tokens returns 0 (not null) — a wallet legitimately has no passes.
+ */
+export async function fetchGoApiAvailableCount(wallet: string): Promise<number | null> {
+  const apiBase = (process.env.NEXT_PUBLIC_DRAFTS_API_URL ?? '').trim();
+  if (!apiBase) return null;
+  try {
+    const res = await fetch(`${apiBase}/owner/${wallet.toLowerCase()}/draftToken/all`);
+    if (!res.ok) {
+      logger.warn('balance.go_api_count_fetch_failed', { wallet, status: res.status });
+      return null;
+    }
+    const body = (await res.json()) as { available?: unknown[] };
+    return Array.isArray(body.available) ? body.available.length : 0;
+  } catch (err) {
+    logger.warn('balance.go_api_count_error', { wallet, err: (err as Error).message });
+    return null;
+  }
 }
 
 /**
