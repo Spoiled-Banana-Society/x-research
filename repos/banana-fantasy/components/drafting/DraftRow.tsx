@@ -126,11 +126,11 @@ export function DraftRow({
             </span>
           ) : isYourTurn ? (
             <span className="text-banana font-bold">
-              {isSpecial
-                ? formatCountdown(draft.pickEndTimestamp ? Math.max(0, draft.pickEndTimestamp - Date.now() / 1000) : (draft.timeRemaining ?? 30))
-                : `${draft.pickEndTimestamp
-                  ? Math.max(0, Math.ceil(draft.pickEndTimestamp - Date.now() / 1000))
-                  : (draft.timeRemaining ?? 30)}s`}
+              {formatCountdown(
+                draft.pickEndTimestamp
+                  ? Math.max(0, draft.pickEndTimestamp - Date.now() / 1000)
+                  : (draft.timeRemaining ?? 30)
+              )}
             </span>
           ) : draft.currentPick != null ? (
             <span className="text-white/50 text-sm">
