@@ -602,13 +602,19 @@ function DraftRoomContent() {
       currentPick: engine.turnsUntilUserPick,
       totalPicks: engine.picks.length,
       isYourTurn: engine.isUserTurn,
-      timeRemaining: engine.isUserTurn ? engine.timeRemaining : undefined,
-      pickEndTimestamp: engine.isUserTurn ? Math.ceil(Date.now() / 1000) + (engine.timeRemaining || 0) : undefined,
+      // Use bestTimeRemaining (max of WS/Firebase RTDB) rather than
+      // engine.timeRemaining, which is often initialized to the full
+      // pickLength before the first server update arrives. For a slow
+      // draft that's hours in, writing now + pickLength to the store
+      // meant the drafting-page row showed a freshly-reset ~8h countdown
+      // instead of the real 2–3h remaining.
+      timeRemaining: engine.isUserTurn ? bestTimeRemaining : undefined,
+      pickEndTimestamp: engine.isUserTurn ? Math.ceil(Date.now() / 1000) + (bestTimeRemaining || 0) : undefined,
       enginePicks: engine.picks,
       enginePickNumber: engine.currentPickNumber,
       engineQueue: engine.queuedPlayers,
     });
-  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
+  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, bestTimeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
 
   const getPersistId = () => draftId || urlDraftId;
 
