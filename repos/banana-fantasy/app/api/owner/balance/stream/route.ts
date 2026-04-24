@@ -1,4 +1,5 @@
 import { createPublicClient, http, type Address } from 'viem';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { BASE, BASE_RPC_URL, BBB4_ABI, BBB4_CONTRACT_ADDRESS } from '@/lib/contracts/bbb4';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
@@ -31,14 +32,27 @@ interface BalancePayload {
 function buildPayload(data: Record<string, unknown> | undefined, onchainPasses: number | null): BalancePayload {
   const d = data ?? {};
   const cachedPasses = (d.draftPasses as number | undefined) ?? 0;
+  // Resilient draft-pass selection:
+  //   - If on-chain read failed (null), trust the Firestore cache.
+  //   - If on-chain read succeeded, take max(on-chain, cached).
+  //
+  // Why max: Alchemy's RPC edge occasionally serves a *previous* block's
+  // balanceOf for a brief window after a tx finalizes — we'd see a stale
+  // smaller number. Firestore is kept up-to-date by the Alchemy Transfer
+  // webhook (writes both directions: increases on mint, decreases on
+  // transfer-out) plus the writethrough below, so the cached value is a
+  // trustworthy floor. Taking max prevents flicker without ever showing
+  // a stale-up count: a real transfer-out lands in the webhook → Firestore
+  // decreases → next on-chain read also lower → max is correct.
+  const draftPasses = onchainPasses == null
+    ? cachedPasses
+    : Math.max(onchainPasses, cachedPasses);
   return {
     wheelSpins: (d.wheelSpins as number | undefined) ?? 0,
     freeDrafts: (d.freeDrafts as number | undefined) ?? 0,
     jackpotEntries: (d.jackpotEntries as number | undefined) ?? 0,
     hofEntries: (d.hofEntries as number | undefined) ?? 0,
-    // Prefer on-chain when available; fall back to Firestore cache. On-chain
-    // is always the authoritative source for BBB4 pass ownership.
-    draftPasses: onchainPasses ?? cachedPasses,
+    draftPasses,
     cardPurchaseCount: (d.cardPurchaseCount as number | undefined) ?? 0,
   };
 }
@@ -119,24 +133,61 @@ export async function GET(req: Request) {
         }
       };
 
-      // 1. Initial snapshot — combine Firestore + on-chain for immediate truth.
+      // 1. Initial snapshot — read on-chain ONCE here. We never read it
+      //    again in this stream's lifetime. Firestore is kept current by
+      //    (a) the Alchemy Transfer webhook on every BBB4 transfer in/out,
+      //    (b) the on-mint writethrough below when on-chain > cached, and
+      //    (c) the standalone /api/owner/balance writethrough on any GET.
+      //    So the onSnapshot fires below send Firestore data verbatim — no
+      //    additional Alchemy calls that could race with each other and
+      //    cause the count to bounce.
+      let firstSnapshotSent = false;
       try {
         const [snap, onchainPasses] = await Promise.all([userRef.get(), readOnchain()]);
         const data = snap.exists ? (snap.data() ?? {}) : {};
+        const cachedPasses = (data.draftPasses as number | undefined) ?? 0;
+
+        // If on-chain is strictly higher than Firestore, a webhook may have
+        // missed a recent mint — write it through so subsequent onSnapshot
+        // events show the right value, and so the admin panel + any other
+        // Firestore-direct reader sees the same number.
+        if (onchainPasses != null && onchainPasses > cachedPasses) {
+          try {
+            await userRef.set(
+              { draftPasses: onchainPasses, onchainSyncedAt: FieldValue.serverTimestamp() },
+              { merge: true },
+            );
+          } catch (writeErr) {
+            logger.warn('balance.stream.writethrough_failed', { userId, err: (writeErr as Error).message });
+          }
+        }
+
         send('snapshot', buildPayload(data, onchainPasses));
+        firstSnapshotSent = true;
       } catch (err) {
         logger.warn('balance.stream.initial_failed', { userId, err: (err as Error).message });
       }
 
-      // 2. Real-time Firestore listener on the user doc. Fires the microsecond
-      //    an Alchemy webhook / balance writethrough / admin action changes the
-      //    doc. Each change triggers a fresh on-chain read so draftPasses
-      //    always reflects truth, not a stale Firestore counter.
+      // 2. Real-time Firestore listener. Each change pushes a fresh payload.
+      //    We DON'T re-read on-chain here — Firestore is the single
+      //    authoritative source within this connection's lifetime. This
+      //    eliminates the race where two near-simultaneous Alchemy reads
+      //    could land on different RPC edge caches and clobber each other.
       const unsubscribe = userRef.onSnapshot(
-        async (snap) => {
+        (snap) => {
+          // Skip the very first onSnapshot fire — Firestore always emits
+          // an initial value when subscribing, but we already sent that
+          // above as the `snapshot` event. Without this guard the client
+          // would see snapshot → identical update in rapid succession.
+          if (!firstSnapshotSent) {
+            firstSnapshotSent = true;
+            return;
+          }
           const data = snap.exists ? (snap.data() ?? {}) : {};
-          const onchainPasses = await readOnchain();
-          send('update', buildPayload(data, onchainPasses));
+          // Pass null for onchainPasses so buildPayload falls back to the
+          // Firestore cached value. Firestore is the authoritative source
+          // for the connection's lifetime — no per-update Alchemy read.
+          send('update', buildPayload(data, null));
         },
         (err) => {
           logger.warn('balance.stream.snapshot_err', { userId, err: err.message });

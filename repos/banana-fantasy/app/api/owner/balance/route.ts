@@ -60,6 +60,16 @@ export async function GET(req: Request) {
     //
     // Background reconciliation still aligns the Go API's per-token ledger
     // and the Firestore cache so downstream reads stay consistent.
+    //
+    // Resilience: take max(on-chain, cache) for the user-facing value. The
+    // Alchemy RPC edge occasionally serves a stale block's balanceOf for
+    // 1–2s after a tx finalizes — without max we'd flicker the count down
+    // briefly. Firestore is kept current by the Alchemy Transfer webhook
+    // (handles both directions), so the cached value is a trustworthy
+    // floor. Real transfer-outs land in the webhook → Firestore decreases
+    // → both sides agree → max returns the correct lower value. The only
+    // failure mode (webhook miss + real transfer) is recovered by the
+    // reconciler.
     let draftPasses = cached.draftPasses;
     if (WALLET_REGEX.test(userId)) {
       try {
@@ -70,16 +80,18 @@ export async function GET(req: Request) {
           args: [userId as Address],
         });
         const onchainN = Number(onchain);
-        draftPasses = onchainN;
-        if (onchainN !== cached.draftPasses) {
+        draftPasses = Math.max(onchainN, cached.draftPasses);
+
+        // Writethrough only when on-chain is strictly HIGHER — that's the
+        // signal that a webhook missed a recent mint. We never ratchet
+        // Firestore down from a single on-chain read; that's the webhook's
+        // job, and a transient Alchemy hiccup must not lose a real pass.
+        if (onchainN > cached.draftPasses) {
           logger.info('balance.drift_detected', {
             userId,
             cached: cached.draftPasses,
             onchain: onchainN,
           });
-          // Write on-chain count through to Firestore so admin panel + other
-          // Firestore-direct readers see the correct value without having
-          // to wait for the background reconcile.
           try {
             await db.collection(USERS_COLLECTION).doc(userId).set(
               { draftPasses: onchainN, onchainSyncedAt: FieldValue.serverTimestamp() },
@@ -88,8 +100,7 @@ export async function GET(req: Request) {
           } catch (writeErr) {
             logger.warn('balance.writethrough_failed', { userId, err: (writeErr as Error).message });
           }
-          // Fire-and-forget full reconciliation — aligns Go API + Firestore.
-          // Doesn't block the current response.
+          // Fire-and-forget reconciliation — aligns Go API + Firestore.
           void reconcilePassesForWallet(userId).catch((err) => {
             logger.warn('balance.reconcile_bg_failed', { userId, err: (err as Error).message });
           });
