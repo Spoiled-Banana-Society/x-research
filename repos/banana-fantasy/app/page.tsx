@@ -219,6 +219,10 @@ export default function HomePage() {
         maxPlayers: 10,
         joinedAt: Date.now(),
         phase: 'filling',
+        // Stamp the wallet so this draft passes useActiveDrafts' strict
+        // wallet filter. Without it the draft would be auto-purged on the
+        // next page load as legacy/unattributable.
+        liveWalletAddress: user.walletAddress,
       });
       router.push(buildDraftRoomUrl(localDraftId, localContestName, speed));
     }
