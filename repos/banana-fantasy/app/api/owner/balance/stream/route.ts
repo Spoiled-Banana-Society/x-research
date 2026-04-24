@@ -4,7 +4,6 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { BASE, BASE_RPC_URL, BBB4_ABI, BBB4_CONTRACT_ADDRESS } from '@/lib/contracts/bbb4';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { fetchGoApiAvailableCount } from '@/lib/onchain/reconcilePasses';
 
 export const dynamic = 'force-dynamic';
 // SSE must run on the Node runtime (edge lacks firebase-admin).
@@ -32,31 +31,19 @@ interface BalancePayload {
 
 function buildPayload(
   data: Record<string, unknown> | undefined,
-  goApiPasses: number | null,
   onchainPasses: number | null,
 ): BalancePayload {
   const d = data ?? {};
   const cachedPasses = (d.draftPasses as number | undefined) ?? 0;
-  // Source-of-truth order for draftPasses:
-  //   1. Go API "available" count — what the user can actually spend right
-  //      now. Matches what getOwnerUser reads on the client. Handles staging
-  //      mints (which never touch on-chain or Firestore) and prod mints
-  //      (Go API is updated via webhook reconciliation).
-  //   2. If Go API is unreachable, fall back to max(on-chain, cached).
-  //   3. If on-chain also unreachable, fall back to cached Firestore.
-  //
-  // The old `max(on-chain, cached)` rule was unsafe because (a) on-chain
-  // counts used + unused NFTs (BBB4 doesn't burn on use), and (b) staging
-  // mints leave Firestore untouched, so the cache could ratchet upward
-  // from prior testing and never come back down.
-  let draftPasses: number;
-  if (goApiPasses != null) {
-    draftPasses = goApiPasses;
-  } else if (onchainPasses != null) {
-    draftPasses = Math.max(onchainPasses, cachedPasses);
-  } else {
-    draftPasses = cachedPasses;
-  }
+  // Firestore is the user-facing source of truth — every mint / grant /
+  // promo / draft-entry endpoint writes through to v2_users/{userId}, and
+  // those writes drive this stream. On-chain BBB4.balanceOf is a one-shot
+  // drift detector on connect; if it's strictly higher than the cache we
+  // ratchet up. We never ratchet down because BBB4 doesn't burn on use,
+  // so balanceOf includes used NFTs.
+  const draftPasses = onchainPasses != null && onchainPasses > cachedPasses
+    ? onchainPasses
+    : cachedPasses;
   return {
     wheelSpins: (d.wheelSpins as number | undefined) ?? 0,
     freeDrafts: (d.freeDrafts as number | undefined) ?? 0,
@@ -71,16 +58,12 @@ function buildPayload(
  * GET /api/owner/balance/stream?userId=<wallet>
  *
  * Server-Sent Events stream of a user's balance. Pushed to the client:
- *   - Initial snapshot on connect (combined Firestore + on-chain balanceOf).
- *   - Any Firestore write to v2_users/{userId} (from Alchemy webhook,
- *     balance endpoint writethrough, admin grants, spin mints, etc.).
- *   - Periodic on-chain refresh (covers the rare case where an Alchemy
- *     webhook is delayed).
+ *   - Initial snapshot on connect (Firestore cache + one on-chain drift check).
+ *   - Any Firestore write to v2_users/{userId} (from mint endpoints, admin
+ *     grants, spin transactions, draft-entry burns, Alchemy webhook, etc.).
  *
- * Replaces the 15s client-side polling. Typical push latency: <200ms
- * from the moment an on-chain event is confirmed to the UI updating.
- * This is the pattern Coinbase / OpenSea / Rainbow use for real-time
- * wallet state: server listens to truth, pushes to client on change.
+ * Replaces the 15s client-side polling. Typical push latency: <200ms from
+ * the moment a Firestore write commits to the UI updating.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -143,35 +126,23 @@ export async function GET(req: Request) {
         }
       };
 
-      // 1. Initial snapshot — Go API is the source of truth for draftPasses;
-      //    on-chain is a fallback. Both are read once here. Firestore values
-      //    for the other counters (wheelSpins, freeDrafts, etc.) come from
-      //    the snapshot below and are pushed live via onSnapshot.
+      // 1. Initial snapshot — read on-chain ONCE here as a drift check.
+      //    Subsequent updates come from Firestore onSnapshot — every code
+      //    path that affects draftPasses writes through to Firestore, so
+      //    we don't need to keep polling on-chain within this connection.
       let firstSnapshotSent = false;
-      // Cache the Go API count for the connection's lifetime so onSnapshot
-      // updates (which fire frequently for unrelated fields) don't make a
-      // Go API call on every push. Refreshed on Firestore-write events that
-      // could imply a pass count change (admin grants, spin mints, etc.).
-      let lastGoApiCount: number | null = null;
       try {
-        const [snap, goApiCount, onchainPasses] = await Promise.all([
-          userRef.get(),
-          fetchGoApiAvailableCount(userId),
-          readOnchain(),
-        ]);
-        lastGoApiCount = goApiCount;
+        const [snap, onchainPasses] = await Promise.all([userRef.get(), readOnchain()]);
         const data = snap.exists ? (snap.data() ?? {}) : {};
         const cachedPasses = (data.draftPasses as number | undefined) ?? 0;
 
-        // Drift writethrough: keep the Firestore cache aligned with the Go
-        // API. Old code only ratcheted up; that left staging mints (Go-API
-        // only) showing stale-high counts because Firestore was never
-        // decremented. Now we sync in both directions whenever Go API is
-        // reachable.
-        if (goApiCount != null && goApiCount !== cachedPasses) {
+        // If on-chain is strictly higher than Firestore, a webhook may have
+        // missed a recent mint — write through up so subsequent onSnapshot
+        // events show the right value.
+        if (onchainPasses != null && onchainPasses > cachedPasses) {
           try {
             await userRef.set(
-              { draftPasses: goApiCount, onchainSyncedAt: FieldValue.serverTimestamp() },
+              { draftPasses: onchainPasses, onchainSyncedAt: FieldValue.serverTimestamp() },
               { merge: true },
             );
           } catch (writeErr) {
@@ -179,35 +150,26 @@ export async function GET(req: Request) {
           }
         }
 
-        send('snapshot', buildPayload(data, goApiCount, onchainPasses));
+        send('snapshot', buildPayload(data, onchainPasses));
         firstSnapshotSent = true;
       } catch (err) {
         logger.warn('balance.stream.initial_failed', { userId, err: (err as Error).message });
       }
 
       // 2. Real-time Firestore listener. Each change pushes a fresh payload.
-      //    We refresh the Go API count when Firestore writes happen because
-      //    the writes that affect draftPasses (admin grants, spin mints,
-      //    pass-burn during draft entry) all touch Firestore too. This keeps
-      //    the per-update Go API hit infrequent and bounded by Firestore
-      //    write frequency rather than firing on every snapshot.
+      //    Firestore is the single authoritative source within this
+      //    connection's lifetime — we don't re-read on-chain per update.
       const unsubscribe = userRef.onSnapshot(
-        async (snap) => {
+        (snap) => {
           // Skip the very first onSnapshot fire — Firestore always emits
           // an initial value when subscribing, but we already sent that
-          // above as the `snapshot` event. Without this guard the client
-          // would see snapshot → identical update in rapid succession.
+          // above as the `snapshot` event.
           if (!firstSnapshotSent) {
             firstSnapshotSent = true;
             return;
           }
           const data = snap.exists ? (snap.data() ?? {}) : {};
-          // Refresh Go API count on each Firestore write so updates carry
-          // the authoritative count. If the call fails, fall back to the
-          // last known value rather than dropping back to the stale cache.
-          const goApiCount = await fetchGoApiAvailableCount(userId);
-          if (goApiCount != null) lastGoApiCount = goApiCount;
-          send('update', buildPayload(data, lastGoApiCount, null));
+          send('update', buildPayload(data, null));
         },
         (err) => {
           logger.warn('balance.stream.snapshot_err', { userId, err: err.message });

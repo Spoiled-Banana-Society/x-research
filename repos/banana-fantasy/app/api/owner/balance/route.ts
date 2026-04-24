@@ -9,7 +9,7 @@ import { json, jsonError } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { BASE, BASE_RPC_URL, BBB4_ABI, BBB4_CONTRACT_ADDRESS } from '@/lib/contracts/bbb4';
 import { logger } from '@/lib/logger';
-import { fetchGoApiAvailableCount, reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
+import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
 
 const USERS_COLLECTION = 'v2_users';
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
@@ -20,11 +20,16 @@ const onchainClient = createPublicClient({ chain: BASE, transport: http(BASE_RPC
  * GET /api/owner/balance?userId=<wallet>
  *
  * Returns `wheelSpins`, `freeDrafts`, `jackpotEntries`, `hofEntries`,
- * `draftPasses`, `cardPurchaseCount` for a user. Uses Firestore as a fast
- * cache, but reads BBB4.balanceOf on-chain via Alchemy as a drift detector —
- * if the Firestore counter is behind on-chain (e.g. a verify step failed
- * silently), we surface the drift in logs + self-heal the cached counter.
- * On-chain is always the source of truth for ownership.
+ * `draftPasses`, `cardPurchaseCount` for a user. Firestore is the
+ * user-facing source of truth — every endpoint that mints, grants, or
+ * spends passes writes through to `v2_users/{userId}.draftPasses` so the
+ * SSE stream can push the change.
+ *
+ * On-chain BBB4.balanceOf is read as a drift detector: if it's strictly
+ * higher than the cached Firestore count (e.g. an Alchemy webhook missed
+ * a recent mint), we writethrough up + fire a background reconcile. We
+ * never ratchet *down* from a single on-chain read because BBB4 doesn't
+ * burn on use, so balanceOf can be inflated by used tokens.
  */
 export async function GET(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.general);
@@ -52,66 +57,44 @@ export async function GET(req: Request) {
       cardPurchaseCount: (data.cardPurchaseCount as number | undefined) ?? 0,
     };
 
-    // The Go API's "available" token count is the source of truth for
-    // draftPasses — it's what the rest of the frontend already uses
-    // (getOwnerUser → getOwnerDraftTokens). On-chain BBB4.balanceOf counts
-    // *all* NFTs (used + unused, since the contract doesn't burn on use)
-    // and staging mints don't touch the contract at all, so neither cached
-    // Firestore nor on-chain is reliable for "passes the user can spend
-    // right now." The Go API is the single ledger that tracks both.
-    //
-    // Drift writethrough: if Firestore disagrees with the Go API count we
-    // correct it both ways. The old code only ratcheted up; that left
-    // staging mints (which only touch the Go API) showing stale-high
-    // counts because Firestore was never decremented.
-    //
-    // Fallback: if the Go API is unreachable, fall back to the cached
-    // Firestore value plus on-chain max — old behavior — so a transient
-    // outage doesn't zero a real user's pass count.
     let draftPasses = cached.draftPasses;
     if (WALLET_REGEX.test(userId)) {
-      const goApiCount = await fetchGoApiAvailableCount(userId);
-      if (goApiCount != null) {
-        draftPasses = goApiCount;
-
-        if (goApiCount !== cached.draftPasses) {
+      try {
+        const onchain = await onchainClient.readContract({
+          address: BBB4_CONTRACT_ADDRESS,
+          abi: BBB4_ABI,
+          functionName: 'balanceOf',
+          args: [userId as Address],
+        });
+        const onchainN = Number(onchain);
+        // Drift writethrough: only ratchet up. A higher on-chain count
+        // means a webhook missed a recent mint; we self-heal so the next
+        // read is correct. We never ratchet down because balanceOf
+        // includes used NFTs (BBB4 doesn't burn on use).
+        if (onchainN > cached.draftPasses) {
+          draftPasses = onchainN;
           logger.info('balance.drift_detected', {
             userId,
             cached: cached.draftPasses,
-            goApi: goApiCount,
+            onchain: onchainN,
           });
           try {
             await db.collection(USERS_COLLECTION).doc(userId).set(
-              { draftPasses: goApiCount, onchainSyncedAt: FieldValue.serverTimestamp() },
+              { draftPasses: onchainN, onchainSyncedAt: FieldValue.serverTimestamp() },
               { merge: true },
             );
           } catch (writeErr) {
             logger.warn('balance.writethrough_failed', { userId, err: (writeErr as Error).message });
           }
-          // Background reconciliation aligns on-chain → Go API → Firestore.
-          // Only run if Go API count is higher than on-chain might suggest a
-          // recent mint that Alchemy webhook missed; otherwise it's noise.
           void reconcilePassesForWallet(userId).catch((err) => {
             logger.warn('balance.reconcile_bg_failed', { userId, err: (err as Error).message });
           });
         }
-      } else {
-        // Go API unreachable — fall back to on-chain + cache like before.
-        try {
-          const onchain = await onchainClient.readContract({
-            address: BBB4_CONTRACT_ADDRESS,
-            abi: BBB4_ABI,
-            functionName: 'balanceOf',
-            args: [userId as Address],
-          });
-          const onchainN = Number(onchain);
-          draftPasses = Math.max(onchainN, cached.draftPasses);
-        } catch (err) {
-          logger.warn('balance.onchain_fallback_failed_using_cache', {
-            userId,
-            err: (err as Error).message,
-          });
-        }
+      } catch (err) {
+        logger.warn('balance.onchain_read_failed_using_cache', {
+          userId,
+          err: (err as Error).message,
+        });
       }
     }
 
