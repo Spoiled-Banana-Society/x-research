@@ -76,7 +76,7 @@ async function fetchOwnedBbb4TokenIds(wallet: string): Promise<string[]> {
  * recorded as `available` (unused, mintable for draft entry).
  */
 export async function fetchGoApiAvailableTokenIds(wallet: string): Promise<string[]> {
-  const apiBase = (process.env.NEXT_PUBLIC_DRAFTS_API_URL ?? '').trim();
+  const apiBase = getServerDraftsApiUrl();
   if (!apiBase) return [];
   const res = await fetch(`${apiBase}/owner/${wallet.toLowerCase()}/draftToken/all`);
   if (!res.ok) {
@@ -134,7 +134,7 @@ export async function fetchGoApiAvailableCount(wallet: string): Promise<number |
  */
 async function registerTokensWithGoApi(wallet: string, tokenIds: number[]): Promise<number> {
   if (tokenIds.length === 0) return 0;
-  const apiBase = (process.env.NEXT_PUBLIC_DRAFTS_API_URL ?? '').trim();
+  const apiBase = getServerDraftsApiUrl();
   if (!apiBase) return 0;
   // Go endpoint takes a minId/maxId range. For non-contiguous ids we call
   // once per id. BBB4 mint is sequential so contiguous is the common case.
