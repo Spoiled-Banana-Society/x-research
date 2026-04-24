@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { DraftRoomChat } from '@/components/drafting/DraftRoomChat';
@@ -74,6 +74,19 @@ export function DraftRoomDrafting({
   showBanner = true,
 }: DraftRoomDraftingProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('draftRoom:sidebarOpen');
+      if (saved === 'false') setSidebarOpen(false);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('draftRoom:sidebarOpen', String(sidebarOpen));
+    } catch {}
+  }, [sidebarOpen]);
 
   const getPositionCountsForPlayer = (playerName: string) => {
     const roster = engine.rosters[playerName];
@@ -324,10 +337,19 @@ export function DraftRoomDrafting({
             {/* Toggle button (always visible) */}
             <button
               onClick={() => setSidebarOpen(prev => !prev)}
-              className="hidden xl:flex items-center justify-center w-5 flex-shrink-0 bg-white/[0.03] hover:bg-white/[0.08] text-white/30 hover:text-white/60 text-xs transition-colors border-l border-white/[0.06] cursor-pointer"
-              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              className="hidden xl:flex flex-col items-center justify-center w-8 flex-shrink-0 bg-white/[0.04] hover:bg-white/[0.1] text-white/50 hover:text-white text-sm transition-colors border-l border-white/[0.08] cursor-pointer gap-2"
+              title={sidebarOpen ? 'Hide queue & team' : 'Show queue & team'}
+              aria-label={sidebarOpen ? 'Hide queue & team' : 'Show queue & team'}
             >
-              {sidebarOpen ? '›' : '‹'}
+              <span className="text-base leading-none">{sidebarOpen ? '›' : '‹'}</span>
+              {!sidebarOpen && (
+                <span
+                  className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap"
+                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                >
+                  Queue · My Team
+                </span>
+              )}
             </button>
             <div className={`hidden xl:flex flex-col flex-shrink-0 border-l border-white/[0.06] overflow-hidden transition-all duration-200 ${sidebarOpen ? 'w-72' : 'w-0 border-l-0'}`}>
               {/* Queue preview — compact, just enough for the list */}

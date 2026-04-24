@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import OneSignal from 'react-onesignal';
+import { usePrivy } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 
 const DISMISSED_KEY = 'sbs_notif_dismissed';
@@ -15,6 +16,7 @@ export type NotifOptInTrigger = 'post-draft' | 'post-purchase' | 'manual';
  */
 export function useNotificationOptIn() {
   const { user } = useAuth();
+  const { getAccessToken } = usePrivy();
   const walletAddress = user?.walletAddress ?? null;
   const [showPrompt, setShowPrompt] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -71,18 +73,26 @@ export function useNotificationOptIn() {
       if (permission === 'granted') {
         setIsSubscribed(true);
 
-        // Tag the user with their wallet address for targeted notifications
+        // Tag the user with their wallet address for targeted notifications.
+        // Lowercase so the tag matches what the server sends to OneSignal —
+        // every push route in this app lowercases the walletAddress filter,
+        // and mixed-case tags would silently miss.
         if (walletAddress) {
-          await OneSignal.User.addTag('walletAddress', walletAddress);
+          const normalized = walletAddress.toLowerCase();
+          await OneSignal.User.addTag('walletAddress', normalized);
 
           // Register with our backend
           try {
             const playerId = await OneSignal.User.onesignalId;
             if (playerId) {
+              const token = await getAccessToken();
               await fetch('/api/notifications/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ walletAddress, playerId }),
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ walletAddress: normalized, playerId }),
               });
             }
           } catch (err) {

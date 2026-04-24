@@ -17,6 +17,20 @@ export function useActiveDrafts(): DraftState[] {
   }, []);
 
   useEffect(() => {
+    // One-time purge of legacy unstamped rows. Without this, the entries
+    // hidden by filterByWallet still sit in localStorage forever, growing
+    // the store and re-bleeding if the filter is ever softened. Safe to
+    // run on every mount: if a wallet is logged in, anything missing
+    // `liveWalletAddress` is unattributable and stale by definition.
+    try {
+      const wallet = localStorage.getItem('banana-last-wallet');
+      if (wallet) {
+        const all = draftStore.getActiveDrafts();
+        const stale = all.filter(d => !d.liveWalletAddress);
+        for (const d of stale) draftStore.removeDraft(d.id);
+      }
+    } catch { /* ignore */ }
+
     // Initial read
     refresh();
 
@@ -46,5 +60,12 @@ function filterByWallet(drafts: DraftState[]): DraftState[] {
   if (typeof window === 'undefined') return drafts;
   const wallet = localStorage.getItem('banana-last-wallet')?.toLowerCase();
   if (!wallet) return drafts;
-  return drafts.filter(d => !d.liveWalletAddress || d.liveWalletAddress.toLowerCase() === wallet);
+  // Strict wallet match. Legacy rows without `liveWalletAddress` used to be
+  // allowed through here, but that meant drafts entered by any prior wallet
+  // on this browser leaked into the current user's "My Drafts" view. Drop
+  // them — if a draft truly belonged to this wallet, the live-sync loop
+  // would have stamped it by now; if it never got stamped it's stale and
+  // safe to hide. Permanently purging from localStorage is handled in the
+  // wallet-load effect of useDraftingPageState.
+  return drafts.filter(d => d.liveWalletAddress?.toLowerCase() === wallet);
 }

@@ -413,6 +413,16 @@ export function useDraftingPageState() {
           // or randomizingStartedAt happens to be lingering. We only guard
           // players/status against the drafting-confirmed case so the in-room
           // flow isn't reverted.
+          // Heal liveWalletAddress on any row where we've confirmed the
+          // current wallet owns this leagueId (the token came back from
+          // /owner/{currentWallet}/draftToken/all). Without this, legacy rows
+          // with no liveWalletAddress stamp get excluded from wallet-scoped
+          // background loops and never receive currentPick/timer updates —
+          // the UI falls back to generic "In progress" forever.
+          const currentWallet = user!.walletAddress!;
+          const needsWalletStamp = !existing.liveWalletAddress
+            || existing.liveWalletAddress.toLowerCase() !== currentWallet.toLowerCase();
+
           const isConfirmedDrafting = existing.phase === 'drafting' || existing.status === 'drafting';
           if (!isConfirmedDrafting) {
             draftStore.updateDraft(d.id, {
@@ -421,12 +431,15 @@ export function useDraftingPageState() {
               draftSpeed: d.draftSpeed,
               players: d.players,
               draftType: d.type,
+              ...(needsWalletStamp ? { liveWalletAddress: currentWallet } : {}),
             });
           } else {
-            // Even for drafting rows, heal speed/type if they were never set.
+            // For rows already drafting, we still heal speed/type if unset
+            // and stamp the wallet so background polls actually run.
             const patch: Partial<typeof existing> = {};
             if (!existing.draftSpeed || existing.draftSpeed !== d.draftSpeed) patch.draftSpeed = d.draftSpeed;
             if (existing.type == null && d.type != null) patch.type = d.type;
+            if (needsWalletStamp) patch.liveWalletAddress = currentWallet;
             if (Object.keys(patch).length > 0) draftStore.updateDraft(d.id, patch);
           }
         }
@@ -442,11 +455,23 @@ export function useDraftingPageState() {
     };
   }, [hiddenDraftIds, isLive, user]);
 
+  // Only poll filling drafts that belong to the currently-authenticated wallet.
+  // Legacy rows with no liveWalletAddress are intentionally excluded — a missed
+  // background poll is recoverable on the next mount; misattributing one is
+  // not (see cross-wallet guard on the syncLiveDrafts effect below).
   const fillingLiveDraftIds = useMemo(
-    () => localDrafts
-      .filter(d => d.phase === 'filling' || d.status === 'filling')
-      .map(d => d.id),
-    [localDrafts],
+    () => {
+      const currentWallet = user?.walletAddress?.toLowerCase();
+      if (!currentWallet) return [] as string[];
+      return localDrafts
+        .filter(d =>
+          (d.phase === 'filling' || d.status === 'filling')
+          && d.liveWalletAddress
+          && d.liveWalletAddress.toLowerCase() === currentWallet,
+        )
+        .map(d => d.id);
+    },
+    [localDrafts, user?.walletAddress],
   );
 
   useEffect(() => {
@@ -478,9 +503,20 @@ export function useDraftingPageState() {
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const syncLiveDrafts = async () => {
+      // Wallet-scope every iteration of this loop. Using the auth context's
+      // wallet (not the stale `banana-last-wallet` localStorage the useActiveDrafts
+      // hook reads) so the filter tracks auth state directly. Legacy rows with
+      // no liveWalletAddress are skipped: their promo attribution would be
+      // guessing, and misattributing promo credit across wallets is a real
+      // data-corruption risk, not cosmetic.
+      const currentWallet = user?.walletAddress?.toLowerCase();
+      if (!currentWallet) return;
+
       const allDrafts = draftStore.getActiveDrafts();
       const liveDraftsToSync = allDrafts.filter(
-        d => d.liveWalletAddress && (d.status === 'filling' || d.status === 'drafting' || d.phase === 'drafting'),
+        d => d.liveWalletAddress
+          && d.liveWalletAddress.toLowerCase() === currentWallet
+          && (d.status === 'filling' || d.status === 'drafting' || d.phase === 'drafting'),
       );
 
       for (const draft of liveDraftsToSync) {
@@ -499,7 +535,14 @@ export function useDraftingPageState() {
           const isFull = playerCount >= 10;
           const isPaid = draft.passType !== 'free';
 
-          if (isFull && user?.id && isPaid) {
+          // Promo side-effects: fire only when this draft unambiguously belongs
+          // to the authenticated user. Belt-and-suspenders on top of the outer
+          // wallet filter — if anything leaks through (race during wallet
+          // switch, future refactor), this guard prevents misattribution.
+          const draftOwnedByUser = draft.liveWalletAddress
+            && draft.liveWalletAddress.toLowerCase() === currentWallet;
+
+          if (isFull && user?.id && isPaid && draftOwnedByUser) {
             const trackedKey = `promo-tracked:${draft.id}`;
             if (!localStorage.getItem(trackedKey)) {
               localStorage.setItem(trackedKey, '1');
@@ -539,8 +582,23 @@ export function useDraftingPageState() {
               continue;
             }
 
+            // /state/info doesn't carry the current pick's absolute
+            // end-timestamp, so fetch it from league-players which proxies
+            // RTDB `realTimeDraftInfo.pickEndTime`. Authoritative source —
+            // overrides any stale value from a previous draft-room write.
+            let rtdbPickEnd: number | undefined;
+            try {
+              const lpRes = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draft.id)}`);
+              if (lpRes.ok) {
+                const lpData = await lpRes.json();
+                if (typeof lpData.pickEndTime === 'number' && lpData.pickEndTime > 0) {
+                  rtdbPickEnd = lpData.pickEndTime;
+                }
+              }
+            } catch { /* ignore — fall back to prior computation */ }
+
             const nowMs = Date.now();
-            const effectivePickEnd = pickEndTimestamp || fresh.pickEndTimestamp;
+            const effectivePickEnd = rtdbPickEnd ?? pickEndTimestamp ?? fresh.pickEndTimestamp;
             const animStillRunning = (() => {
               if (fresh.randomizingStartedAt && !fresh.preSpinStartedAt) {
                 return (nowMs - fresh.randomizingStartedAt) < 63000;
@@ -638,9 +696,17 @@ export function useDraftingPageState() {
     const serverUrl = getDraftServerUrl() || 'wss://sbs-drafts-server-staging-652484219017.us-central1.run.app';
 
     const syncConnections = () => {
+      // WS connections are opened with the current wallet as the `address` param
+      // — stale connections from a prior wallet would auth against the wrong
+      // user and leak events into the wrong account. Scope by current wallet
+      // and let the effect's cleanup (which re-runs on user.walletAddress
+      // change, see dep at bottom) close prior-wallet connections.
       const allDrafts = draftStore.getActiveDrafts();
       const draftingDrafts = allDrafts.filter(
-        d => d.liveWalletAddress && d.phase === 'drafting' && d.status === 'drafting',
+        d => d.liveWalletAddress
+          && d.liveWalletAddress.toLowerCase() === wallet
+          && d.phase === 'drafting'
+          && d.status === 'drafting',
       );
 
       const activeIds = new Set(draftingDrafts.map(d => d.id));

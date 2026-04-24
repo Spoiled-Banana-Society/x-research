@@ -602,13 +602,36 @@ function DraftRoomContent() {
       currentPick: engine.turnsUntilUserPick,
       totalPicks: engine.picks.length,
       isYourTurn: engine.isUserTurn,
-      timeRemaining: engine.isUserTurn ? engine.timeRemaining : undefined,
-      pickEndTimestamp: engine.isUserTurn ? Math.ceil(Date.now() / 1000) + (engine.timeRemaining || 0) : undefined,
+      timeRemaining: engine.isUserTurn ? bestTimeRemaining : undefined,
+      // Prefer Firebase RTDB's absolute pickEndTime when we have it — that's
+      // the server-sourced end timestamp for the current pick, stable across
+      // tab lifecycle. Fallback to now+bestTimeRemaining only when RTDB
+      // hasn't delivered yet; skip the write entirely if neither source has
+      // given us a real value, so we never stamp the store with the engine's
+      // default pickLength right after mount. Previous behavior overwrote
+      // the drafting-page row's countdown with a reset 8h value on every
+      // fresh draft-room mount.
+      pickEndTimestamp: (() => {
+        if (!engine.isUserTurn) return undefined;
+        const rtdb = firebaseRtdb.data?.pickEndTime;
+        if (typeof rtdb === 'number' && rtdb > 0) return rtdb;
+        const rtdbPickLength = firebaseRtdb.data?.pickLength;
+        // If we have a server-sourced pickLength AND bestTimeRemaining is
+        // strictly less than it, the engine has been updated past its
+        // default — safe to derive an absolute timestamp from it.
+        if (typeof rtdbPickLength === 'number' && rtdbPickLength > 0
+            && bestTimeRemaining > 0 && bestTimeRemaining < rtdbPickLength) {
+          return Math.ceil(Date.now() / 1000) + bestTimeRemaining;
+        }
+        // Otherwise we don't have confirmed server data — skip the write so
+        // we don't stamp the store with the engine's fresh-mount default.
+        return undefined;
+      })(),
       enginePicks: engine.picks,
       enginePickNumber: engine.currentPickNumber,
       engineQueue: engine.queuedPlayers,
     });
-  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, engine.timeRemaining, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
+  }, [draftId, phase, draftType, engine.currentPickNumber, engine.isUserTurn, bestTimeRemaining, firebaseRtdb.data?.pickEndTime, firebaseRtdb.data?.pickLength, engine.turnsUntilUserPick, engine.draftStatus, engine.picks.length, engine.picks, engine.queuedPlayers]);
 
   const getPersistId = () => draftId || urlDraftId;
 
