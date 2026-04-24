@@ -90,6 +90,20 @@ export async function fetchGoApiAvailableTokenIds(wallet: string): Promise<strin
 }
 
 /**
+ * Resolve the Go API base URL for server-side use.
+ *
+ * The client-side `getDraftsApiUrl()` uses `isStagingMode()` to swap between
+ * staging and prod, but that check requires `window` and silently returns the
+ * prod URL in server contexts (Next.js API routes, SSR). This codebase is
+ * staging-only per CLAUDE.md, so we explicitly prefer the staging URL.
+ */
+function getServerDraftsApiUrl(): string {
+  const staging = (process.env.NEXT_PUBLIC_STAGING_DRAFTS_API_URL ?? '').trim();
+  if (staging) return staging;
+  return (process.env.NEXT_PUBLIC_DRAFTS_API_URL ?? '').trim();
+}
+
+/**
  * Returns the Go API's authoritative count of available draft passes for a
  * wallet, or `null` if the Go API is unreachable / unconfigured. Used by the
  * balance endpoints so the user-facing pass count comes from the same source
@@ -97,7 +111,7 @@ export async function fetchGoApiAvailableTokenIds(wallet: string): Promise<strin
  * available tokens returns 0 (not null) — a wallet legitimately has no passes.
  */
 export async function fetchGoApiAvailableCount(wallet: string): Promise<number | null> {
-  const apiBase = (process.env.NEXT_PUBLIC_DRAFTS_API_URL ?? '').trim();
+  const apiBase = getServerDraftsApiUrl();
   if (!apiBase) return null;
   try {
     const res = await fetch(`${apiBase}/owner/${wallet.toLowerCase()}/draftToken/all`);
