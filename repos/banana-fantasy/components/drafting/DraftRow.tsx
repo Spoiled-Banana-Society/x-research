@@ -125,13 +125,27 @@ export function DraftRow({
               {effectiveLive.countdown != null ? `Starts in ${effectiveLive.countdown}s` : 'Starting...'}
             </span>
           ) : isYourTurn ? (
-            <span className="text-banana font-bold">
-              {formatCountdown(
-                draft.pickEndTimestamp
-                  ? Math.max(0, draft.pickEndTimestamp - Date.now() / 1000)
-                  : (draft.timeRemaining ?? 30)
-              )}
-            </span>
+            (() => {
+              // Suppress the brief on-mount flash of an un-confirmed
+              // countdown. If the "remaining" implied by the stored
+              // pickEndTimestamp is within 5% of the full pickLength for
+              // this speed, the value is almost certainly a pre-sync
+              // default that syncLiveDrafts will overwrite on its next
+              // poll (<= 3s). Render a quiet placeholder until then.
+              const remaining = draft.pickEndTimestamp
+                ? Math.max(0, draft.pickEndTimestamp - Date.now() / 1000)
+                : (draft.timeRemaining ?? 30);
+              const expectedPickLength = draft.draftSpeed === 'fast' ? 30 : 28800;
+              const looksUnconfirmed = remaining > expectedPickLength * 0.95;
+              if (looksUnconfirmed) {
+                return <span className="text-white/30 text-sm">Syncing…</span>;
+              }
+              return (
+                <span className="text-banana font-bold">
+                  {formatCountdown(remaining)}
+                </span>
+              );
+            })()
           ) : draft.currentPick != null ? (
             <span className="text-white/50 text-sm">
               {draft.currentPick === 0 ? 'Next up' : `${draft.currentPick} pick${draft.currentPick !== 1 ? 's' : ''} away`}
