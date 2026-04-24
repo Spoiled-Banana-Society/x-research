@@ -34,10 +34,12 @@ export async function GET(req: Request) {
   }
 
   const db = getAdminFirestore();
+  // No orderBy here on purpose — `where(userId) + orderBy(createdAt)` needs a
+  // composite Firestore index, which isn't deployed. We sort by createdAt
+  // descending in JS below. PAGE_SIZE is fine for a single user.
   const colRef = db
     .collection(ACTIVITY_EVENTS_COLLECTION)
     .where('userId', '==', userId)
-    .orderBy('createdAt', 'desc')
     .limit(PAGE_SIZE);
   const encoder = new TextEncoder();
 
@@ -55,14 +57,16 @@ export async function GET(req: Request) {
 
       const unsubscribe = colRef.onSnapshot(
         (snap) => {
-          const events = snap.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-              createdAt: data.createdAt?.toMillis?.() ?? null,
-            };
-          });
+          const events = snap.docs
+            .map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                ...data,
+                createdAt: data.createdAt?.toMillis?.() ?? null,
+              };
+            })
+            .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
           send('snapshot', { events });
         },
         (err) => {
