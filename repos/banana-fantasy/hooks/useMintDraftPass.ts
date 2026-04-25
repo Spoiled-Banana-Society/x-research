@@ -21,10 +21,14 @@ import { buildUsdcPermitTypedData } from '@/lib/onchain/usdcPermit';
 
 type MintFn = (quantity: number, opts?: { paymentMethod?: 'usdc' | 'card' }) => Promise<Hex>;
 
+export type MintStep = 'idle' | 'signing' | 'processing' | 'success' | 'error';
+
 interface UseMintDraftPassResult {
   mint: MintFn;
   isApproving: boolean;
   isMinting: boolean;
+  /** Current step of the mint flow, used by the modal to render a stepper. */
+  mintStep: MintStep;
   error: string | null;
   txHash: Hex | null;
   tokenPrice: bigint | null;
@@ -66,6 +70,7 @@ export function useMintDraftPass(): UseMintDraftPassResult {
 
   const [isApproving, setIsApproving] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
+  const [mintStep, setMintStep] = useState<MintStep>('idle');
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<Hex | null>(null);
   const [tokenPrice, setTokenPrice] = useState<bigint | null>(null);
@@ -146,21 +151,25 @@ export function useMintDraftPass(): UseMintDraftPassResult {
     async (quantity, opts) => {
       setError(null);
       setTxHash(null);
+      setMintStep('idle');
 
       if (!walletsReady || !selectedWallet) {
         const message = 'Wallet not ready — please wait a moment and try again.';
         setError(message);
+        setMintStep('error');
         throw new Error(message);
       }
 
       if (!Number.isInteger(quantity) || quantity <= 0) {
         const message = 'Quantity must be a positive whole number.';
         setError(message);
+        setMintStep('error');
         throw new Error(message);
       }
 
       try {
         setIsApproving(true);
+        setMintStep('signing');
 
         // Read price + current permit nonce for this wallet.
         const [price, mintIsActiveNow, userNonce, adminWalletRes] = await Promise.all([
@@ -213,6 +222,7 @@ export function useMintDraftPass(): UseMintDraftPassResult {
 
         setIsApproving(false);
         setIsMinting(true);
+        setMintStep('processing');
 
         // Server orchestrates permit → transferFrom → reserveTokens.
         const res = await fetch('/api/purchases/card-mint', {
@@ -236,11 +246,13 @@ export function useMintDraftPass(): UseMintDraftPassResult {
         }
         const hash = (data.txHashes?.mint ?? '0x') as Hex;
         setTxHash(hash);
+        setMintStep('success');
         await refreshContractState();
         return hash;
       } catch (err) {
         const message = normalizeMintError(err);
         setError(message);
+        setMintStep('error');
         throw new Error(message);
       } finally {
         setIsApproving(false);
@@ -254,6 +266,7 @@ export function useMintDraftPass(): UseMintDraftPassResult {
     mint,
     isApproving,
     isMinting,
+    mintStep,
     error,
     txHash,
     tokenPrice,

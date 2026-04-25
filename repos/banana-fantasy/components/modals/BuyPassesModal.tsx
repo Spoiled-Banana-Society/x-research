@@ -15,7 +15,14 @@ import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType'
 import { fetchJson } from '@/lib/appApiClient';
 import { logger } from '@/lib/logger';
 
-type FlowStep = 'idle' | 'funding' | 'waiting-for-usdc' | 'minting' | 'success' | 'error';
+type FlowStep =
+  | 'idle'
+  | 'funding'          // card path — MoonPay is open
+  | 'waiting-for-usdc' // card path — waiting for USDC to land in wallet
+  | 'signing'          // both paths — waiting for wallet signature (permit)
+  | 'processing'       // both paths — server executing on-chain txs
+  | 'success'
+  | 'error';
 type ModalPhase = 'purchase' | 'pick-speed' | 'joining' | 'error';
 
 interface BuyPassesModalProps {
@@ -31,7 +38,7 @@ export function BuyPassesModal({
 }: BuyPassesModalProps) {
   const _router = useRouter();
   const { user, walletAddress, updateUser, refreshBalance, refreshBalanceUntil } = useAuth();
-  const { mint, isApproving, isMinting, error: mintError, txHash, tokenPrice, mintActive } = useMintDraftPass();
+  const { mint, mintStep, error: mintError, txHash, tokenPrice, mintActive } = useMintDraftPass();
   const { fundWallet } = useFundWallet({
     onUserExited: ({ balance, fundingMethod }) => {
       logger.debug('[BuyModal] Fund wallet exited:', { balance: balance?.toString(), fundingMethod });
@@ -70,6 +77,7 @@ export function BuyPassesModal({
       setJoinError(null);
       joinInFlightRef.current = false;
       setIsJoiningDraft(false);
+      setWaitingForUsdcStartedAt(null);
     }
   }, [isOpen]);
 
@@ -77,9 +85,37 @@ export function BuyPassesModal({
   const totalPrice = quantity * pricePerPass;
   const usdcTotal = tokenPrice ? tokenPrice * BigInt(quantity) : null;
   const quantityOptions = [1, 5, 10, 20, 30, 40];
-  const isUsdcProcessing = isApproving || isMinting;
-  const isCardProcessing = flowStep === 'funding' || flowStep === 'waiting-for-usdc' || flowStep === 'minting';
-  const isProcessing = paymentMethod === 'usdc' ? isUsdcProcessing : isCardProcessing;
+  const isProcessing =
+    flowStep === 'funding' ||
+    flowStep === 'waiting-for-usdc' ||
+    flowStep === 'signing' ||
+    flowStep === 'processing';
+
+  // The hook drives its own signing / processing / success state. Mirror
+  // it into flowStep so both the USDC and Card paths render the same
+  // unified stepper. The card path manages its own funding/waiting steps
+  // before handing off to the hook.
+  useEffect(() => {
+    if (mintStep === 'signing') setFlowStep('signing');
+    else if (mintStep === 'processing') setFlowStep('processing');
+    else if (mintStep === 'success') setFlowStep('success');
+    else if (mintStep === 'error') setFlowStep('error');
+  }, [mintStep]);
+
+  // Track how long the "waiting for USDC to arrive" step has been running
+  // so the modal can show an elapsed timer and an expected duration. MoonPay
+  // can take anywhere from ~15s (card) to ~60s (Apple Pay first-run).
+  const [waitingForUsdcStartedAt, setWaitingForUsdcStartedAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (flowStep !== 'waiting-for-usdc') return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [flowStep]);
+  const waitingElapsedSec =
+    waitingForUsdcStartedAt && flowStep === 'waiting-for-usdc'
+      ? Math.max(0, Math.floor((nowTick - waitingForUsdcStartedAt) / 1000))
+      : 0;
 
   /**
    * Track a purchase in Firestore: create record → verify → promo updates.
@@ -198,7 +234,7 @@ export function BuyPassesModal({
       return;
     }
 
-    if (isCardProcessing) return;
+    if (isProcessing) return;
 
     setFlowStep('funding');
     setFlowError(null);
@@ -225,6 +261,7 @@ export function BuyPassesModal({
 
       // Poll for USDC arrival before minting
       setFlowStep('waiting-for-usdc');
+      setWaitingForUsdcStartedAt(Date.now());
 
       const totalCostUsdc = usdcTotal ?? BigInt(quantity * pricePerPass) * BigInt(10 ** 6);
       const maxWaitMs = 300_000; // 5 minutes max (MoonPay card payments can take a few minutes)
@@ -245,7 +282,9 @@ export function BuyPassesModal({
         throw new Error('USDC not yet received. Please try minting again in a few minutes.');
       }
 
-      setFlowStep('minting');
+      setWaitingForUsdcStartedAt(null);
+      // mint() drives flowStep from here on via mintStep → useEffect above:
+      // signing → processing → success / error.
       await mint(quantity, { paymentMethod: 'card' });
       setFlowStep('success');
 
@@ -351,12 +390,48 @@ export function BuyPassesModal({
     }
   };
 
-  const flowSteps = [
-    { key: 'funding', label: 'Purchasing USDC via MoonPay...' },
-    { key: 'waiting-for-usdc', label: 'Waiting for USDC to arrive...' },
-    { key: 'minting', label: 'Minting draft passes...' },
-    { key: 'success', label: 'Purchase complete!' },
-  ];
+  // Step labels are tailored per user segment:
+  //   - Web2 (Privy social login) → friendly, no crypto jargon.
+  //   - Web3 (external wallet) → accurate, since they know what a signature is.
+  // The card path adds two leading steps (payment + funding) that the
+  // USDC path skips — visibleSteps() filters by paymentMethod.
+  const isWeb2 = user?.loginMethod === 'social';
+
+  const stepLabels: Record<FlowStep, string> = isWeb2
+    ? {
+        idle: '',
+        funding: 'Processing your payment…',
+        'waiting-for-usdc': 'Preparing your funds…',
+        signing: 'Confirming your purchase…',
+        processing: 'Getting your passes ready…',
+        success: 'All set! Your passes are live',
+        error: '',
+      }
+    : {
+        idle: '',
+        funding: 'Purchasing USDC via MoonPay…',
+        'waiting-for-usdc': 'Waiting for USDC to arrive…',
+        signing: 'Waiting for your wallet signature…',
+        processing: 'Processing on-chain…',
+        success: 'Purchase complete!',
+        error: '',
+      };
+
+  const stepHelper: Partial<Record<FlowStep, string>> = isWeb2
+    ? {
+        'waiting-for-usdc': 'This usually takes 15–60 seconds.',
+        signing: '',
+        processing: 'Finalizing — just a few seconds.',
+      }
+    : {
+        'waiting-for-usdc': 'Typically 15–60s. We poll the chain every few seconds.',
+        signing: "Check your wallet — this is just a signature, it won't cost gas.",
+        processing: 'Admin wallet is paying gas for you. ~5 seconds.',
+      };
+
+  const cardStepOrder: FlowStep[] = ['funding', 'waiting-for-usdc', 'signing', 'processing', 'success'];
+  const usdcStepOrder: FlowStep[] = ['signing', 'processing', 'success'];
+  const visibleStepOrder = paymentMethod === 'card' ? cardStepOrder : usdcStepOrder;
 
   const modalTitle = phase === 'purchase' ? 'Buy Draft Passes' : phase === 'pick-speed' ? 'Pick Your Draft Speed' : 'Joining Draft...';
 
@@ -479,50 +554,76 @@ export function BuyPassesModal({
               </div>
             )}
 
-            {/* Card flow status */}
-            {paymentMethod === 'card' && flowStep !== 'idle' && (
-              <div className="bg-bg-tertiary/60 border border-bg-elevated rounded-xl p-3 space-y-2">
-                {flowSteps.map(({ key, label }) => {
-                  const stepOrder = ['funding', 'waiting-for-usdc', 'minting', 'success'];
-                  const currentIdx = stepOrder.indexOf(flowStep === 'error' ? 'funding' : flowStep);
-                  const stepIdx = stepOrder.indexOf(key);
+            {/* Unified purchase progress stepper (both USDC + card paths) */}
+            {flowStep !== 'idle' && (
+              <div className="bg-bg-tertiary/60 border border-bg-elevated rounded-xl p-3 space-y-3">
+                {visibleStepOrder.map((key) => {
+                  const currentIdx = visibleStepOrder.indexOf(
+                    flowStep === 'error' ? visibleStepOrder[0] : (flowStep as FlowStep),
+                  );
+                  const stepIdx = visibleStepOrder.indexOf(key);
                   const isComplete = flowStep === 'success' ? true : stepIdx < currentIdx;
                   const isActive = key === flowStep;
+                  const label = stepLabels[key];
+                  const helper = isActive ? stepHelper[key] : undefined;
 
                   return (
-                    <div key={key} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        {isComplete ? (
-                          <span className="h-4 w-4 rounded-full bg-banana/20 text-banana flex items-center justify-center">
-                            <svg viewBox="0 0 20 20" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M5 10l3 3 7-7" />
-                            </svg>
-                          </span>
-                        ) : isActive ? (
-                          <span className="h-4 w-4 rounded-full border-2 border-banana/30 border-t-banana animate-spin" />
-                        ) : (
-                          <span className="h-4 w-4 rounded-full border border-bg-elevated" />
-                        )}
-                        <span className={`${isComplete ? 'text-text-primary' : isActive ? 'text-text-secondary' : 'text-text-muted'}`}>{label}</span>
+                    <div key={key} className="flex items-start justify-between gap-3 text-sm">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="mt-0.5 flex-shrink-0">
+                          {isComplete ? (
+                            <span className="h-4 w-4 rounded-full bg-banana/20 text-banana flex items-center justify-center">
+                              <svg viewBox="0 0 20 20" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M5 10l3 3 7-7" />
+                              </svg>
+                            </span>
+                          ) : isActive ? (
+                            <span className="h-4 w-4 rounded-full border-2 border-banana/30 border-t-banana animate-spin inline-block" />
+                          ) : (
+                            <span className="h-4 w-4 rounded-full border border-bg-elevated inline-block" />
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className={isComplete ? 'text-text-primary' : isActive ? 'text-text-primary' : 'text-text-muted'}>
+                            {label}
+                          </p>
+                          {helper && (
+                            <p className="text-text-muted text-[11px] mt-0.5">{helper}</p>
+                          )}
+                          {isActive && key === 'waiting-for-usdc' && waitingElapsedSec > 0 && (
+                            <p className="text-text-muted text-[11px] mt-0.5 tabular-nums">
+                              {waitingElapsedSec}s elapsed
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      {isComplete && <span className="text-text-muted text-xs">Done</span>}
+                      {isComplete && <span className="text-text-muted text-xs flex-shrink-0">Done</span>}
                     </div>
                   );
                 })}
-                {flowStep === 'error' && flowError && (
-                  <div className="text-sm text-red-400 text-center mt-1">{flowError}</div>
+
+                {/* Gas-covered badge — crypto users only, so it doesn't confuse web2 users */}
+                {!isWeb2 && flowStep !== 'success' && flowStep !== 'error' && (
+                  <div className="pt-2 mt-1 border-t border-bg-elevated/60 flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <svg viewBox="0 0 20 20" className="h-3 w-3 text-banana" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 6h8l2 2v7H4z" />
+                      <path d="M14 11h2v2a1 1 0 01-1 1 1 1 0 01-1-1z" />
+                    </svg>
+                    <span>Gas fees covered by SBS — you only sign, we pay.</span>
+                  </div>
+                )}
+
+                {flowStep === 'error' && (flowError || mintError) && (
+                  <div className="text-sm text-red-400 text-center pt-1">
+                    {flowError || mintError}
+                  </div>
                 )}
               </div>
             )}
 
-            {/* USDC status */}
-            {paymentMethod === 'usdc' && (
-              <div className="space-y-1 text-xs">
-                <p className={`${mintActive ? 'text-green-400' : 'text-red-400'} text-center`}>
-                  {mintActive ? 'Mint is active' : 'Mint is currently inactive'}
-                </p>
-                {mintError && <p className="text-red-400 text-center text-sm">{mintError}</p>}
-              </div>
+            {/* USDC mint-active indicator (shown only before the user has clicked Buy) */}
+            {paymentMethod === 'usdc' && flowStep === 'idle' && !mintActive && (
+              <p className="text-red-400 text-center text-xs">Mint is currently inactive</p>
             )}
 
             {/* Price + Total */}
@@ -559,9 +660,7 @@ export function BuyPassesModal({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  {paymentMethod === 'usdc'
-                    ? isApproving ? 'Approving USDC...' : 'Minting...'
-                    : flowStep === 'funding' ? 'Completing payment...' : flowStep === 'waiting-for-usdc' ? 'Waiting for USDC...' : 'Minting passes...'}
+                  {stepLabels[flowStep as FlowStep] || 'Processing…'}
                 </span>
               ) : flowStep === 'success' ? (
                 'Success!'
