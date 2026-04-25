@@ -183,7 +183,7 @@ export function BuyPassesModal({
 
     if (paymentMethod === 'usdc') {
       try {
-        await mint(quantity);
+        await mint(quantity, { paymentMethod: 'usdc' });
         // Phase transition handled by useEffect on txHash
       } catch {
         // Error surfaced by mint hook
@@ -246,7 +246,7 @@ export function BuyPassesModal({
       }
 
       setFlowStep('minting');
-      await mint(quantity);
+      await mint(quantity, { paymentMethod: 'card' });
       setFlowStep('success');
 
       await new Promise((resolve) => setTimeout(resolve, 800));

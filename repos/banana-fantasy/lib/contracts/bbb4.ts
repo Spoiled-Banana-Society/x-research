@@ -165,6 +165,59 @@ export const USDC_ABI = [
     ],
     outputs: [{ name: '', type: 'bool' }],
   },
+  {
+    type: 'function',
+    stateMutability: 'nonpayable',
+    name: 'transferFrom',
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const satisfies Abi;
+
+// EIP-2612 permit ABI for USDC on Base. Used by the server-side card-mint
+// route to consume a user-signed permit and pull USDC without the user
+// paying gas. USDC (Circle) on Base uses name "USD Coin" and version "2".
+export const USDC_PERMIT_ABI = [
+  {
+    type: 'function',
+    stateMutability: 'nonpayable',
+    name: 'permit',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'v', type: 'uint8' },
+      { name: 'r', type: 'bytes32' },
+      { name: 's', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    stateMutability: 'view',
+    name: 'nonces',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    stateMutability: 'view',
+    name: 'name',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }],
+  },
+  {
+    type: 'function',
+    stateMutability: 'view',
+    name: 'version',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }],
+  },
 ] as const satisfies Abi;
 
 export async function getUsdcBalance(address: Address): Promise<bigint> {

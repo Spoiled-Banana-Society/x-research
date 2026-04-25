@@ -7,7 +7,15 @@ import {
   type Hex,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { BASE, BASE_RPC_URL, BBB4_ABI, BBB4_CONTRACT_ADDRESS } from '@/lib/contracts/bbb4';
+import {
+  BASE,
+  BASE_RPC_URL,
+  BASE_SEPOLIA_USDC_ADDRESS,
+  BBB4_ABI,
+  BBB4_CONTRACT_ADDRESS,
+  USDC_ABI,
+  USDC_PERMIT_ABI,
+} from '@/lib/contracts/bbb4';
 import { ApiError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
 
@@ -105,4 +113,106 @@ export async function reserveTokensToWallet(opts: {
   }
 
   return { txHash, tokenIds };
+}
+
+/**
+ * Public address of the admin wallet (same key that signs `reserveTokens`).
+ * Used as the `spender` on EIP-2612 permits issued by users so the server
+ * can pull USDC on their behalf.
+ */
+export function getAdminWalletAddress(): Address | null {
+  const key = loadPrivateKey();
+  if (!key) return null;
+  return privateKeyToAccount(key).address;
+}
+
+function buildWalletClients() {
+  const key = loadPrivateKey();
+  if (!key) {
+    throw new ApiError(503, 'Admin mint is not configured (missing BBB4_OWNER_PRIVATE_KEY)');
+  }
+  const account = privateKeyToAccount(key);
+  const walletClient = createWalletClient({
+    account,
+    chain: BASE,
+    transport: http(BASE_RPC_URL),
+  });
+  const publicClient = createPublicClient({
+    chain: BASE,
+    transport: http(BASE_RPC_URL),
+  });
+  return { account, walletClient, publicClient };
+}
+
+/**
+ * Submit an EIP-2612 USDC permit signed by the user. Admin wallet pays gas.
+ * Returns the tx hash. Throws ApiError(400) if the permit is rejected (bad
+ * signature, expired deadline, consumed nonce).
+ */
+export async function submitUsdcPermit(opts: {
+  owner: Address;
+  spender: Address;
+  value: bigint;
+  deadline: bigint;
+  v: number;
+  r: Hex;
+  s: Hex;
+}): Promise<Hex> {
+  const { walletClient, publicClient } = buildWalletClients();
+
+  try {
+    const txHash = await walletClient.writeContract({
+      address: BASE_SEPOLIA_USDC_ADDRESS,
+      abi: USDC_PERMIT_ABI,
+      functionName: 'permit',
+      args: [opts.owner, opts.spender, opts.value, opts.deadline, opts.v, opts.r, opts.s],
+    });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: RECEIPT_TIMEOUT_MS,
+    });
+    if (receipt.status !== 'success') {
+      throw new ApiError(400, `USDC permit reverted (tx ${txHash})`);
+    }
+    logger.info('adminMint.permit.ok', { owner: opts.owner, value: opts.value.toString(), txHash });
+    return txHash;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    const msg = (err as Error).message || 'USDC permit failed';
+    throw new ApiError(400, `USDC permit failed: ${msg}`);
+  }
+}
+
+/**
+ * Pull USDC from `owner` to `to` via ERC-20 transferFrom. Requires the
+ * admin wallet to already have allowance (via a prior `submitUsdcPermit`
+ * or an on-chain approve). Admin wallet pays gas.
+ */
+export async function pullUsdcFromUser(opts: {
+  owner: Address;
+  to: Address;
+  amount: bigint;
+}): Promise<Hex> {
+  const { walletClient, publicClient } = buildWalletClients();
+
+  const txHash = await walletClient.writeContract({
+    address: BASE_SEPOLIA_USDC_ADDRESS,
+    abi: USDC_ABI,
+    functionName: 'transferFrom',
+    args: [opts.owner, opts.to, opts.amount],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+    timeout: RECEIPT_TIMEOUT_MS,
+  });
+  if (receipt.status !== 'success') {
+    throw new ApiError(402, `USDC transferFrom reverted (tx ${txHash})`);
+  }
+  logger.info('adminMint.transferFrom.ok', {
+    owner: opts.owner,
+    to: opts.to,
+    amount: opts.amount.toString(),
+    txHash,
+  });
+  return txHash;
 }

@@ -1,27 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSendTransaction, useWallets } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth';
 import {
   createPublicClient,
-  encodeFunctionData,
-  formatUnits,
   http,
   type Address,
   type Hex,
 } from 'viem';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  BASE_SEPOLIA,
-  BASE_SEPOLIA_CHAIN_ID,
-  BASE_SEPOLIA_RPC_URL,
+  BASE,
+  BASE_RPC_URL,
   BASE_SEPOLIA_USDC_ADDRESS,
   BBB4_ABI,
   BBB4_CONTRACT_ADDRESS,
-  USDC_ABI,
+  USDC_PERMIT_ABI,
 } from '@/lib/contracts/bbb4';
+import { buildUsdcPermitTypedData } from '@/lib/onchain/usdcPermit';
 
-type MintFn = (quantity: number) => Promise<Hex>;
+type MintFn = (quantity: number, opts?: { paymentMethod?: 'usdc' | 'card' }) => Promise<Hex>;
 
 interface UseMintDraftPassResult {
   mint: MintFn;
@@ -35,28 +33,28 @@ interface UseMintDraftPassResult {
   userPassCount: bigint | null;
 }
 
-const USDC_DECIMALS = 6;
+// EIP-712 permit expires shortly after signing so a malicious server can't
+// hoard the signature and submit later when prices change.
+const PERMIT_DEADLINE_SECONDS = 10 * 60;
 
 function normalizeMintError(error: unknown): string {
   const message =
     typeof error === 'object' && error !== null
       ? (error as { shortMessage?: string; message?: string }).shortMessage ??
         (error as { message?: string }).message ??
-        'Transaction failed'
-      : 'Transaction failed';
+        'Mint failed'
+      : 'Mint failed';
 
   const lower = message.toLowerCase();
 
-  if (lower.includes('user rejected') || lower.includes('rejected the request')) {
-    return 'Transaction was rejected in your wallet.';
+  if (lower.includes('user rejected') || lower.includes('rejected the request') || lower.includes('user denied')) {
+    return 'Signature was rejected in your wallet.';
   }
-
-  if (lower.includes('insufficient funds')) {
-    return 'Insufficient ETH for gas fees.';
-  }
-
   if (lower.includes('mint is not active')) {
     return 'Mint is not active.';
+  }
+  if (lower.includes('permit failed')) {
+    return 'Wallet signature could not be verified. Please try again.';
   }
 
   return message;
@@ -65,7 +63,6 @@ function normalizeMintError(error: unknown): string {
 export function useMintDraftPass(): UseMintDraftPassResult {
   const { wallets, ready: walletsReady } = useWallets();
   const { walletAddress } = useAuth();
-  const { sendTransaction } = useSendTransaction();
 
   const [isApproving, setIsApproving] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
@@ -87,14 +84,13 @@ export function useMintDraftPass(): UseMintDraftPassResult {
     return wallets[0];
   }, [walletAddress, wallets]);
 
-  // The address we use for on-chain reads (balance, allowance, NFT count)
   const onChainAddress = selectedWallet?.address ?? walletAddress;
 
   const publicClient = useMemo(
     () =>
       createPublicClient({
-        chain: BASE_SEPOLIA,
-        transport: http(BASE_SEPOLIA_RPC_URL),
+        chain: BASE,
+        transport: http(BASE_RPC_URL),
       }),
     []
   );
@@ -147,7 +143,7 @@ export function useMintDraftPass(): UseMintDraftPassResult {
   }, [refreshContractState]);
 
   const mint = useCallback<MintFn>(
-    async (quantity) => {
+    async (quantity, opts) => {
       setError(null);
       setTxHash(null);
 
@@ -164,16 +160,10 @@ export function useMintDraftPass(): UseMintDraftPassResult {
       }
 
       try {
-        // Ensure wallet is on Base
-        const provider = await selectedWallet.getEthereumProvider();
-        const currentChainHex = (await provider.request({ method: 'eth_chainId' })) as string;
-        const currentChainId = parseInt(currentChainHex, 16);
-        if (currentChainId !== BASE_SEPOLIA_CHAIN_ID) {
-          await selectedWallet.switchChain(BASE_SEPOLIA_CHAIN_ID);
-        }
+        setIsApproving(true);
 
-        // Read contract state
-        const [price, isActive, maxTokensPerTx] = await Promise.all([
+        // Read price + current permit nonce for this wallet.
+        const [price, mintIsActiveNow, userNonce, adminWalletRes] = await Promise.all([
           publicClient.readContract({
             address: BBB4_CONTRACT_ADDRESS,
             abi: BBB4_ABI,
@@ -185,94 +175,79 @@ export function useMintDraftPass(): UseMintDraftPassResult {
             functionName: 'mintIsActive',
           }),
           publicClient.readContract({
-            address: BBB4_CONTRACT_ADDRESS,
-            abi: BBB4_ABI,
-            functionName: 'MAX_TOKENS_PER_TX',
+            address: BASE_SEPOLIA_USDC_ADDRESS,
+            abi: USDC_PERMIT_ABI,
+            functionName: 'nonces',
+            args: [selectedWallet.address as Address],
           }),
+          fetch('/api/purchases/admin-wallet').then((r) => r.ok ? r.json() : null).catch(() => null),
         ]);
 
-        if (!isActive) throw new Error('Mint is not active.');
-        if (BigInt(quantity) > maxTokensPerTx) {
-          throw new Error(`Max tokens per transaction is ${maxTokensPerTx.toString()}.`);
+        if (!mintIsActiveNow) {
+          throw new Error('Mint is not active.');
         }
 
-        const totalCost = price * BigInt(quantity);
-        const userAddr = selectedWallet.address as Address;
-
-        // Check USDC balance and allowance
-        const [balance, allowance] = await Promise.all([
-          publicClient.readContract({
-            address: BASE_SEPOLIA_USDC_ADDRESS,
-            abi: USDC_ABI,
-            functionName: 'balanceOf',
-            args: [userAddr],
-          }),
-          publicClient.readContract({
-            address: BASE_SEPOLIA_USDC_ADDRESS,
-            abi: USDC_ABI,
-            functionName: 'allowance',
-            args: [userAddr, BBB4_CONTRACT_ADDRESS],
-          }),
-        ]);
-
-        if (balance < totalCost) {
-          throw new Error(
-            `Insufficient USDC balance. Need ${formatUnits(totalCost, USDC_DECIMALS)} USDC, have ${formatUnits(balance, USDC_DECIMALS)} USDC.`
-          );
+        const adminAddress = adminWalletRes?.address as Address | undefined;
+        if (!adminAddress) {
+          throw new Error('Payment relay not available right now. Please try again later.');
         }
 
-        // Approve USDC if needed — using Privy's sendTransaction with gas sponsorship
-        if (allowance < totalCost) {
-          setIsApproving(true);
-          try {
-            const approveData = encodeFunctionData({
-              abi: USDC_ABI,
-              functionName: 'approve',
-              args: [BBB4_CONTRACT_ADDRESS, totalCost],
-            });
+        const value = (price as bigint) * BigInt(quantity);
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
 
-            const approveReceipt = await sendTransaction(
-              { to: BASE_SEPOLIA_USDC_ADDRESS, data: approveData, chainId: BASE_SEPOLIA_CHAIN_ID },
-              { sponsor: true }
-            );
+        const typedData = buildUsdcPermitTypedData({
+          owner: selectedWallet.address as Address,
+          spender: adminAddress,
+          value,
+          nonce: userNonce as bigint,
+          deadline,
+        });
 
-            await publicClient.waitForTransactionReceipt({
-              hash: (approveReceipt as Record<string, unknown>).transactionHash as Hex ?? approveReceipt.hash,
-            });
-          } finally {
-            setIsApproving(false);
-          }
-        }
+        // Request EIP-712 signature via the wallet's own provider. Works for
+        // Privy embedded, MetaMask, Coinbase Wallet, etc. — no gas prompt.
+        const provider = await selectedWallet.getEthereumProvider();
+        const signature = (await provider.request({
+          method: 'eth_signTypedData_v4',
+          params: [selectedWallet.address, JSON.stringify(typedData)],
+        })) as Hex;
 
-        // Mint — using Privy's sendTransaction with gas sponsorship
+        setIsApproving(false);
         setIsMinting(true);
-        try {
-          const mintData = encodeFunctionData({
-            abi: BBB4_ABI,
-            functionName: 'mint',
-            args: [BigInt(quantity)],
-          });
 
-          const mintReceipt = await sendTransaction(
-            { to: BBB4_CONTRACT_ADDRESS, data: mintData, chainId: BASE_SEPOLIA_CHAIN_ID },
-            { sponsor: true }
-          );
-
-          const hash = ((mintReceipt as Record<string, unknown>).transactionHash as Hex) ?? mintReceipt.hash;
-          await publicClient.waitForTransactionReceipt({ hash });
-          setTxHash(hash);
-          await refreshContractState();
-          return hash;
-        } finally {
-          setIsMinting(false);
+        // Server orchestrates permit → transferFrom → reserveTokens.
+        const res = await fetch('/api/purchases/card-mint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: (selectedWallet.address as string).toLowerCase(),
+            quantity,
+            deadline: Number(deadline),
+            signature,
+            paymentMethod: opts?.paymentMethod ?? 'usdc',
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          error?: string;
+          txHashes?: { mint?: Hex };
+        };
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Mint failed (${res.status})`);
         }
+        const hash = (data.txHashes?.mint ?? '0x') as Hex;
+        setTxHash(hash);
+        await refreshContractState();
+        return hash;
       } catch (err) {
         const message = normalizeMintError(err);
         setError(message);
         throw new Error(message);
+      } finally {
+        setIsApproving(false);
+        setIsMinting(false);
       }
     },
-    [publicClient, walletsReady, refreshContractState, selectedWallet, sendTransaction]
+    [publicClient, walletsReady, refreshContractState, selectedWallet]
   );
 
   return {
