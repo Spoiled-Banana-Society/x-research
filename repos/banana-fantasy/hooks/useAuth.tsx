@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo, useRef } from 'react';
 import { useSafePrivy as usePrivy, usePrivyAvailable } from '@/providers/PrivyProvider';
 import { User } from '@/types';
-import { getOwnerUser, getOwnerDraftTokens, updateOwnerDisplayName, updateOwnerPfpImage } from '@/lib/api/owner';
+import { getOwnerUser, updateOwnerDisplayName, updateOwnerPfpImage } from '@/lib/api/owner';
 import { ApiError as ClientApiError } from '@/lib/api/client';
 import { MobileLoginModal } from '@/components/modals/MobileLoginModal';
 import { logger } from '@/lib/logger';
@@ -418,8 +418,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             let updated = prev;
 
             // NFT on-chain balance — informational only.
-            // draftPasses is set by getOwnerDraftTokens (server-side token count).
-            // Do NOT overwrite draftPasses with on-chain NFT balance.
+            // draftPasses is sourced from Firestore (via /api/owner/balance and
+            // the SSE stream). Do NOT overwrite it with on-chain BBB4 balance —
+            // BBB4 doesn't burn on use, so balanceOf permanently inflates after
+            // any pass is consumed in a draft.
 
             // USDC balance (6 decimals)
             if (usdcResult?.result) {
@@ -623,42 +625,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Re-fetch draftPasses (Go backend tokens) and freeDrafts/wheelSpins (Firestore).
+  // Re-fetch every counter from Firestore (the user-facing source of truth).
   // Call after minting, purchasing, or claiming promos that affect balances.
+  //
+  // Critical: `draftPasses` MUST come from Firestore, not from the Go API
+  // token list. Go API doesn't track staging mints (the staging-mint
+  // endpoint writes Firestore directly), so reading `tokens.filter(!leagueId)`
+  // here would return 0 right after a mint and clobber the SSE-pushed
+  // correct value, causing the header to flicker 5 → 0 → 5.
   const refreshBalance = useCallback(async () => {
-    const addr = walletAddress;
     const userId = user?.id;
-    if (!addr && !userId) return;
+    if (!userId) return;
 
-    const [tokens, firestoreBalance] = await Promise.all([
-      addr ? getOwnerDraftTokens(addr).catch(() => null) : null,
-      userId
-        ? fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`)
-            .then(r => r.json())
-            .catch(() => null)
-        : null,
-    ]);
+    let firestoreBalance: {
+      draftPasses?: number;
+      freeDrafts?: number;
+      wheelSpins?: number;
+      jackpotEntries?: number;
+      hofEntries?: number;
+      cardPurchaseCount?: number;
+    } | null = null;
+    try {
+      const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(userId)}`);
+      if (res.ok) firestoreBalance = await res.json();
+    } catch {
+      // swallow — keep current state
+    }
+
+    if (!firestoreBalance) return;
 
     setUser(prev => {
       if (!prev) return prev;
-      const updated = { ...prev };
-      if (tokens) {
-        updated.draftPasses = tokens.filter(t => !t.leagueId).length;
-      }
-      if (firestoreBalance && typeof firestoreBalance.wheelSpins === 'number') {
-        updated.wheelSpins = firestoreBalance.wheelSpins;
-        updated.freeDrafts = firestoreBalance.freeDrafts ?? updated.freeDrafts;
-        updated.jackpotEntries = firestoreBalance.jackpotEntries ?? updated.jackpotEntries;
-        updated.hofEntries = firestoreBalance.hofEntries ?? updated.hofEntries;
-        updated.cardPurchaseCount = firestoreBalance.cardPurchaseCount ?? updated.cardPurchaseCount;
-        // If Go API token fetch failed, use Firestore draftPasses as fallback
-        if (!tokens && typeof firestoreBalance.draftPasses === 'number') {
-          updated.draftPasses = firestoreBalance.draftPasses;
-        }
-      }
-      return updated;
+      return {
+        ...prev,
+        draftPasses: typeof firestoreBalance!.draftPasses === 'number' ? firestoreBalance!.draftPasses : prev.draftPasses,
+        freeDrafts: typeof firestoreBalance!.freeDrafts === 'number' ? firestoreBalance!.freeDrafts : prev.freeDrafts,
+        wheelSpins: typeof firestoreBalance!.wheelSpins === 'number' ? firestoreBalance!.wheelSpins : prev.wheelSpins,
+        jackpotEntries: typeof firestoreBalance!.jackpotEntries === 'number' ? firestoreBalance!.jackpotEntries : prev.jackpotEntries,
+        hofEntries: typeof firestoreBalance!.hofEntries === 'number' ? firestoreBalance!.hofEntries : prev.hofEntries,
+        cardPurchaseCount: typeof firestoreBalance!.cardPurchaseCount === 'number' ? firestoreBalance!.cardPurchaseCount : prev.cardPurchaseCount,
+      };
     });
-  }, [walletAddress, user?.id]);
+  }, [user?.id]);
 
   const refreshBalanceUntil = useCallback(
     async (
