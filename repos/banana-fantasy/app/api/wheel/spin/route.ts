@@ -11,7 +11,7 @@ import { getWheelConfig } from '@/lib/wheelConfigFirestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
-import { logActivityEvent } from '@/lib/activityEvents';
+import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
 
 const WHEEL_SPINS_COLLECTION = 'wheelSpins';
@@ -217,6 +217,26 @@ export async function POST(req: Request) {
         : 0;
     const mintOnChain = isAdminMintConfigured() && draftPassCount > 0;
 
+    // Pre-build the spin_won activity doc OUTSIDE the transaction (Firestore
+    // forbids new reads after writes inside a transaction). On-chain mint
+    // tx hash + tokenIds aren't known yet — they get populated by a
+    // follow-up update event after the mint succeeds, so the spin event is
+    // recorded atomically with the counter mutation regardless of mint fate.
+    const spinActivityDoc = await buildActivityEventDoc({
+      type: 'spin_won',
+      userId,
+      paymentMethod: 'free',
+      quantity: draftPassCount,
+      metadata: {
+        spinId,
+        prizeType: segment.prizeType,
+        prizeValue: segment.prizeValue,
+        segmentId: segment.id,
+        segmentLabel: segment.label,
+        mintOnChain,
+      },
+    });
+
     await db.runTransaction(async (tx) => {
       const userDoc = await tx.get(userRef);
       const userData = userDoc.data();
@@ -235,21 +255,30 @@ export async function POST(req: Request) {
         nonce,
       });
 
-      const balanceUpdate: Record<string, FieldValue | number> = {
-        wheelSpins: FieldValue.increment(-1),
+      // Atomic counter update with floor-of-0 on every counter so legacy
+      // bad data can't cascade. Spin decrement, optional pass / entry
+      // increments — all in one transaction.
+      const currentSpins = Math.max(0, (userData?.wheelSpins as number | undefined) ?? 0);
+      const currentFree = Math.max(0, (userData?.freeDrafts as number | undefined) ?? 0);
+      const currentJp = Math.max(0, (userData?.jackpotEntries as number | undefined) ?? 0);
+      const currentHof = Math.max(0, (userData?.hofEntries as number | undefined) ?? 0);
+
+      const balanceUpdate: Record<string, number> = {
+        wheelSpins: Math.max(0, currentSpins - 1),
       };
-      // Counter update mirrors the on-chain mint (dual-write) so the admin UI,
-      // entry flow, and user balance views stay accurate. The counter and the
-      // NFT both get consumed when the user enters a draft, so they stay in sync.
       if (draftPassCount > 0) {
-        balanceUpdate.freeDrafts = FieldValue.increment(draftPassCount);
+        balanceUpdate.freeDrafts = currentFree + draftPassCount;
       }
       if (segment.prizeType === 'custom' && segment.prizeValue === 'jackpot') {
-        balanceUpdate.jackpotEntries = FieldValue.increment(1);
+        balanceUpdate.jackpotEntries = currentJp + 1;
       } else if (segment.prizeType === 'custom' && segment.prizeValue === 'hof') {
-        balanceUpdate.hofEntries = FieldValue.increment(1);
+        balanceUpdate.hofEntries = currentHof + 1;
       }
       tx.set(userRef, balanceUpdate, { merge: true });
+
+      // Activity event in the SAME transaction — counter and feed always
+      // agree about whether the spin happened.
+      addActivityEventToTx(tx, spinActivityDoc);
     });
 
     // On-chain mint for draft_pass wins — happens outside the tx so a failed
@@ -287,24 +316,25 @@ export async function POST(req: Request) {
       }
     }
 
-    // Activity event — tracks every spin win regardless of prize type so the
-    // admin feed + user history both surface spin outcomes with full context.
-    await logActivityEvent({
-      type: 'spin_won',
-      userId,
-      paymentMethod: 'free',
-      quantity: draftPassCount,
-      tokenIds: mintedTokenIds,
-      txHash: mintTxHash ?? null,
-      metadata: {
-        spinId,
-        prizeType: segment.prizeType,
-        prizeValue: segment.prizeValue,
-        segmentId: segment.id,
-        segmentLabel: segment.label,
-        mintOnChain,
-      },
-    });
+    // The spin_won activity event was already written atomically with the
+    // counter mutation above. If the on-chain mint succeeded after, log a
+    // supplementary `pass_granted` event so the user's history shows the
+    // mint tx hash + tokenIds (the spin event records what they won; this
+    // records the on-chain delivery).
+    if (mintOnChain && mintedTokenIds.length > 0) {
+      await logActivityEvent({
+        type: 'pass_granted',
+        userId,
+        paymentMethod: 'free',
+        quantity: draftPassCount,
+        tokenIds: mintedTokenIds,
+        txHash: mintTxHash ?? null,
+        metadata: {
+          source: 'wheel_spin_mint',
+          spinId,
+        },
+      });
+    }
 
     // Auto-queue for Jackpot/HOF — happens server-side so it can't be interrupted
     if (segment.prizeType === 'custom' && (segment.prizeValue === 'jackpot' || segment.prizeValue === 'hof')) {

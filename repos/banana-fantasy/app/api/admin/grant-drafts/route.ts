@@ -11,7 +11,7 @@ import { getRequestId } from '@/lib/requestId';
 import { logAdminAction } from '@/lib/adminAudit';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
 import { recordPassOrigins } from '@/lib/onchain/passOrigin';
-import { logActivityEvent } from '@/lib/activityEvents';
+import { addActivityEventToTx, buildActivityEventDoc } from '@/lib/activityEvents';
 
 const USERS_COLLECTION = 'v2_users';
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
@@ -117,19 +117,41 @@ export async function POST(req: Request) {
       });
     }
 
-    // Counter update — happens whether we minted or fell back. Also ensures the
-    // user doc exists (merge:true creates it if missing) and carries the wallet
-    // so subsequent lookups resolve correctly.
-    await userRef.set(
-      {
+    // Atomic Firestore commit: counter increment + pass_granted activity
+    // event in a single transaction. Either both land or neither does, so
+    // the admin "before/after" log and the user-facing count always agree.
+    let newFreeDrafts = beforeFreeDrafts;
+    if (count > 0) {
+      const activityDoc = await buildActivityEventDoc({
+        type: 'pass_granted',
+        userId: userDocId,
         walletAddress: targetWallet,
-        freeDrafts: FieldValue.increment(count),
-      },
-      { merge: true },
-    );
+        paymentMethod: 'free',
+        quantity: count,
+        tokenIds: mintedTokenIds,
+        txHash: txHash ?? null,
+        metadata: {
+          adminActor: actorWallet.toLowerCase(),
+          mintedOnChain: mintOnChain,
+        },
+      });
 
-    const fresh = await userRef.get();
-    const newFreeDrafts = (fresh.data()?.freeDrafts as number | undefined) ?? 0;
+      newFreeDrafts = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        const current = (snap.exists ? (snap.data()?.freeDrafts as number | undefined) : undefined) ?? 0;
+        const next = Math.max(0, current) + count;
+        tx.set(
+          userRef,
+          { walletAddress: targetWallet, freeDrafts: next },
+          { merge: true },
+        );
+        addActivityEventToTx(tx, activityDoc);
+        return next;
+      });
+    } else {
+      // 0-count case: just ensure the wallet field is set, no counter change.
+      await userRef.set({ walletAddress: targetWallet }, { merge: true });
+    }
 
     await logAdminAction({
       actor: actorWallet,
@@ -164,21 +186,7 @@ export async function POST(req: Request) {
       logger.warn('admin.grant_drafts.notify_failed', { requestId, err: notifyErr });
     }
 
-    if (count > 0) {
-      await logActivityEvent({
-        type: 'pass_granted',
-        userId: userDocId,
-        walletAddress: targetWallet,
-        paymentMethod: 'free',
-        quantity: count,
-        tokenIds: mintedTokenIds,
-        txHash: txHash ?? null,
-        metadata: {
-          adminActor: actorWallet.toLowerCase(),
-          mintedOnChain: mintOnChain,
-        },
-      });
-    }
+    // (Activity event was written atomically with the counter mutation above.)
 
     logger.info('admin.grant_drafts.ok', {
       requestId,
