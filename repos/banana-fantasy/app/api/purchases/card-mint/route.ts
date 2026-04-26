@@ -31,13 +31,12 @@ const FAILED_MINTS_COLLECTION = 'failed_mints';
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
 const MAX_QUANTITY = 40;
 
-// Floor at which the admin wallet can no longer reliably submit the
-// permit + transferFrom + reserveTokens trio. Empirically each tx costs
-// ~0.0008 ETH on Base, so we need ~0.003 ETH to do a full mint with
-// some headroom for spikes. Below this, fail fast — DO NOT let the user
-// sign a permit that the server can't honor (it would burn their nonce
-// + leave an unclaimable allowance behind).
-const ADMIN_WALLET_GAS_FLOOR_WEI = 5_000_000_000_000_000n; // 0.005 ETH
+// Floor at which the admin wallet can reliably submit the permit +
+// transferFrom + reserveTokens trio. We pin gas params to 0.1 gwei
+// max in adminMint.ts (vs Base's actual ~0.005 gwei base fee), so a
+// full mint pre-funds at ~0.0001 ETH of viem-required headroom. Floor
+// at 5× that so transient spikes don't lock us out.
+const ADMIN_WALLET_GAS_FLOOR_WEI = 500_000_000_000_000n; // 0.0005 ETH (~$1.50)
 
 const publicClient = createPublicClient({ chain: BASE, transport: http(BASE_RPC_URL) });
 

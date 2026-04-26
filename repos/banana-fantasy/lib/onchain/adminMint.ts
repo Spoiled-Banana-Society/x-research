@@ -3,6 +3,7 @@ import {
   createWalletClient,
   http,
   parseEventLogs,
+  parseGwei,
   type Address,
   type Hex,
 } from 'viem';
@@ -20,6 +21,20 @@ import { ApiError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
 
 const RECEIPT_TIMEOUT_MS = 60_000;
+
+// Base mainnet runs at ~0.005 gwei base fee + ~0.001 gwei priority.
+// Without pinned values, viem falls back to Ethereum-mainnet-like defaults
+// (~1.5 gwei priority) and demands the wallet pre-fund a worst case of
+// `gasLimit × maxFeePerGas` ≈ 0.0024 ETH per tx — 250–6000× the real
+// cost. Pin explicit Base-realistic values so a $5 admin wallet can
+// actually submit txs whose true cost is fractions of a cent.
+//
+// Headroom: 0.1 gwei is ~20× the current base fee, plenty for Base spikes.
+// If Base ever sustains >0.05 gwei base fee for a stretch, bump these.
+const BASE_GAS_PARAMS = {
+  maxFeePerGas: parseGwei('0.1'),
+  maxPriorityFeePerGas: parseGwei('0.001'),
+} as const;
 
 function loadPrivateKey(): Hex | null {
   const raw = process.env.BBB4_OWNER_PRIVATE_KEY?.trim();
@@ -81,6 +96,7 @@ export async function reserveTokensToWallet(opts: {
     abi: BBB4_ABI,
     functionName: 'reserveTokens',
     args: [recipient, BigInt(count)],
+    ...BASE_GAS_PARAMS,
   });
 
   logger.info('adminMint.tx.sent', { to: recipient, count, txHash });
@@ -166,6 +182,7 @@ export async function submitUsdcPermit(opts: {
       abi: USDC_PERMIT_ABI,
       functionName: 'permit',
       args: [opts.owner, opts.spender, opts.value, opts.deadline, opts.v, opts.r, opts.s],
+      ...BASE_GAS_PARAMS,
     });
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
@@ -200,6 +217,7 @@ export async function pullUsdcFromUser(opts: {
     abi: USDC_ABI,
     functionName: 'transferFrom',
     args: [opts.owner, opts.to, opts.amount],
+    ...BASE_GAS_PARAMS,
   });
   const receipt = await publicClient.waitForTransactionReceipt({
     hash: txHash,

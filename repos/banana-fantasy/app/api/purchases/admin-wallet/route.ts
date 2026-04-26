@@ -7,7 +7,10 @@ import { BASE, BASE_RPC_URL } from '@/lib/contracts/bbb4';
 import { getAdminWalletAddress } from '@/lib/onchain/adminMint';
 
 // Same floor as the card-mint route — keep these in sync if you change it.
-const ADMIN_WALLET_GAS_FLOOR_WEI = 5_000_000_000_000_000n; // 0.005 ETH
+// We pin gas params to Base-realistic values (0.1 gwei max) in adminMint.ts,
+// so a full card-mint flow (3 txs × ~150k gas × 0.1 gwei) needs ~0.0001 ETH
+// of pre-funded headroom. Floor at 5× that for spike tolerance.
+const ADMIN_WALLET_GAS_FLOOR_WEI = 500_000_000_000_000n; // 0.0005 ETH (~$1.50)
 
 const publicClient = createPublicClient({ chain: BASE, transport: http(BASE_RPC_URL) });
 
