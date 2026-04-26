@@ -1,5 +1,7 @@
 #!/bin/bash
-# Safe deploy script — only copies files that actually changed
+# Safe deploy script — mirrors the workspace banana-fantasy tree into
+# sbs-frontend-v2 by content checksum, so it picks up EVERY divergence
+# (not just the last commit's files).
 # Usage: ./scripts/deploy.sh "commit message"
 
 set -e
@@ -8,9 +10,36 @@ WORKSPACE="$HOME/sbs-claude-shared-workspace/repos/banana-fantasy"
 DEPLOY_REPO="/tmp/sbs-frontend-v2"
 MSG="${1:-Deploy from shared workspace}"
 
-# 1. Ensure deploy repo exists and is up to date
-if [ ! -d "$DEPLOY_REPO/.git" ]; then
+# Files/dirs that must NEVER sync workspace → deploy.
+# - .git/, node_modules/, build artifacts: not source code
+# - .env.local, .env.*.local: developer-local secrets
+# - .env.production, .env.vercel-check: deploy-side prod secrets, must not be
+#   overwritten or deleted by --delete
+# - playwright-report/, test-results/, coverage/: local test artifacts
+# - .last-richard-sync: deploy-side sync marker
+# Mirrors deploy repo's .gitignore plus deploy-only files.
+RSYNC_EXCLUDES=(
+  --exclude='.git/'
+  --exclude='node_modules/'
+  --exclude='.pnp' --exclude='.pnp.js' --exclude='.yarn/'
+  --exclude='coverage/'
+  --exclude='.next/' --exclude='.next-old/' --exclude='out/' --exclude='build/'
+  --exclude='.DS_Store' --exclude='*.pem'
+  --exclude='*-debug.log*' --exclude='yarn-error.log*'
+  --exclude='.env' --exclude='.env.local' --exclude='.env.*.local'
+  --exclude='.env.production' --exclude='.env.vercel-check'
+  --exclude='.vercel'
+  --exclude='*.tsbuildinfo' --exclude='next-env.d.ts'
+  --exclude='artifacts/' --exclude='cache/' --exclude='typechain-types/'
+  --exclude='playwright-report/' --exclude='test-results/' --exclude='blob-report/'
+  --exclude='package-lock.json' --exclude='yarn.lock'
+  --exclude='.last-richard-sync'
+)
+
+# 1. Ensure deploy repo exists and is up to date.
+if [ ! -d "$DEPLOY_REPO/.git" ] || [ ! -f "$DEPLOY_REPO/.git/HEAD" ]; then
   echo "Cloning sbs-frontend-v2..."
+  rm -rf "$DEPLOY_REPO"
   git clone https://github.com/Spoiled-Banana-Society/sbs-frontend-v2.git "$DEPLOY_REPO"
 fi
 
@@ -23,41 +52,28 @@ if [ -n "$BORIS_HASH" ]; then
   echo "$BORIS_HASH" > "$HOME/sbs-claude-shared-workspace/.last-richard-sync"
 fi
 
-# 2. Find which files changed in the shared workspace (compared to main)
-cd "$HOME/sbs-claude-shared-workspace"
-CHANGED=$(git diff origin/main~1 origin/main --name-only -- repos/banana-fantasy/ | sed 's|repos/banana-fantasy/||')
+# 2. Show what would change (dry run, content-checksum based).
+echo "Computing diff (workspace → deploy)..."
+DRY_RUN=$(rsync -rcin --delete "${RSYNC_EXCLUDES[@]}" "$WORKSPACE/" "$DEPLOY_REPO/" 2>&1)
+CHANGES=$(echo "$DRY_RUN" | awk '/^[<>][fdLs]|^\*deleting/ {print}')
 
-if [ -z "$CHANGED" ]; then
-  echo "No banana-fantasy files changed. Nothing to deploy."
+if [ -z "$CHANGES" ]; then
+  echo "No banana-fantasy changes detected. Nothing to deploy."
   exit 0
 fi
 
-echo "Changed files:"
-echo "$CHANGED"
+echo "Files that will sync:"
+echo "$CHANGES"
 echo ""
 
-# 3. Copy ONLY changed files
-while IFS= read -r file; do
-  src="$WORKSPACE/$file"
-  dst="$DEPLOY_REPO/$file"
-  if [ -f "$src" ]; then
-    mkdir -p "$(dirname "$dst")"
-    cp "$src" "$dst"
-    echo "  Copied: $file"
-  else
-    # File was deleted
-    if [ -f "$dst" ]; then
-      rm "$dst"
-      echo "  Deleted: $file"
-    fi
-  fi
-done <<< "$CHANGED"
+# 3. Apply for real.
+rsync -rc --delete "${RSYNC_EXCLUDES[@]}" "$WORKSPACE/" "$DEPLOY_REPO/" >/dev/null
 
-# 4. Commit, push, and trigger deploy hook (NOT git-push auto-deploy)
+# 4. Commit, push, and trigger deploy hook (NOT git-push auto-deploy).
 cd "$DEPLOY_REPO"
 git add -A
 if git diff --cached --quiet; then
-  echo "No differences after copy. Already up to date."
+  echo "No tracked-file differences after sync. Already up to date."
   exit 0
 fi
 
