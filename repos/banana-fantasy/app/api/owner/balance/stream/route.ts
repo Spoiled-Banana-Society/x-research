@@ -24,13 +24,15 @@ interface BalancePayload {
 
 function buildPayload(data: Record<string, unknown> | undefined): BalancePayload {
   const d = data ?? {};
+  // Clamp at 0 — defense in depth so legacy negative values can't surface.
+  const nonNeg = (v: unknown): number => Math.max(0, (typeof v === 'number' ? v : 0));
   return {
-    wheelSpins: (d.wheelSpins as number | undefined) ?? 0,
-    freeDrafts: (d.freeDrafts as number | undefined) ?? 0,
-    jackpotEntries: (d.jackpotEntries as number | undefined) ?? 0,
-    hofEntries: (d.hofEntries as number | undefined) ?? 0,
-    draftPasses: (d.draftPasses as number | undefined) ?? 0,
-    cardPurchaseCount: (d.cardPurchaseCount as number | undefined) ?? 0,
+    wheelSpins: nonNeg(d.wheelSpins),
+    freeDrafts: nonNeg(d.freeDrafts),
+    jackpotEntries: nonNeg(d.jackpotEntries),
+    hofEntries: nonNeg(d.hofEntries),
+    draftPasses: nonNeg(d.draftPasses),
+    cardPurchaseCount: nonNeg(d.cardPurchaseCount),
   };
 }
 

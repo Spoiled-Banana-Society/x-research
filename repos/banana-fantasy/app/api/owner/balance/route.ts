@@ -40,13 +40,18 @@ export async function GET(req: Request) {
     const snap = await db.collection(USERS_COLLECTION).doc(userId).get();
     const data = snap.exists ? (snap.data() ?? {}) : {};
 
+    // Clamp at 0 — defense in depth. The use-pass endpoint already refuses
+    // to decrement below 0, but legacy docs may have negative values from
+    // before that fix landed.
+    const nonNeg = (v: unknown): number => Math.max(0, (typeof v === 'number' ? v : 0));
+
     return json({
-      wheelSpins: (data.wheelSpins as number | undefined) ?? 0,
-      freeDrafts: (data.freeDrafts as number | undefined) ?? 0,
-      jackpotEntries: (data.jackpotEntries as number | undefined) ?? 0,
-      hofEntries: (data.hofEntries as number | undefined) ?? 0,
-      draftPasses: (data.draftPasses as number | undefined) ?? 0,
-      cardPurchaseCount: (data.cardPurchaseCount as number | undefined) ?? 0,
+      wheelSpins: nonNeg(data.wheelSpins),
+      freeDrafts: nonNeg(data.freeDrafts),
+      jackpotEntries: nonNeg(data.jackpotEntries),
+      hofEntries: nonNeg(data.hofEntries),
+      draftPasses: nonNeg(data.draftPasses),
+      cardPurchaseCount: nonNeg(data.cardPurchaseCount),
     });
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
