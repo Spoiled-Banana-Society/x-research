@@ -6,7 +6,7 @@ import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils'
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
 import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
-import { logActivityEvent } from '@/lib/activityEvents';
+import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
 import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
@@ -55,37 +55,59 @@ export async function POST(req: Request) {
     // 1. Real on-chain mint.
     const { txHash, tokenIds } = await reserveTokensToWallet({ to: userId, count: quantity });
 
-    // 2. Direct Firestore writethrough so the user-facing count updates live.
-    //    The SSE stream's onSnapshot listener will fire and push the new
-    //    value to the connected client. We also read the post-write value
-    //    back and return it in the response so the client can update its
-    //    own state immediately, without waiting on SSE roundtrip latency.
+    // 2. Atomic Firestore commit: the counter increment AND the activity
+    //    event are written in ONE Firestore transaction. Either both land
+    //    or neither does — the activity feed and the header counter can
+    //    never disagree about whether a mint happened.
     //
-    // Two-stage strategy:
-    //   (a) try a transaction with a 0-floor (handles legacy negative data).
-    //   (b) if the transaction fails for any reason, fall back to an atomic
-    //       FieldValue.increment which can't contend, then re-read for the
-    //       returned value. Worst case we miss the 0-floor on legacy data —
-    //       acceptable because the read-side clamp still hides any negative
-    //       and the user gets a valid number back.
+    //    Two-stage strategy:
+    //      (a) try the transactional path (counter floor + activity event).
+    //      (b) on transaction failure, fall back to atomic increment +
+    //          best-effort activity log so we never lose a successful mint.
     let newDraftPasses: number | null = null;
     if (isFirestoreConfigured()) {
       const db = getAdminFirestore();
       const userRef = db.collection(USERS_COLLECTION).doc(userId);
+
+      // Pre-build the activity event doc OUTSIDE the transaction (Firestore
+      // doesn't allow new reads after a write inside a transaction).
+      const activityDoc = await buildActivityEventDoc({
+        type: 'pass_purchased',
+        userId,
+        walletAddress: userId,
+        paymentMethod: 'free',
+        quantity,
+        tokenIds,
+        txHash,
+        metadata: { source: 'staging_mint_button', mintedOnChain: true },
+      });
+
       try {
         newDraftPasses = await db.runTransaction(async (tx) => {
           const snap = await tx.get(userRef);
           const current = (snap.exists ? (snap.data()?.draftPasses as number | undefined) : undefined) ?? 0;
           const next = Math.max(0, current) + quantity;
           tx.set(userRef, { draftPasses: next }, { merge: true });
+          addActivityEventToTx(tx, activityDoc);
           return next;
         });
       } catch (txErr) {
-        console.error('[staging-mint] firestore transaction failed, falling back to atomic increment:', txErr);
+        console.error('[staging-mint] firestore transaction failed, falling back:', txErr);
         try {
           await userRef.set({ draftPasses: FieldValue.increment(quantity) }, { merge: true });
           const after = await userRef.get();
           newDraftPasses = (after.data()?.draftPasses as number | undefined) ?? null;
+          // Best-effort activity log on the fallback path.
+          await logActivityEvent({
+            type: 'pass_purchased',
+            userId,
+            walletAddress: userId,
+            paymentMethod: 'free',
+            quantity,
+            tokenIds,
+            txHash,
+            metadata: { source: 'staging_mint_button', mintedOnChain: true, fallbackPath: true },
+          });
         } catch (incErr) {
           console.error('[staging-mint] atomic increment fallback also failed:', incErr);
           logger.warn('staging-mint.firestore_increment_failed', {
@@ -94,6 +116,18 @@ export async function POST(req: Request) {
           });
         }
       }
+    } else {
+      // Firestore unavailable — log activity best-effort.
+      await logActivityEvent({
+        type: 'pass_purchased',
+        userId,
+        walletAddress: userId,
+        paymentMethod: 'free',
+        quantity,
+        tokenIds,
+        txHash,
+        metadata: { source: 'staging_mint_button', mintedOnChain: true },
+      });
     }
 
     // 3. Best-effort reconcile so the Go API ledger eventually catches up
@@ -101,21 +135,6 @@ export async function POST(req: Request) {
     //    response or affect the user-visible count.
     void reconcilePassesForWallet(userId).catch((reconcileErr) => {
       logger.warn('staging-mint.reconcile_failed', { userId, err: (reconcileErr as Error).message });
-    });
-
-    // 4. Activity event for the live feed + user profile history.
-    await logActivityEvent({
-      type: 'pass_purchased',
-      userId,
-      walletAddress: userId,
-      paymentMethod: 'free',
-      quantity,
-      tokenIds,
-      txHash,
-      metadata: {
-        source: 'staging_mint_button',
-        mintedOnChain: true,
-      },
     });
 
     return json({ success: true, minted: quantity, tokenIds, txHash, draftPasses: newDraftPasses }, 200);

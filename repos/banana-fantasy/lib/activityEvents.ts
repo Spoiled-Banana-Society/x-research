@@ -1,4 +1,4 @@
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, type Transaction } from 'firebase-admin/firestore';
 
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
@@ -87,6 +87,59 @@ async function loadDenormFields(userId: string): Promise<{ username: string | nu
     : userId;
   return { username, walletType, walletAddress };
 }
+
+/**
+ * Build the activity event document body, ready to write. Used by the
+ * transactional helper below so callers can include the activity write in
+ * the same Firestore transaction as their counter mutation — guaranteeing
+ * the activity log and the user-facing counter never drift.
+ *
+ * Note: denormalized fields are read OUTSIDE the caller's transaction
+ * (best-effort, eventual consistency on those is fine because they're
+ * display-only). The actual write happens inside the transaction.
+ */
+async function buildActivityEventDoc(input: LogActivityInput) {
+  const userIdLc = input.userId.toLowerCase();
+  const denorm = await loadDenormFields(userIdLc);
+  const walletAddress = (input.walletAddress ?? denorm.walletAddress).toLowerCase();
+  return {
+    type: input.type,
+    userId: userIdLc,
+    walletAddress,
+    username: denorm.username,
+    walletType: denorm.walletType,
+    paymentMethod: input.paymentMethod ?? null,
+    quantity: input.quantity ?? 0,
+    tokenIds: input.tokenIds ?? [],
+    txHash: input.txHash ?? null,
+    metadata: input.metadata ?? {},
+    devicePlatform: detectPlatform(input.userAgent),
+    userAgent: input.userAgent ?? null,
+    createdAt: FieldValue.serverTimestamp(),
+    createdAtIso: new Date().toISOString(),
+  };
+}
+
+/**
+ * Add an activity-event write to an existing Firestore transaction. The
+ * caller's transaction stays atomic: counter update + activity event commit
+ * together or not at all. This is the pattern that keeps the user-facing
+ * count and the activity feed perfectly aligned — they're written in the
+ * same logical operation.
+ *
+ * Pre-build the doc body OUTSIDE this function (await `buildActivityEventDoc`),
+ * because Firestore transactions disallow new reads after a write.
+ */
+export function addActivityEventToTx(
+  tx: Transaction,
+  doc: Awaited<ReturnType<typeof buildActivityEventDoc>>,
+): void {
+  const db = getAdminFirestore();
+  const ref = db.collection(ACTIVITY_EVENTS_COLLECTION).doc();
+  tx.set(ref, doc);
+}
+
+export { buildActivityEventDoc };
 
 export async function logActivityEvent(input: LogActivityInput): Promise<void> {
   if (!isFirestoreConfigured()) return;

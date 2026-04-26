@@ -23,7 +23,7 @@ import {
   submitUsdcPermit,
 } from '@/lib/onchain/adminMint';
 import { parsePermitSignature } from '@/lib/onchain/usdcPermit';
-import { logActivityEvent } from '@/lib/activityEvents';
+import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
 import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
@@ -238,50 +238,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // 4. Firestore writethrough so the header ticks live via the SSE stream.
-    //    Two-stage strategy: transaction with 0-floor first, atomic
-    //    FieldValue.increment fallback if the transaction fails.
+    // 4. Atomic Firestore commit: counter + cardPurchaseCount + activity
+    //    event all written in ONE transaction. Activity feed and counter
+    //    can never disagree.
     let newDraftPasses: number | null = null;
-    if (isFirestoreConfigured()) {
-      const db = getAdminFirestore();
-      const userRef = db.collection(USERS_COLLECTION).doc(userId);
-      try {
-        newDraftPasses = await db.runTransaction(async (tx) => {
-          const snap = await tx.get(userRef);
-          const data = snap.exists ? (snap.data() ?? {}) : {};
-          const currentPasses = (data.draftPasses as number | undefined) ?? 0;
-          const currentCardCount = (data.cardPurchaseCount as number | undefined) ?? 0;
-          const nextPasses = Math.max(0, currentPasses) + quantity;
-          const nextCardCount =
-            paymentMethod === 'card' ? Math.max(0, currentCardCount) + 1 : currentCardCount;
-          tx.set(userRef, { draftPasses: nextPasses, cardPurchaseCount: nextCardCount }, { merge: true });
-          return nextPasses;
-        });
-      } catch (txErr) {
-        console.error('[card-mint] firestore transaction failed, falling back to atomic increment:', txErr);
-        try {
-          await userRef.set(
-            {
-              draftPasses: FieldValue.increment(quantity),
-              ...(paymentMethod === 'card' ? { cardPurchaseCount: FieldValue.increment(1) } : {}),
-            },
-            { merge: true },
-          );
-          const after = await userRef.get();
-          newDraftPasses = (after.data()?.draftPasses as number | undefined) ?? null;
-        } catch (incErr) {
-          console.error('[card-mint] atomic increment fallback also failed:', incErr);
-          logger.warn('card-mint.firestore_increment_failed', {
-            userId,
-            err: (incErr as Error).message,
-          });
-        }
-      }
-    }
-
-    // 5. Activity event for the user profile timeline.
-    await logActivityEvent({
-      type: 'pass_purchased',
+    const activityInput = {
+      type: 'pass_purchased' as const,
       userId,
       walletAddress: userId,
       paymentMethod,
@@ -296,7 +258,50 @@ export async function POST(req: Request) {
         totalPrice: Number(value) / 1_000_000,
         currency: 'USDC',
       },
-    });
+    };
+
+    if (isFirestoreConfigured()) {
+      const db = getAdminFirestore();
+      const userRef = db.collection(USERS_COLLECTION).doc(userId);
+      const activityDoc = await buildActivityEventDoc(activityInput);
+
+      try {
+        newDraftPasses = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(userRef);
+          const data = snap.exists ? (snap.data() ?? {}) : {};
+          const currentPasses = (data.draftPasses as number | undefined) ?? 0;
+          const currentCardCount = (data.cardPurchaseCount as number | undefined) ?? 0;
+          const nextPasses = Math.max(0, currentPasses) + quantity;
+          const nextCardCount =
+            paymentMethod === 'card' ? Math.max(0, currentCardCount) + 1 : currentCardCount;
+          tx.set(userRef, { draftPasses: nextPasses, cardPurchaseCount: nextCardCount }, { merge: true });
+          addActivityEventToTx(tx, activityDoc);
+          return nextPasses;
+        });
+      } catch (txErr) {
+        console.error('[card-mint] firestore transaction failed, falling back:', txErr);
+        try {
+          await userRef.set(
+            {
+              draftPasses: FieldValue.increment(quantity),
+              ...(paymentMethod === 'card' ? { cardPurchaseCount: FieldValue.increment(1) } : {}),
+            },
+            { merge: true },
+          );
+          const after = await userRef.get();
+          newDraftPasses = (after.data()?.draftPasses as number | undefined) ?? null;
+          await logActivityEvent({ ...activityInput, metadata: { ...activityInput.metadata, fallbackPath: true } });
+        } catch (incErr) {
+          console.error('[card-mint] atomic increment fallback also failed:', incErr);
+          logger.warn('card-mint.firestore_increment_failed', {
+            userId,
+            err: (incErr as Error).message,
+          });
+        }
+      }
+    } else {
+      await logActivityEvent(activityInput);
+    }
 
     return json({
       success: true,
