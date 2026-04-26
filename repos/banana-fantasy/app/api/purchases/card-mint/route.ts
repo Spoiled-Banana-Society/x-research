@@ -239,17 +239,25 @@ export async function POST(req: Request) {
     }
 
     // 4. Firestore writethrough so the header ticks live via the SSE stream.
+    //    Use a transaction with a 0-floor so legacy bad data (negative
+    //    values from before the use-pass floor was added) doesn't silently
+    //    swallow this mint.
+    let newDraftPasses: number | null = null;
     if (isFirestoreConfigured()) {
       try {
         const db = getAdminFirestore();
-        await db.collection(USERS_COLLECTION).doc(userId).set(
-          {
-            draftPasses: FieldValue.increment(quantity),
-            cardPurchaseCount:
-              paymentMethod === 'card' ? FieldValue.increment(1) : FieldValue.increment(0),
-          },
-          { merge: true },
-        );
+        const userRef = db.collection(USERS_COLLECTION).doc(userId);
+        newDraftPasses = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(userRef);
+          const data = snap.exists ? (snap.data() ?? {}) : {};
+          const currentPasses = (data.draftPasses as number | undefined) ?? 0;
+          const currentCardCount = (data.cardPurchaseCount as number | undefined) ?? 0;
+          const nextPasses = Math.max(0, currentPasses) + quantity;
+          const nextCardCount =
+            paymentMethod === 'card' ? Math.max(0, currentCardCount) + 1 : currentCardCount;
+          tx.set(userRef, { draftPasses: nextPasses, cardPurchaseCount: nextCardCount }, { merge: true });
+          return nextPasses;
+        });
       } catch (dbErr) {
         logger.warn('card-mint.firestore_increment_failed', {
           userId,
@@ -281,6 +289,7 @@ export async function POST(req: Request) {
       success: true,
       minted: quantity,
       tokenIds: mintResult.tokenIds,
+      draftPasses: newDraftPasses,
       txHashes: {
         permit: permitTxHash,
         transferFrom: transferTxHash,

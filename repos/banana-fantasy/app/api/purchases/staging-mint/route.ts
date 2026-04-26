@@ -1,6 +1,4 @@
 export const dynamic = "force-dynamic";
-import { FieldValue } from 'firebase-admin/firestore';
-
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
@@ -57,14 +55,25 @@ export async function POST(req: Request) {
 
     // 2. Direct Firestore writethrough so the user-facing count updates live.
     //    The SSE stream's onSnapshot listener will fire and push the new
-    //    value to the connected client.
+    //    value to the connected client. We also read the post-write value
+    //    back and return it in the response so the client can update its
+    //    own state immediately, without waiting on SSE roundtrip latency.
+    let newDraftPasses: number | null = null;
     if (isFirestoreConfigured()) {
       try {
         const db = getAdminFirestore();
-        await db.collection(USERS_COLLECTION).doc(userId).set(
-          { draftPasses: FieldValue.increment(quantity) },
-          { merge: true },
-        );
+        const userRef = db.collection(USERS_COLLECTION).doc(userId);
+        // Transaction so the read sees the post-increment value, not a
+        // racy stale snapshot.
+        newDraftPasses = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(userRef);
+          const current = (snap.exists ? (snap.data()?.draftPasses as number | undefined) : undefined) ?? 0;
+          // Floor at 0 so legacy bad data (e.g. a negative value from before
+          // the use-pass floor was added) doesn't silently swallow this mint.
+          const next = Math.max(0, current) + quantity;
+          tx.set(userRef, { draftPasses: next }, { merge: true });
+          return next;
+        });
       } catch (dbErr) {
         logger.warn('staging-mint.firestore_increment_failed', { userId, err: (dbErr as Error).message });
       }
@@ -92,7 +101,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return json({ success: true, minted: quantity, tokenIds, txHash }, 200);
+    return json({ success: true, minted: quantity, tokenIds, txHash, draftPasses: newDraftPasses }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     console.error('staging-mint error:', err);

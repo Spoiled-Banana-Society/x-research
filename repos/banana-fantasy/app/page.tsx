@@ -24,7 +24,13 @@ import { SkeletonContestCard } from '@/components/ui/Skeleton';
 import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType';
 import * as draftStore from '@/lib/draftStore';
 
-function StagingMintButton({ userId, onMinted }: { userId: string; onMinted: (userData?: unknown) => void }) {
+function StagingMintButton({
+  userId,
+  onMinted,
+}: {
+  userId: string;
+  onMinted: (data?: { draftPasses?: number | null }) => void;
+}) {
   const [minting, setMinting] = React.useState(false);
   const [qty, setQty] = React.useState(3);
   const [result, setResult] = React.useState<string | null>(null);
@@ -40,8 +46,8 @@ function StagingMintButton({ userId, onMinted }: { userId: string; onMinted: (us
       });
       const data = await res.json();
       if (res.ok) {
-        setResult(`Minted ${qty} — promo updated`);
-        onMinted(data.user);
+        setResult(`Minted ${qty} — passes ready`);
+        onMinted({ draftPasses: typeof data.draftPasses === 'number' ? data.draftPasses : null });
       } else {
         setResult(`Error: ${data.error || 'Unknown'}`);
       }
@@ -262,9 +268,13 @@ export default function HomePage() {
       {/* Staging Mint Button */}
       {_isStagingMode() && user?.id && (
         <section className="mb-4 flex justify-center">
-          <StagingMintButton userId={user.id} onMinted={() => {
-            // Don't updateUser with Firestore data — it lacks draftPasses from Go backend.
-            // refreshBalance fetches both Go backend tokens + Firestore balances correctly.
+          <StagingMintButton userId={user.id} onMinted={(data) => {
+            // Apply the new draftPasses count from the mint response immediately —
+            // skips SSE / refreshBalance roundtrip latency that occasionally
+            // delayed the header tick by several seconds.
+            if (typeof data?.draftPasses === 'number') {
+              updateUser({ draftPasses: data.draftPasses });
+            }
             promosQuery.refreshPromos();
             void refreshBalance();
           }} />
