@@ -31,6 +31,14 @@ const FAILED_MINTS_COLLECTION = 'failed_mints';
 const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
 const MAX_QUANTITY = 40;
 
+// Floor at which the admin wallet can no longer reliably submit the
+// permit + transferFrom + reserveTokens trio. Empirically each tx costs
+// ~0.0008 ETH on Base, so we need ~0.003 ETH to do a full mint with
+// some headroom for spikes. Below this, fail fast — DO NOT let the user
+// sign a permit that the server can't honor (it would burn their nonce
+// + leave an unclaimable allowance behind).
+const ADMIN_WALLET_GAS_FLOOR_WEI = 5_000_000_000_000_000n; // 0.005 ETH
+
 const publicClient = createPublicClient({ chain: BASE, transport: http(BASE_RPC_URL) });
 
 /**
@@ -102,6 +110,23 @@ export async function POST(req: Request) {
       return jsonError('Admin wallet address unavailable', 503);
     }
     const owner = userId as Address;
+
+    // Pre-flight: ensure the admin wallet has enough ETH to cover the
+    // three on-chain txs we're about to submit. If it doesn't, fail fast
+    // with a 503 BEFORE the user signs the permit so we don't burn their
+    // nonce or leave an orphaned allowance.
+    const adminEthBalance = await publicClient.getBalance({ address: adminWallet });
+    if (adminEthBalance < ADMIN_WALLET_GAS_FLOOR_WEI) {
+      logger.error('card-mint.admin_wallet_low_balance', {
+        adminWallet,
+        balanceWei: adminEthBalance.toString(),
+        floorWei: ADMIN_WALLET_GAS_FLOOR_WEI.toString(),
+      });
+      return jsonError(
+        'Purchases are temporarily paused for maintenance. Your funds are safe — please try again in a few minutes.',
+        503,
+      );
+    }
 
     // Read on-chain price + user's current permit nonce. The client also
     // read these to build the signature; re-reading here guards against

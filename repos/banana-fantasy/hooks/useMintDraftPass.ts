@@ -200,6 +200,9 @@ export function useMintDraftPass(): UseMintDraftPassResult {
         if (!adminAddress) {
           throw new Error('Payment relay not available right now. Please try again later.');
         }
+        if (adminWalletRes?.healthy === false) {
+          throw new Error('Purchases are temporarily paused for maintenance. Your funds are safe — please try again in a few minutes.');
+        }
 
         const value = (price as bigint) * BigInt(quantity);
         const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
