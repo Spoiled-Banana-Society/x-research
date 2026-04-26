@@ -110,6 +110,27 @@ class Logger {
           });
         })
         .catch(() => { /* swallow — logging must never break */ });
+
+      // Also forward to Sentry if configured. captureException keeps the full
+      // stack + grouping; tags + contexts make every error searchable in the
+      // Sentry UI by route, source, requestId, etc.
+      if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+        void import('@sentry/nextjs')
+          .then((Sentry) => {
+            const errToCapture = errField instanceof Error ? errField : new Error(errMsg);
+            const tags: Record<string, string> = {};
+            if (msg) tags.source = msg;
+            if (typeof fields?.route === 'string') tags.route = fields.route;
+            if (typeof fields?.requestId === 'string') tags.requestId = fields.requestId;
+            const user = typeof fields?.actor === 'string' ? { id: fields.actor } : undefined;
+            Sentry.captureException(errToCapture, {
+              tags,
+              user,
+              extra: context as Record<string, unknown> | undefined,
+            });
+          })
+          .catch(() => { /* swallow — logging must never break */ });
+      }
     }
 
     if (isStructured && isProd()) {

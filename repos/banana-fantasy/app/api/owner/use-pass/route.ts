@@ -4,6 +4,7 @@ import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { addActivityEventToTx, buildActivityEventDoc } from '@/lib/activityEvents';
+import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
 
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('[use-pass] POST failed:', err);
+    logger.error('use-pass.unhandled', { route: '/api/owner/use-pass', err });
     return jsonError('Internal Server Error', 500);
   }
 }

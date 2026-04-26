@@ -353,7 +353,7 @@ export async function POST(req: Request) {
     );
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('[wheel/spin] Unhandled error:', err);
+    logger.error('wheel.spin.unhandled', { route: '/api/wheel/spin', err });
     return jsonError('Internal Server Error', 500);
   }
 }

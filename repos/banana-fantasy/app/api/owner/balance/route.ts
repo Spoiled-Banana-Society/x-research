@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
 
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('[owner/balance] GET failed:', err);
+    logger.error('owner.balance.unhandled', { route: '/api/owner/balance', err });
     return jsonError('Internal Server Error', 500);
   }
 }

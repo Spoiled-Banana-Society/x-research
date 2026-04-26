@@ -140,7 +140,7 @@ export async function POST(req: Request) {
     return json({ success: true, minted: quantity, tokenIds, txHash, draftPasses: newDraftPasses }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
-    console.error('staging-mint error:', err);
+    logger.error('staging-mint.unhandled', { route: '/api/purchases/staging-mint', err });
     return jsonError((err as Error).message || 'Internal Server Error', 500);
   }
 }
