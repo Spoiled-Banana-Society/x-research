@@ -525,12 +525,15 @@ export function BuyPassesModal({
             </div>
 
             {/* Card Purchase Rewards banner */}
-            {paymentMethod === 'card' && flowStep === 'idle' && (
+            {paymentMethod === 'card' && flowStep === 'idle' && (() => {
+              const current = user?.cardPurchaseCount || 0;
+              const projected = Math.min(6, current + (quantity || 0));
+              return (
               <div className="bg-banana/[0.06] border border-banana/10 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm">🎁</span>
                   <p className="text-white/70 text-[12px] font-medium">
-                    {((user?.cardPurchaseCount || 0) + 1) >= 6
+                    {projected >= 6
                       ? 'This purchase earns you a FREE draft!'
                       : 'Card fee? We\'ve got you — every 6 purchases earns a free draft'
                     }
@@ -541,18 +544,19 @@ export function BuyPassesModal({
                     <div
                       key={i}
                       className={`h-1.5 flex-1 rounded-full ${
-                        i < (user?.cardPurchaseCount || 0)
+                        i < current
                           ? 'bg-banana'
-                          : i === (user?.cardPurchaseCount || 0)
+                          : i < projected
                             ? 'bg-banana/40'
                             : 'bg-white/[0.06]'
                       }`}
                     />
                   ))}
                 </div>
-                <p className="text-white/30 text-[10px] mt-1.5">{user?.cardPurchaseCount || 0} of 6 toward your next free draft</p>
+                <p className="text-white/30 text-[10px] mt-1.5">{projected} of 6 toward your next free draft</p>
               </div>
-            )}
+              );
+            })()}
 
             {/* Unified purchase progress stepper (both USDC + card paths) */}
             {flowStep !== 'idle' && (
