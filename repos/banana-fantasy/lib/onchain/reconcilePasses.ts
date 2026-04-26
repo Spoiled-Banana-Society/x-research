@@ -76,17 +76,37 @@ async function fetchOwnedBbb4TokenIds(wallet: string): Promise<string[]> {
  * recorded as `available` (unused, mintable for draft entry).
  */
 export async function fetchGoApiAvailableTokenIds(wallet: string): Promise<string[]> {
+  const lists = await fetchGoApiTokenLists(wallet);
+  return lists.available;
+}
+
+/**
+ * Reads Go API's full per-wallet token state: both `available` (unused) and
+ * `active` (consumed in a league) cardIds. Used by the reconciler to compute
+ * the correct "spendable" count = on-chain owned − active count.
+ */
+export async function fetchGoApiTokenLists(
+  wallet: string,
+): Promise<{ available: string[]; active: string[] }> {
   const apiBase = getServerDraftsApiUrl();
-  if (!apiBase) return [];
+  if (!apiBase) return { available: [], active: [] };
   const res = await fetch(`${apiBase}/owner/${wallet.toLowerCase()}/draftToken/all`);
   if (!res.ok) {
     logger.warn('reconcile.go_api_fetch_failed', { wallet, status: res.status });
-    return [];
+    return { available: [], active: [] };
   }
-  const body = (await res.json()) as { available?: Array<{ _cardId?: string; CardId?: string }>; active?: unknown[] };
-  return (body.available ?? [])
-    .map((t) => t._cardId ?? t.CardId ?? '')
-    .filter((id) => /^\d+$/.test(id));
+  const body = (await res.json()) as {
+    available?: Array<{ _cardId?: string; CardId?: string }>;
+    active?: Array<{ _cardId?: string; CardId?: string }>;
+  };
+  const extract = (arr: Array<{ _cardId?: string; CardId?: string }> | undefined) =>
+    (arr ?? [])
+      .map((t) => t._cardId ?? t.CardId ?? '')
+      .filter((id) => /^\d+$/.test(id));
+  return {
+    available: extract(body.available),
+    active: extract(body.active),
+  };
 }
 
 /**
@@ -202,12 +222,17 @@ async function removeTransferredOutFromGoApi(wallet: string, tokenIds: string[])
 /**
  * Aligns Firestore + Go API to what BBB4 says on-chain.
  *
- * Source of truth: Alchemy NFT API `getNFTsForOwner(wallet, BBB4)`.
- * Result: `draftPasses` in Firestore == count of `available` in Go API ==
- * count of BBB4 NFTs the wallet currently owns minus those in active drafts.
+ * Computes Firestore `draftPasses` as **on-chain owned − Go API active**
+ * (not raw on-chain owned). BBB4 doesn't burn NFTs on use, so the raw
+ * `balanceOf` includes consumed tokens — using it here would silently undo
+ * every legitimate decrement from a draft entry.
  *
- * Safe to call concurrently — Firestore ops are idempotent, Go API backfill
- * no-ops on already-registered tokens.
+ * Source of truth: Alchemy NFT API `getNFTsForOwner(wallet, BBB4)` paired
+ * with the Go API's per-wallet `active` list.
+ *
+ * Called from: explicit admin reconcile endpoint, and the Alchemy Transfer
+ * webhook on real BBB4 transfers in/out. Not called from balance-read
+ * paths.
  */
 export async function reconcilePassesForWallet(wallet: string): Promise<ReconcileResult> {
   const w = wallet.toLowerCase();
@@ -222,24 +247,28 @@ export async function reconcilePassesForWallet(wallet: string): Promise<Reconcil
     .filter((n) => Number.isFinite(n));
   const ownedSet = new Set(ownedNumericIds.map((n) => String(n)));
 
-  // 2. What Go API thinks is available.
-  const goApiAvailable = await fetchGoApiAvailableTokenIds(w);
+  // 2. Go API's view: which tokens are available vs active.
+  const { available: goApiAvailable, active: goApiActive } = await fetchGoApiTokenLists(w);
   const goApiSet = new Set(goApiAvailable);
 
-  // 3. Diff: missing (own on-chain, Go doesn't know) vs stale (Go has, no longer own).
+  // 3. Diff against on-chain reality.
+  //    - missingFromGo: on-chain tokens the Go API doesn't know about (yet
+  //      to be backfilled).
+  //    - staleInGo: Go-API-available tokens the wallet no longer owns
+  //      on-chain (transferred out, sold) — these should be removed.
   const missingFromGo = ownedNumericIds.filter((n) => !goApiSet.has(String(n)));
   const staleInGo = goApiAvailable.filter((id) => !ownedSet.has(id));
 
-  // 4. Fix each side.
+  // 4. Repair each side.
   const registered = await registerTokensWithGoApi(w, missingFromGo);
   const removed = await removeTransferredOutFromGoApi(w, staleInGo);
 
-  // 5. Align Firestore counter. The authoritative count is on-chain
-  //    balanceOf — it's what the user actually holds, regardless of whether
-  //    Go API has caught up yet. Using Go API's "available" count here
-  //    caused the admin panel to show 0 when the user actually had 3 NFTs
-  //    (Go API lagged behind the real on-chain state).
-  const afterCounter = ownedNumericIds.length;
+  // 5. Compute the spendable count and write Firestore.
+  //    spendable = on-chain owned tokens that aren't already consumed in a
+  //    league. The Go API's `active` list is the authoritative record of
+  //    consumption.
+  const activeOnChain = goApiActive.filter((id) => ownedSet.has(id)).length;
+  const afterCounter = Math.max(0, ownedNumericIds.length - activeOnChain);
 
   await userRef.set(
     { draftPasses: afterCounter, onchainSyncedAt: FieldValue.serverTimestamp() },
@@ -250,7 +279,8 @@ export async function reconcilePassesForWallet(wallet: string): Promise<Reconcil
     wallet: w,
     before: beforeCounter,
     after: afterCounter,
-    onchain: ownedNumericIds.length,
+    onchainOwned: ownedNumericIds.length,
+    activeInLeagues: activeOnChain,
     registered,
     removed,
   });

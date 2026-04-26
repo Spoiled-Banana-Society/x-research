@@ -194,18 +194,66 @@ export async function getOwnerProfile(walletAddress: string): Promise<ApiOwnerPr
 
 /**
  * Fetch owner profile and map to UI `User`.
- * Also fetches draft token count so draftPasses reflects real available tokens.
+ *
+ * `draftPasses` comes from `/api/owner/balance` (Firestore-backed) — the
+ * single source of truth that the SSE stream also pushes from. Using the
+ * Go API's "available tokens" count here would disagree with the SSE
+ * value the moment a Firestore-only mint or use endpoint runs (staging
+ * mints, draft entry's use-pass decrement, etc.), causing the header to
+ * flicker between values across reload + SSE-connect events.
+ *
+ * Falls back to the Go API count only if the balance endpoint is
+ * unreachable, so a transient outage still shows something reasonable.
  */
 export async function getOwnerUser(walletAddress: string): Promise<User> {
-  const [owner, tokens] = await Promise.all([
+  const [owner, balance] = await Promise.all([
     getOwnerProfile(walletAddress),
-    getOwnerDraftTokens(walletAddress).catch(() => [] as ApiDraftToken[]),
+    fetchBalanceCounters(walletAddress),
   ]);
-  const availableTokens = tokens.filter(t => !t.leagueId);
   const user = mapOwnerProfileToUser(walletAddress, owner);
-  user.draftPasses = availableTokens.length;
-  user.freeDrafts = 0;
+  if (balance) {
+    user.draftPasses = balance.draftPasses;
+    user.freeDrafts = balance.freeDrafts;
+    user.wheelSpins = balance.wheelSpins;
+    user.jackpotEntries = balance.jackpotEntries;
+    user.hofEntries = balance.hofEntries;
+    user.cardPurchaseCount = balance.cardPurchaseCount;
+  } else {
+    // Balance endpoint unreachable — fall back to Go API token count for
+    // draftPasses so the header isn't completely blank.
+    const tokens = await getOwnerDraftTokens(walletAddress).catch(() => [] as ApiDraftToken[]);
+    user.draftPasses = tokens.filter(t => !t.leagueId).length;
+    user.freeDrafts = 0;
+  }
   return user;
+}
+
+interface BalanceCounters {
+  wheelSpins: number;
+  freeDrafts: number;
+  jackpotEntries: number;
+  hofEntries: number;
+  draftPasses: number;
+  cardPurchaseCount: number;
+}
+
+async function fetchBalanceCounters(walletAddress: string): Promise<BalanceCounters | null> {
+  try {
+    const wallet = normalizeWalletAddress(walletAddress);
+    const res = await fetch(`/api/owner/balance?userId=${encodeURIComponent(wallet)}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<BalanceCounters>;
+    return {
+      wheelSpins: typeof data.wheelSpins === 'number' ? data.wheelSpins : 0,
+      freeDrafts: typeof data.freeDrafts === 'number' ? data.freeDrafts : 0,
+      jackpotEntries: typeof data.jackpotEntries === 'number' ? data.jackpotEntries : 0,
+      hofEntries: typeof data.hofEntries === 'number' ? data.hofEntries : 0,
+      draftPasses: typeof data.draftPasses === 'number' ? data.draftPasses : 0,
+      cardPurchaseCount: typeof data.cardPurchaseCount === 'number' ? data.cardPurchaseCount : 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

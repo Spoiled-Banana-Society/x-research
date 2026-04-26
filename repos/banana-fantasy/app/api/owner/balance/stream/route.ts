@@ -1,7 +1,3 @@
-import { createPublicClient, http, type Address } from 'viem';
-import { FieldValue } from 'firebase-admin/firestore';
-
-import { BASE, BASE_RPC_URL, BBB4_ABI, BBB4_CONTRACT_ADDRESS } from '@/lib/contracts/bbb4';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 
@@ -10,15 +6,12 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const USERS_COLLECTION = 'v2_users';
-const WALLET_REGEX = /^0x[0-9a-fA-F]{40}$/;
 
 // Vercel serverless functions time out (60s on Pro). We proactively close
 // slightly before that so EventSource cleanly reconnects instead of the
 // platform killing us mid-stream. The client auto-reconnects transparently.
 const STREAM_LIFETIME_MS = 55_000;
 const KEEPALIVE_INTERVAL_MS = 15_000;
-
-const onchainClient = createPublicClient({ chain: BASE, transport: http(BASE_RPC_URL) });
 
 interface BalancePayload {
   wheelSpins: number;
@@ -29,27 +22,14 @@ interface BalancePayload {
   cardPurchaseCount: number;
 }
 
-function buildPayload(
-  data: Record<string, unknown> | undefined,
-  onchainPasses: number | null,
-): BalancePayload {
+function buildPayload(data: Record<string, unknown> | undefined): BalancePayload {
   const d = data ?? {};
-  const cachedPasses = (d.draftPasses as number | undefined) ?? 0;
-  // Firestore is the user-facing source of truth — every mint / grant /
-  // promo / draft-entry endpoint writes through to v2_users/{userId}, and
-  // those writes drive this stream. On-chain BBB4.balanceOf is a one-shot
-  // drift detector on connect; if it's strictly higher than the cache we
-  // ratchet up. We never ratchet down because BBB4 doesn't burn on use,
-  // so balanceOf includes used NFTs.
-  const draftPasses = onchainPasses != null && onchainPasses > cachedPasses
-    ? onchainPasses
-    : cachedPasses;
   return {
     wheelSpins: (d.wheelSpins as number | undefined) ?? 0,
     freeDrafts: (d.freeDrafts as number | undefined) ?? 0,
     jackpotEntries: (d.jackpotEntries as number | undefined) ?? 0,
     hofEntries: (d.hofEntries as number | undefined) ?? 0,
-    draftPasses,
+    draftPasses: (d.draftPasses as number | undefined) ?? 0,
     cardPurchaseCount: (d.cardPurchaseCount as number | undefined) ?? 0,
   };
 }
@@ -57,13 +37,17 @@ function buildPayload(
 /**
  * GET /api/owner/balance/stream?userId=<wallet>
  *
- * Server-Sent Events stream of a user's balance. Pushed to the client:
- *   - Initial snapshot on connect (Firestore cache + one on-chain drift check).
- *   - Any Firestore write to v2_users/{userId} (from mint endpoints, admin
- *     grants, spin transactions, draft-entry burns, Alchemy webhook, etc.).
+ * Server-Sent Events stream of a user's balance. Firestore is the single
+ * source of truth — every endpoint that mints / grants / spends / burns a
+ * pass writes through to `v2_users/{userId}`, and this stream pushes those
+ * writes to the client via Firestore onSnapshot.
  *
  * Replaces the 15s client-side polling. Typical push latency: <200ms from
  * the moment a Firestore write commits to the UI updating.
+ *
+ * No on-chain reads here on purpose: BBB4 doesn't burn NFTs on use, so
+ * `balanceOf` would inflate the count after a pass is consumed and undo
+ * the use endpoint's correct decrement.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -96,24 +80,6 @@ export async function GET(req: Request) {
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
   const encoder = new TextEncoder();
 
-  // Local helper: read BBB4.balanceOf on-chain. Quiet on failure — we'll fall
-  // back to the cached value in that case.
-  const readOnchain = async (): Promise<number | null> => {
-    if (!WALLET_REGEX.test(userId)) return null;
-    try {
-      const v = await onchainClient.readContract({
-        address: BBB4_CONTRACT_ADDRESS,
-        abi: BBB4_ABI,
-        functionName: 'balanceOf',
-        args: [userId as Address],
-      });
-      return Number(v);
-    } catch (err) {
-      logger.debug('balance.stream.onchain_read_failed', { userId, err: (err as Error).message });
-      return null;
-    }
-  };
-
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
@@ -126,39 +92,18 @@ export async function GET(req: Request) {
         }
       };
 
-      // 1. Initial snapshot — read on-chain ONCE here as a drift check.
-      //    Subsequent updates come from Firestore onSnapshot — every code
-      //    path that affects draftPasses writes through to Firestore, so
-      //    we don't need to keep polling on-chain within this connection.
+      // 1. Initial snapshot — pure Firestore read, no on-chain mutation.
       let firstSnapshotSent = false;
       try {
-        const [snap, onchainPasses] = await Promise.all([userRef.get(), readOnchain()]);
+        const snap = await userRef.get();
         const data = snap.exists ? (snap.data() ?? {}) : {};
-        const cachedPasses = (data.draftPasses as number | undefined) ?? 0;
-
-        // If on-chain is strictly higher than Firestore, a webhook may have
-        // missed a recent mint — write through up so subsequent onSnapshot
-        // events show the right value.
-        if (onchainPasses != null && onchainPasses > cachedPasses) {
-          try {
-            await userRef.set(
-              { draftPasses: onchainPasses, onchainSyncedAt: FieldValue.serverTimestamp() },
-              { merge: true },
-            );
-          } catch (writeErr) {
-            logger.warn('balance.stream.writethrough_failed', { userId, err: (writeErr as Error).message });
-          }
-        }
-
-        send('snapshot', buildPayload(data, onchainPasses));
+        send('snapshot', buildPayload(data));
         firstSnapshotSent = true;
       } catch (err) {
         logger.warn('balance.stream.initial_failed', { userId, err: (err as Error).message });
       }
 
       // 2. Real-time Firestore listener. Each change pushes a fresh payload.
-      //    Firestore is the single authoritative source within this
-      //    connection's lifetime — we don't re-read on-chain per update.
       const unsubscribe = userRef.onSnapshot(
         (snap) => {
           // Skip the very first onSnapshot fire — Firestore always emits
@@ -169,7 +114,7 @@ export async function GET(req: Request) {
             return;
           }
           const data = snap.exists ? (snap.data() ?? {}) : {};
-          send('update', buildPayload(data, null));
+          send('update', buildPayload(data));
         },
         (err) => {
           logger.warn('balance.stream.snapshot_err', { userId, err: err.message });
