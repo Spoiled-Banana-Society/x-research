@@ -239,14 +239,13 @@ export async function POST(req: Request) {
     }
 
     // 4. Firestore writethrough so the header ticks live via the SSE stream.
-    //    Use a transaction with a 0-floor so legacy bad data (negative
-    //    values from before the use-pass floor was added) doesn't silently
-    //    swallow this mint.
+    //    Two-stage strategy: transaction with 0-floor first, atomic
+    //    FieldValue.increment fallback if the transaction fails.
     let newDraftPasses: number | null = null;
     if (isFirestoreConfigured()) {
+      const db = getAdminFirestore();
+      const userRef = db.collection(USERS_COLLECTION).doc(userId);
       try {
-        const db = getAdminFirestore();
-        const userRef = db.collection(USERS_COLLECTION).doc(userId);
         newDraftPasses = await db.runTransaction(async (tx) => {
           const snap = await tx.get(userRef);
           const data = snap.exists ? (snap.data() ?? {}) : {};
@@ -258,11 +257,25 @@ export async function POST(req: Request) {
           tx.set(userRef, { draftPasses: nextPasses, cardPurchaseCount: nextCardCount }, { merge: true });
           return nextPasses;
         });
-      } catch (dbErr) {
-        logger.warn('card-mint.firestore_increment_failed', {
-          userId,
-          err: (dbErr as Error).message,
-        });
+      } catch (txErr) {
+        console.error('[card-mint] firestore transaction failed, falling back to atomic increment:', txErr);
+        try {
+          await userRef.set(
+            {
+              draftPasses: FieldValue.increment(quantity),
+              ...(paymentMethod === 'card' ? { cardPurchaseCount: FieldValue.increment(1) } : {}),
+            },
+            { merge: true },
+          );
+          const after = await userRef.get();
+          newDraftPasses = (after.data()?.draftPasses as number | undefined) ?? null;
+        } catch (incErr) {
+          console.error('[card-mint] atomic increment fallback also failed:', incErr);
+          logger.warn('card-mint.firestore_increment_failed', {
+            userId,
+            err: (incErr as Error).message,
+          });
+        }
       }
     }
 

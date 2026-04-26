@@ -1,4 +1,6 @@
 export const dynamic = "force-dynamic";
+import { FieldValue } from 'firebase-admin/firestore';
+
 import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
@@ -58,24 +60,39 @@ export async function POST(req: Request) {
     //    value to the connected client. We also read the post-write value
     //    back and return it in the response so the client can update its
     //    own state immediately, without waiting on SSE roundtrip latency.
+    //
+    // Two-stage strategy:
+    //   (a) try a transaction with a 0-floor (handles legacy negative data).
+    //   (b) if the transaction fails for any reason, fall back to an atomic
+    //       FieldValue.increment which can't contend, then re-read for the
+    //       returned value. Worst case we miss the 0-floor on legacy data —
+    //       acceptable because the read-side clamp still hides any negative
+    //       and the user gets a valid number back.
     let newDraftPasses: number | null = null;
     if (isFirestoreConfigured()) {
+      const db = getAdminFirestore();
+      const userRef = db.collection(USERS_COLLECTION).doc(userId);
       try {
-        const db = getAdminFirestore();
-        const userRef = db.collection(USERS_COLLECTION).doc(userId);
-        // Transaction so the read sees the post-increment value, not a
-        // racy stale snapshot.
         newDraftPasses = await db.runTransaction(async (tx) => {
           const snap = await tx.get(userRef);
           const current = (snap.exists ? (snap.data()?.draftPasses as number | undefined) : undefined) ?? 0;
-          // Floor at 0 so legacy bad data (e.g. a negative value from before
-          // the use-pass floor was added) doesn't silently swallow this mint.
           const next = Math.max(0, current) + quantity;
           tx.set(userRef, { draftPasses: next }, { merge: true });
           return next;
         });
-      } catch (dbErr) {
-        logger.warn('staging-mint.firestore_increment_failed', { userId, err: (dbErr as Error).message });
+      } catch (txErr) {
+        console.error('[staging-mint] firestore transaction failed, falling back to atomic increment:', txErr);
+        try {
+          await userRef.set({ draftPasses: FieldValue.increment(quantity) }, { merge: true });
+          const after = await userRef.get();
+          newDraftPasses = (after.data()?.draftPasses as number | undefined) ?? null;
+        } catch (incErr) {
+          console.error('[staging-mint] atomic increment fallback also failed:', incErr);
+          logger.warn('staging-mint.firestore_increment_failed', {
+            userId,
+            err: (incErr as Error).message,
+          });
+        }
       }
     }
 

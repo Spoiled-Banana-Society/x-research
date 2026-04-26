@@ -277,6 +277,11 @@ export default function HomePage() {
             }
             promosQuery.refreshPromos();
             void refreshBalance();
+            // Safety net: if the response was missing draftPasses (e.g. the
+            // server-side Firestore write hit a transient error and the
+            // fallback re-read returned null), pull the value once more after
+            // 2s. By then the reconciler / SSE will have caught up.
+            setTimeout(() => { void refreshBalance(); }, 2000);
           }} />
         </section>
       )}
