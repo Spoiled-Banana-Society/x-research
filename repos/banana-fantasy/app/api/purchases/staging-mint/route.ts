@@ -5,7 +5,6 @@ import { ApiError } from '@/lib/api/errors';
 import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
-import { reconcilePassesForWallet } from '@/lib/onchain/reconcilePasses';
 import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
 import { logger } from '@/lib/logger';
 
@@ -130,12 +129,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Best-effort reconcile so the Go API ledger eventually catches up
-    //    for any downstream consumer. Fire-and-forget — must not block the
-    //    response or affect the user-visible count.
-    void reconcilePassesForWallet(userId).catch((reconcileErr) => {
-      logger.warn('staging-mint.reconcile_failed', { userId, err: (reconcileErr as Error).message });
-    });
+    // Note: we deliberately do NOT call reconcilePassesForWallet here.
+    // The reconciler reads on-chain ownership via Alchemy's NFT indexer,
+    // which lags the JSON-RPC node by a few seconds after a fresh mint.
+    // If we fire-and-forget the reconciler after this endpoint's
+    // authoritative Firestore write, it can race and overwrite the
+    // correct value with a stale lower count (the Alchemy NFT API hasn't
+    // indexed the mint yet). The reconciler still runs from the Alchemy
+    // Transfer webhook (real-time, signature-verified) and the admin
+    // /api/admin/reconcile-passes endpoint — those are the right places
+    // for it.
 
     return json({ success: true, minted: quantity, tokenIds, txHash, draftPasses: newDraftPasses }, 200);
   } catch (err) {
