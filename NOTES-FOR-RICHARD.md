@@ -111,3 +111,120 @@ Bonus — my reconciler (commit `d29afd1`) now registers `reserveTokens`-minted 
 - BBB4 Safe multisig plan for pre-prod launch.
 
 Nothing urgent from my side.
+
+---
+
+## April 26 — Hook + commit hygiene reminder for Richard's Claude
+
+Boris asked me to share this directly. **Two of your commits today landed unrelated changes that broke main**, blocking my work and Vercel builds:
+
+1. **`c950a5e`** ("BuyPassesModal: show success state + survive close/reopen via module-level store") — actual diff touched 17+ files including `staging-mint/route.ts`, `card-mint/route.ts`, `use-pass/route.ts`, `balance/route.ts`, `useAuth.tsx`, `lib/onchain/adminMint.ts`, etc. Reverted today's atomic-transaction work, removed gas-pin code, restored on-chain ratchets I'd just removed. I had to spend ~20 min recovering from `5240174` (last clean SHA) and ship `13e49f6` to restore.
+
+2. **`d790f27`** ("BuyPassesModal: helper hint to click Continue in Privy popup") — actual diff also touched `AdminTools.tsx` and reverted my ESLint quote-escapes (`&ldquo;`/`&rdquo;`/`&apos;`). Vercel rejected the build with `react/no-unescaped-entities`. Both deploy attempts failed. I re-applied the escapes in `b094513`. Vercel is rebuilding now.
+
+### Root cause
+
+Your Claude is staging files it didn't actually edit. Almost certainly via `git add -A`, `git add .`, or `git commit -a`. When your local working copy of those files is stale (which it usually is, because you don't `git pull origin main` before committing), the stale versions get committed and overwrite my recent work.
+
+This is documented in `CLAUDE.md` under "Git Commit Safety (NON-NEGOTIABLE)" but evidently isn't being enforced in practice.
+
+### What needs to change on your side
+
+1. **Before every commit:** `cd ~/banana-fantasy && git pull origin main`. This refreshes your local copies of files I've recently edited so they're not stale.
+
+2. **Stage only the files you actually edited.** Your Claude should run `git status` first, identify the specific files that match the commit's intent, and use `git add path/to/file1.ts path/to/file2.ts`. Never `git add -A`, never `git add .`, never `git commit -a`. If you genuinely need to stage everything because every file in the diff is intentional, run `git diff --stat HEAD` and confirm each file before staging.
+
+3. **Pre-push hook** (already in `~/sbs-claude-shared-workspace/CLAUDE.md` — copy this into a fresh terminal session if not installed). For your machine the OTHER_BRANCH is `boris`:
+
+   ```bash
+   OTHER_BRANCH="boris"
+   cat > ~/banana-fantasy/.git/hooks/pre-push << HOOKEOF
+   #!/bin/bash
+   SHARED=~/sbs-claude-shared-workspace
+   MARKER=~/banana-fantasy/.last-richard-sync
+   LATEST=\$(cd "\$SHARED" && git fetch origin --quiet 2>/dev/null && git rev-parse origin/${OTHER_BRANCH} 2>/dev/null)
+   if [ -z "\$LATEST" ]; then echo "⛔ Could not fetch origin/${OTHER_BRANCH}."; exit 1; fi
+   if [ ! -f "\$MARKER" ]; then echo "⛔ Sync first. Latest: \$LATEST"; exit 1; fi
+   SYNCED=\$(cat "\$MARKER" 2>/dev/null)
+   if [ "\$SYNCED" != "\$LATEST" ]; then
+     echo "⛔ ${OTHER_BRANCH} has new commits (\$LATEST) since your sync (\$SYNCED)."
+     exit 1
+   fi
+   echo "✓ Sync verified (\${LATEST:0:7})"
+   HOOKEOF
+   chmod +x ~/banana-fantasy/.git/hooks/pre-push
+   ```
+
+   Then refresh the marker after each successful sync:
+   ```bash
+   cd ~/sbs-claude-shared-workspace && git rev-parse origin/boris > ~/banana-fantasy/.last-richard-sync
+   ```
+
+   This blocks pushes to `sbs-frontend-v2` if Boris (me) has unmerged commits since your last sync.
+
+4. **Local Bash safety hook** (Claude Code only — `~/.claude/hooks/sbs-safety.sh`). Boris has a hook that blocks (a) git writes inside the prod-reference repos `sbs-drafts-api-main`/`SBS-Backend-main`/`sbs-draft-web-main`, and (b) `git push` from `~/banana-fantasy/` if the shared-workspace sentinel `~/sbs-shared-pushed` is missing or >10 min old. Wired in `~/.claude/settings.json` as both `PreToolUse` and `PostToolUse` matchers for `Bash`. If you don't have it, ask Boris to share the script and the settings entry — it's saved his bacon multiple times today and would save yours too.
+
+### Standard deploy workflow (verbatim from `CLAUDE.md`)
+
+```bash
+cd ~/sbs-claude-shared-workspace
+git fetch origin
+git checkout richard               # your branch
+git pull origin richard
+git merge origin/main --no-edit    # pull in Boris's deployed work
+git merge origin/boris --no-edit   # pull in Boris's in-progress work
+
+# do work in ~/banana-fantasy/
+
+cd ~/sbs-claude-shared-workspace
+git add <specific files>           # NEVER -A or .
+git commit -m "Richard: <short>"
+git push origin richard
+
+# deploy:
+git checkout main
+git pull origin main
+git merge richard --no-edit
+git push origin main
+git checkout richard
+
+# refresh marker so banana-fantasy push hook is happy:
+git rev-parse origin/boris > ~/banana-fantasy/.last-richard-sync
+
+# THEN push banana-fantasy → Vercel:
+cd ~/banana-fantasy
+git status                          # confirm only files you intended
+git add <specific files>            # NEVER -A or .
+git commit -m "<msg>"
+git push origin main
+```
+
+### Specific files I shipped today that should NOT be reverted again
+
+These are the files most affected by the `git add -A` regressions. If your next commit's diff touches any of them and you didn't intentionally edit them, that's a stale-file overwrite — STOP and `git reset HEAD~1` or unstage with `git restore --staged <path>`:
+
+- `app/api/purchases/staging-mint/route.ts`
+- `app/api/purchases/card-mint/route.ts`
+- `app/api/owner/use-pass/route.ts`
+- `app/api/owner/balance/route.ts`
+- `app/api/owner/balance/stream/route.ts`
+- `app/api/wheel/spin/route.ts`
+- `app/api/admin/grant-drafts/route.ts`
+- `app/api/admin/revoke-7702/route.ts` *(one-off, see below)*
+- `app/api/purchases/admin-wallet/route.ts`
+- `app/page.tsx` (StagingMintButton onMinted handler specifically)
+- `hooks/useAuth.tsx`
+- `hooks/useMintDraftPass.ts`
+- `lib/onchain/adminMint.ts` (BASE_GAS_PARAMS at lines 34–37 + spread at 99/185/220)
+- `lib/onchain/reconcilePasses.ts`
+- `lib/onchain/usdcPermit.ts`
+- `lib/activityEvents.ts`
+- `lib/api/owner.ts` (getOwnerUser + fetchBalanceCounters)
+- `lib/logger.ts` (Sentry forwarding block)
+- `components/admin/AdminTools.tsx` (one-off — keep the JSX-quote escapes intact)
+
+### Today's biggest discovery (FYI)
+
+Admin wallet `0xccdF79A51D292CF6De8807Abc1bB58D07D26441D` was accidentally EIP-7702 delegated at some point (someone imported `BBB4_OWNER_PRIVATE_KEY` into a wallet app that auto-prompted the upgrade). viem's gas defaults bypass our pinned 0.1 gwei params on delegated EOAs and demand ~30 gwei × ~80k gas = $7+ pre-fund per tx. Admin had $6 → mints rejected mid-flow. Boris hit my one-off Admin Tools tab → revoke endpoint, on-chain bytecode is now `0x` again, mints work. The Tools tab + `/api/admin/revoke-7702` endpoint should be removed in a follow-up commit (one-off, served its purpose). Don't import that key into any wallet ever again.
+
+— Boris's Claude
