@@ -9,27 +9,56 @@ import { logger } from '@/lib/logger';
 /**
  * GET /api/batches/{batchNumber}/proof
  *
- * Returns the on-chain commit/reveal proof for a given batch. Reads from
- * Firestore collection `batch_proofs/{batchNumber}` which is written by the
- * Go API at batch boundaries (see contracts/BBB4BatchProof.sol + the Go
- * batchproof package — both pending deploy as of this commit).
+ * Returns the on-chain proof for a given batch. Reads `batch_proofs/{N}`
+ * which the Go API writes at batch boundaries.
  *
- * Until the contract + Go integration ship, every batch returns
- * `{ status: 'pre-launch', ... }`. The frontend handles that state
- * gracefully (shows the distribution-rule explanation + a "rolling out"
- * disclaimer).
+ * Two variants share this endpoint:
+ *   - "commit-reveal" (legacy BBB4BatchProof): status flows
+ *     "" → "committed" → "revealed". Positions exposed at "revealed".
+ *   - "vrf" (BBB4BatchProofVRF, Chainlink VRF v2.5): status flows
+ *     "" → "requested" → "fulfilled". Positions exposed at "fulfilled".
+ *
+ * Pre-launch batches (no Firestore doc) return status='pre-launch' and the
+ * frontend renders the rolling-out disclaimer.
  */
+
+type ProofStatus =
+  | 'pending'
+  | 'committed'
+  | 'revealed'
+  | 'requested'
+  | 'fulfilled'
+  | 'pre-launch';
+
+type ProofVariant = 'commit-reveal' | 'vrf';
 
 interface BatchProofDoc {
   batchNumber: number;
-  status: 'pending' | 'committed' | 'revealed' | 'pre-launch';
+  status: ProofStatus;
+  variant?: ProofVariant;
+
+  // Legacy commit-reveal
   seedHash?: string;
   commitTxHash?: string;
   commitBlock?: number;
   committedAt?: number;
   serverSeed?: string;
+  publishTxHash?: string;
+  publishBlock?: number;
   revealTxHash?: string;
+  revealBlock?: number;
   revealedAt?: number;
+
+  // VRF v2.5
+  vrfRequestId?: string;
+  vrfRequestTxHash?: string;
+  vrfRequestBlock?: number;
+  vrfRequestedAt?: number;
+  vrfRandomness?: string;
+  vrfFulfilledAt?: number;
+  vrfCoordinator?: string;
+
+  // Common (gated)
   jackpotPositions?: number[];
   hofPositions?: number[];
   preLaunchNote?: string;
@@ -58,25 +87,46 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
     const data = snap.data() as BatchProofDoc | undefined;
     if (!data) return json(prelaunch(batchNumber));
 
-    // Positions are gated on status='revealed'. Before the seed is on-chain,
-    // exposing them via the API would let users time their draft entries
-    // to land in the slots known to be Jackpot/HOF — defeating the surprise
-    // and giving an unfair edge to anyone who scrapes this endpoint. After
-    // reveal, the seed itself is public, so anyone can recompute positions
-    // independently in the browser via lib/batchProof.ts.
-    const isRevealed = data.status === 'revealed';
+    // Positions are gated until the seed/randomness is publicly verifiable
+    // on-chain. Before that, exposing them via the API would let users time
+    // their draft entries to land in the slots known to be Jackpot/HOF —
+    // defeating the surprise and giving an unfair edge to anyone who scrapes
+    // this endpoint.
+    //   - commit-reveal: gated on status==='revealed' (server seed published).
+    //   - vrf: gated on status==='fulfilled' (coordinator delivered randomness).
+    const variant: ProofVariant = data.variant === 'vrf' ? 'vrf' : 'commit-reveal';
+    const isPubliclyVerifiable =
+      variant === 'vrf' ? data.status === 'fulfilled' : data.status === 'revealed';
+
     return json({
       batchNumber,
       status: data.status,
+      variant,
+
+      // Legacy commit-reveal fields
       seedHash: data.seedHash,
       commitTxHash: data.commitTxHash,
       commitBlock: data.commitBlock,
       committedAt: data.committedAt,
-      serverSeed: isRevealed ? data.serverSeed : undefined,
+      serverSeed: variant === 'commit-reveal' && isPubliclyVerifiable ? data.serverSeed : undefined,
+      publishTxHash: data.publishTxHash,
+      publishBlock: data.publishBlock,
       revealTxHash: data.revealTxHash,
+      revealBlock: data.revealBlock,
       revealedAt: data.revealedAt,
-      jackpotPositions: isRevealed ? data.jackpotPositions : undefined,
-      hofPositions: isRevealed ? data.hofPositions : undefined,
+
+      // VRF fields
+      vrfRequestId: data.vrfRequestId,
+      vrfRequestTxHash: data.vrfRequestTxHash,
+      vrfRequestBlock: data.vrfRequestBlock,
+      vrfRequestedAt: data.vrfRequestedAt,
+      vrfRandomness: variant === 'vrf' && isPubliclyVerifiable ? data.vrfRandomness : undefined,
+      vrfFulfilledAt: data.vrfFulfilledAt,
+      vrfCoordinator: data.vrfCoordinator,
+
+      // Common (gated)
+      jackpotPositions: isPubliclyVerifiable ? data.jackpotPositions : undefined,
+      hofPositions: isPubliclyVerifiable ? data.hofPositions : undefined,
       preLaunchNote: data.preLaunchNote,
     });
   } catch (err) {
@@ -89,6 +139,8 @@ function prelaunch(batchNumber: number, note?: string) {
   return {
     batchNumber,
     status: 'pre-launch' as const,
-    preLaunchNote: note ?? 'Batch fills predate the on-chain commit/reveal rollout. Distribution constraint (94/5/1 per 100) was enforced in code.',
+    preLaunchNote:
+      note ??
+      'Batch fills predate the on-chain commit/reveal rollout. Distribution constraint (94/5/1 per 100) was enforced in code.',
   };
 }
