@@ -7,9 +7,13 @@
 
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getDatabase, type Database as RtdbDatabase } from 'firebase-admin/database';
+
+const STAGING_RTDB_URL = 'https://sbs-staging-env-default-rtdb.firebaseio.com';
 
 let _app: App | null = null;
 let _db: Firestore | null = null;
+let _rtdb: RtdbDatabase | null = null;
 
 // Staging service account (base64) — hardcoded fallback for Vercel runtime
 // where .env.production server-side vars are not available.
@@ -42,11 +46,15 @@ export function getAdminApp(): App {
   }
 
   const sa = getServiceAccount();
+  const databaseURL = process.env.NEXT_PUBLIC_DATABASE_URL || STAGING_RTDB_URL;
   if (sa) {
-    _app = initializeApp({ credential: cert(sa as Parameters<typeof cert>[0]) });
+    _app = initializeApp({
+      credential: cert(sa as Parameters<typeof cert>[0]),
+      databaseURL,
+    });
   } else {
     // Fall back to ADC (works in GCP environments)
-    _app = initializeApp();
+    _app = initializeApp({ databaseURL });
   }
   return _app;
 }
@@ -56,6 +64,17 @@ export function getAdminFirestore(): Firestore {
   const app = getAdminApp();
   _db = getFirestore(app);
   return _db;
+}
+
+/**
+ * Get the Realtime Database via Admin SDK. Bypasses RTDB security rules,
+ * so use only from trusted server contexts (API routes, Cloud Functions).
+ */
+export function getAdminDatabase(): RtdbDatabase {
+  if (_rtdb) return _rtdb;
+  const app = getAdminApp();
+  _rtdb = getDatabase(app);
+  return _rtdb;
 }
 
 /**

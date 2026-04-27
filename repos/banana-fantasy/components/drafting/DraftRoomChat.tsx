@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { subscribeChatMessages, pushChatMessage } from '@/lib/api/firebase';
 
 interface ChatMessage {
   id: string;
@@ -40,35 +39,57 @@ export function DraftRoomChat({
   const [isSending, setIsSending] = useState(false);
   const myWallet = (walletAddress || '').toLowerCase();
 
-  // Subscribe to RTDB chat for this draft. Updates flow in real time across
-  // every device in the room (including the user's own phone + laptop).
-  // Track the latest message id we've seen so we can bump unread count when
-  // someone else's message arrives while the chat is collapsed.
+  // Poll the chat API for this draft. We can't subscribe directly to RTDB
+  // from the browser because the Privy-authenticated client is anonymous to
+  // Firebase, and staging rules deny anonymous reads on /drafts/*/chat. The
+  // server route reads via Admin SDK and proxies the result.
   const lastSeenIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!draftId) return;
-    const unsub = subscribeChatMessages(draftId, (records) => {
-      const next = records.map((r) => ({
-        id: r.id,
-        sender: r.username || r.walletAddress.slice(0, 6),
-        text: r.text,
-        isYou: !!myWallet && r.walletAddress.toLowerCase() === myWallet,
-        timestamp: r.timestamp,
-      }));
-      setMessages((prev) => {
-        // Bump unread for any new messages from others while collapsed.
-        if (isCollapsedRef.current && next.length > prev.length) {
-          const known = new Set(prev.map((m) => m.id));
-          const newFromOthers = next.filter((m) => !known.has(m.id) && !m.isYou);
-          if (newFromOthers.length > 0) {
-            setUnreadCount((c) => c + newFromOthers.length);
+    let cancelled = false;
+
+    const fetchOnce = async () => {
+      try {
+        const res = await fetch(`/api/chat/${encodeURIComponent(draftId)}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          messages?: Array<{
+            id: string;
+            walletAddress: string;
+            username: string;
+            text: string;
+            timestamp: number;
+          }>;
+        };
+        if (cancelled || !Array.isArray(data.messages)) return;
+        const next = data.messages.map((r) => ({
+          id: r.id,
+          sender: r.username || r.walletAddress.slice(0, 6),
+          text: r.text,
+          isYou: !!myWallet && r.walletAddress.toLowerCase() === myWallet,
+          timestamp: r.timestamp,
+        }));
+        setMessages((prev) => {
+          if (isCollapsedRef.current && next.length > prev.length) {
+            const known = new Set(prev.map((m) => m.id));
+            const newFromOthers = next.filter((m) => !known.has(m.id) && !m.isYou);
+            if (newFromOthers.length > 0) {
+              setUnreadCount((c) => c + newFromOthers.length);
+            }
           }
-        }
-        if (next.length) lastSeenIdRef.current = next[next.length - 1].id;
-        return next;
-      });
-    });
-    return unsub;
+          if (next.length) lastSeenIdRef.current = next[next.length - 1].id;
+          return next;
+        });
+      } catch {
+        // network blip — let next tick retry
+      }
+    };
+
+    fetchOnce();
+    const id = setInterval(fetchOnce, 2000);
+    return () => { cancelled = true; clearInterval(id); };
   }, [draftId, myWallet]);
   const [isMuted, setIsMuted] = useState(true);
   const [isDeafened, setIsDeafened] = useState(false);
@@ -107,23 +128,21 @@ export function DraftRoomChat({
     const text = inputValue.trim();
     if (!text || isSending) return;
     if (!draftId || !walletAddress) {
-      // Can't sync without wallet+draft context — fall back to no-op so we
-      // don't pretend to send a message that won't reach anyone else.
       console.warn('[DraftRoomChat] cannot send: missing draftId or walletAddress');
       return;
     }
     setIsSending(true);
     setInputValue('');
     try {
-      await pushChatMessage(draftId, {
-        walletAddress,
-        username,
-        text,
+      const res = await fetch(`/api/chat/${encodeURIComponent(draftId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress, username, text }),
       });
+      if (!res.ok) throw new Error(`send failed (${res.status})`);
     } catch (err) {
       console.warn('[DraftRoomChat] send failed:', err);
-      // Restore the unsent text so the user can retry.
-      setInputValue(text);
+      setInputValue(text); // restore so user can retry
     } finally {
       setIsSending(false);
     }
