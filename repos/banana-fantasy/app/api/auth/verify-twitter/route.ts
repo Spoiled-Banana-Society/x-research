@@ -8,11 +8,24 @@ import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 const TWITTER_LINKS_COLLECTION = 'v2_twitter_links';
 
 async function requireAuthenticatedWallet(req: Request, walletAddress: string) {
-  const { walletAddress: authenticatedWalletAddress } = await getPrivyUser(req);
-  if (!authenticatedWalletAddress) {
-    throw new ApiError(401, 'Authenticated wallet address missing from token');
+  const { userId, walletAddress: authenticatedWalletAddress } = await getPrivyUser(req);
+
+  // Privy JWTs don't always carry wallet claims — fall back to looking up
+  // the wallet on the user's Firestore doc via the authenticated userId.
+  let authoritativeWallet = authenticatedWalletAddress?.toLowerCase() ?? null;
+  if (!authoritativeWallet) {
+    const db = getAdminFirestore();
+    const userDoc = await db.collection('v2_users').doc(userId).get();
+    const userWallet = userDoc.exists
+      ? (userDoc.data()?.walletAddress as string | undefined)
+      : undefined;
+    authoritativeWallet = userWallet ? userWallet.toLowerCase() : null;
   }
-  if (authenticatedWalletAddress !== walletAddress) {
+
+  if (!authoritativeWallet) {
+    throw new ApiError(401, 'No wallet found for authenticated user');
+  }
+  if (authoritativeWallet !== walletAddress.toLowerCase()) {
     throw new ApiError(403, 'Authenticated wallet does not match request walletAddress');
   }
 }
