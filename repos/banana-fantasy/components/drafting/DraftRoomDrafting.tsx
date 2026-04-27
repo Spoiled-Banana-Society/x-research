@@ -254,21 +254,21 @@ export function DraftRoomDrafting({
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {phase === 'drafting' && engine.draftStatus === 'completed' ? (
-          <div>
-            <DraftTabs activeTab={activeTab} onTabChange={onTabChange} queueCount={engine.queuedPlayers.length} />
-            <DraftComplete
-              draftId={draftId || urlDraftId}
-              generatedCardUrl={generatedCardUrl}
-              walletAddress={walletParam}
-            />
-          </div>
-        ) : (
+        {(() => {
+          const isCompleted = phase === 'drafting' && engine.draftStatus === 'completed';
+          return (
           <div className="flex flex-1 overflow-hidden">
             {/* Main tab content (left) — tabs centered above player list */}
             <div className="flex-1 overflow-auto flex flex-col min-w-0">
               <DraftTabs activeTab={activeTab} onTabChange={onTabChange} queueCount={engine.queuedPlayers.length} />
-              {activeTab === 'draft' && (
+              {activeTab === 'draft' && isCompleted && (
+                <DraftComplete
+                  draftId={draftId || urlDraftId}
+                  generatedCardUrl={generatedCardUrl}
+                  walletAddress={walletParam}
+                />
+              )}
+              {activeTab === 'draft' && !isCompleted && (
                 <DraftPlayerList
                   availablePlayers={engine.availablePlayers}
                   isUserTurn={phase === 'drafting' && engine.isUserTurn}
@@ -324,7 +324,11 @@ export function DraftRoomDrafting({
                   userName={user?.username ?? undefined}
                 />
               )}
-              {activeTab === 'chat' && (
+              {/* Keep chat mounted across tab switches and through draft
+                  completion so the polling subscription, unread counter, and
+                  message history persist. Visibility is CSS-controlled — the
+                  parent div is `hidden` when another tab is active. */}
+              <div hidden={activeTab !== 'chat'} className={activeTab === 'chat' ? 'flex-1 flex flex-col min-h-0' : ''}>
                 <DraftRoomChat
                   playerCount={playerCount}
                   phase={phase}
@@ -332,7 +336,7 @@ export function DraftRoomDrafting({
                   draftId={draftId}
                   walletAddress={walletParam}
                 />
-              )}
+              </div>
             </div>
 
             {/* Right sidebar: Queue + My Team previews (desktop only) */}
@@ -483,7 +487,8 @@ export function DraftRoomDrafting({
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </>
   );
