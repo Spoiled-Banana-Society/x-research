@@ -13,7 +13,8 @@ export type AdminAction =
   | 'zero-free-drafts'
   | 'kyc-verify'
   | 'kyc-revoke'
-  | 'reset-user';
+  | 'reset-user'
+  | 'revoke-7702';
 
 export interface AdminActionRecord {
   actor: string;          // wallet address of admin who performed action

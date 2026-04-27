@@ -72,7 +72,7 @@ export function DraftRow({
         </div>
 
         <div className="w-28 flex-shrink-0 hidden sm:flex items-center justify-center gap-1.5">
-          {!isSpecial && (effectiveLive.displayPhase === 'randomizing' || effectiveLive.displayPhase === 'pre-spin-countdown' || (effectiveLive.displayPhase === 'draft-starting' && effectiveLive.countdown != null && effectiveLive.countdown > 37)) ? (
+          {!isSpecial && (effectiveLive.displayPhase === 'pre-spin-countdown' || (effectiveLive.displayPhase === 'draft-starting' && effectiveLive.countdown != null && effectiveLive.countdown > 37)) ? (
             <span className="text-banana text-sm font-semibold animate-pulse">Revealing...</span>
           ) : isRevealed ? (
             <>
