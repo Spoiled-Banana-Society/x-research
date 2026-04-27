@@ -150,8 +150,11 @@ func (dra *DraftActionResources) autoDraft(w http.ResponseWriter, r *http.Reques
 		// Update SortByObj to reflect missed pick
 		userInfo.NumPicksMissedConsecutive++
 
-		// After 3 consecutive timer-expired picks (server auto-pick), enable auto-draft for future picks
-		if userInfo.NumPicksMissedConsecutive >= 3 {
+		// After 2 consecutive timer-expired picks (server auto-pick), enable
+		// auto-draft for future picks. Was >= 3 — Richard requested >= 2 since
+		// users who miss two in a row are almost certainly AFK and shouldn't
+		// keep waiting full timers each pick.
+		if userInfo.NumPicksMissedConsecutive >= 2 {
 			userInfo.AutoDraft = true
 		}
 
