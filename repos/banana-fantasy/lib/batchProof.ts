@@ -69,9 +69,8 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 async function hmacSha256(key: Uint8Array, message: string): Promise<Uint8Array> {
-  const subtle = (typeof crypto !== 'undefined' && crypto.subtle)
-    ? crypto.subtle
-    : (await import('node:crypto')).webcrypto.subtle;
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto subtle unavailable in this runtime');
   const cryptoKey = await subtle.importKey(
     'raw',
     key as BufferSource,
@@ -141,9 +140,8 @@ export async function deriveBatchSlots(
  * pulling a keccak library.
  */
 export async function sha256Hex(hex: string): Promise<string> {
-  const subtle = (typeof crypto !== 'undefined' && crypto.subtle)
-    ? crypto.subtle
-    : (await import('node:crypto')).webcrypto.subtle;
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto subtle unavailable in this runtime');
   const digest = await subtle.digest('SHA-256', hexToBytes(hex) as BufferSource);
   return bytesToHex(new Uint8Array(digest));
 }

@@ -16,7 +16,7 @@ interface VerifiedBadgeProps {
   draftId?: string;
 }
 
-export function VerifiedBadge({ type, draftType: rawDraftType = 'pro', size = 'sm', compact = false, draftId }: VerifiedBadgeProps) {
+export function VerifiedBadge({ type: _type, draftType: rawDraftType = 'pro', size = 'sm', compact = false, draftId }: VerifiedBadgeProps) {
   const draftType: 'jackpot' | 'hof' | 'pro' = rawDraftType === 'regular' ? 'pro' : (rawDraftType || 'pro');
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
