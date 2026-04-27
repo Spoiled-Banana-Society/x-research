@@ -273,6 +273,7 @@ export interface Promo {
   timerEndTime?: string;
   claimable?: boolean;
   claimCount?: number;
+  completedDraftIds?: string[];
   isNew?: boolean;
   modalContent: {
     title: string;

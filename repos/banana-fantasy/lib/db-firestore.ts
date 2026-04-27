@@ -1236,19 +1236,110 @@ export async function resetQueue(type: 'jackpot' | 'hof'): Promise<void> {
   await db.collection(QUEUES_COLLECTION).doc(type).set(emptyQueueDoc(type));
 }
 
-// ── Promo recording stubs ───────────────────────────────────────────
-// These are called by the draft-complete and pick10 API routes.
-// They record a draft completion / pick-10 event for promo tracking.
-// TODO: implement real promo tracking logic once backend is ready.
+// ==================== DAILY-DRAFTS PROMO: DRAFT COMPLETION TRACKING ====================
+
+const DAILY_DRAFTS_PROMO_ID = '1';
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export async function recordDraftCompletion(userId: string, draftId: string): Promise<Promo | null> {
-  logger.debug(`[db] recordDraftCompletion stub: userId=${userId}, draftId=${draftId}`);
-  return null;
+  const db = getAdminFirestore();
+  await ensureUserSeeded(userId);
+
+  const promoRef = db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(PROMOS_SUBCOLLECTION)
+    .doc(DAILY_DRAFTS_PROMO_ID);
+
+  return db.runTransaction(async (tx) => {
+    const promoSnap = await tx.get(promoRef);
+    if (!promoSnap.exists) return null;
+
+    const promo = deepClone(promoSnap.data() as Promo);
+    if (promo.type !== 'daily-drafts') return null;
+
+    const ids = promo.completedDraftIds || [];
+
+    if (ids.includes(draftId)) return promo;
+
+    let needsTimerDelete = false;
+    if (promo.timerEndTime) {
+      const expired = new Date(promo.timerEndTime).getTime() < Date.now();
+      if (expired && !promo.claimable) {
+        promo.progressCurrent = 0;
+        promo.timerEndTime = undefined;
+        promo.completedDraftIds = [];
+        needsTimerDelete = true;
+      }
+    }
+
+    const prevProgress = promo.progressCurrent || 0;
+    promo.progressCurrent = prevProgress + 1;
+    promo.completedDraftIds = [...(promo.completedDraftIds || []), draftId];
+
+    if (prevProgress === 0) {
+      promo.timerEndTime = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
+    }
+
+    // Target reached: 3/4 → (4th draft) → 0/4 with CLAIM button + 24:00:00.
+    if (promo.progressCurrent >= (promo.progressMax || 4)) {
+      promo.progressCurrent = 0;
+      promo.claimable = true;
+      promo.claimCount = (promo.claimCount || 0) + 1;
+      promo.timerEndTime = undefined;
+      promo.completedDraftIds = [];
+      needsTimerDelete = true;
+    }
+
+    tx.set(promoRef, stripUndefined(promo), { merge: true });
+    if (needsTimerDelete) {
+      tx.update(promoRef, { timerEndTime: FieldValue.delete() });
+    }
+    return deepClone(promo);
+  });
 }
 
+// ==================== PICK-10 PROMO: RECORD WHEN USER GETS PICK #10 ====================
+
+const PICK10_PROMO_ID = '2';
+
 export async function recordPick10(userId: string, draftId: string, _draftName: string): Promise<Promo | null> {
-  logger.debug(`[db] recordPick10 stub: userId=${userId}, draftId=${draftId}`);
-  return null;
+  const db = getAdminFirestore();
+  await ensureUserSeeded(userId);
+
+  const promoRef = db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(PROMOS_SUBCOLLECTION)
+    .doc(PICK10_PROMO_ID);
+
+  return db.runTransaction(async (tx) => {
+    const promoSnap = await tx.get(promoRef);
+    if (!promoSnap.exists) return null;
+
+    const promo = deepClone(promoSnap.data() as Promo);
+    if (promo.type !== 'pick-10') return null;
+
+    const history = promo.modalContent.pick10History || [];
+
+    if (history.some(h => h.draftName === draftId)) return promo;
+
+    history.unshift({
+      date: new Date().toISOString().split('T')[0],
+      draftName: draftId,
+      status: 'claim' as const,
+    });
+    promo.modalContent.pick10History = history;
+    promo.modalContent.totalPick10s = (promo.modalContent.totalPick10s || 0) + 1;
+
+    const claimableCount = history.filter(h => h.status === 'claim').length;
+    promo.progressCurrent = 1;
+    promo.claimable = true;
+    promo.claimCount = claimableCount;
+
+    tx.set(promoRef, stripUndefined(promo), { merge: true });
+    return deepClone(promo);
+  });
 }
 
 // ── Persona Verification ──────────────────────────────────────────────
