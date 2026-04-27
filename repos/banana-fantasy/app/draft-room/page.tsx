@@ -1366,6 +1366,20 @@ function DraftRoomContent() {
           setPhase('result');
           const currentDraftId = draftIdRef.current;
           if (currentDraftId) draftStore.updateDraft(currentDraftId, { phase: 'result', type: draftType, draftType });
+
+          // Jackpot-hit promo: fire once per draft, idempotent on the server too.
+          if (draftType === 'jackpot' && currentDraftId && isPaidDraft) {
+            const promoUserId = user?.id || walletParam?.toLowerCase();
+            const jackpotKey = `promo-jackpot:${currentDraftId}`;
+            if (promoUserId && !localStorage.getItem(jackpotKey)) {
+              localStorage.setItem(jackpotKey, '1');
+              fetch('/api/promos/jackpot-hit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: promoUserId, draftId: currentDraftId }),
+              }).catch(err => console.error('[Promo] Jackpot tracking failed:', err));
+            }
+          }
         }, 400);
       }
     };

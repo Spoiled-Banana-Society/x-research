@@ -6,7 +6,7 @@ import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils'
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
 import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
-import { incrementMintPromos } from '@/lib/db';
+import { incrementMintPromos, incrementReferralPromos } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
@@ -141,8 +141,9 @@ export async function POST(req: Request) {
     // /api/admin/reconcile-passes endpoint — those are the right places
     // for it.
 
-    // Bump Buy 10 + Buy 2 promo progress. Best-effort: a Firestore failure
-    // here must not roll back the on-chain mint (already happened).
+    // Bump Buy 10 + Buy 2 promo progress and referrer milestones.
+    // Best-effort: a Firestore failure here must not roll back the on-chain
+    // mint (already happened).
     if (isFirestoreConfigured()) {
       try {
         await incrementMintPromos(userId, quantity);
@@ -151,6 +152,15 @@ export async function POST(req: Request) {
           userId,
           quantity,
           err: (promoErr as Error).message,
+        });
+      }
+      try {
+        await incrementReferralPromos(userId, quantity);
+      } catch (refErr) {
+        logger.warn('staging-mint.referral_increment_failed', {
+          userId,
+          quantity,
+          err: (refErr as Error).message,
         });
       }
     }

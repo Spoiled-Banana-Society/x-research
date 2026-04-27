@@ -748,6 +748,78 @@ export async function incrementMintPromos(
   return db.runTransaction((tx) => _incrementMintPromosInTx(tx, userRef, quantity));
 }
 
+/**
+ * Bumps the referrer's referral promo when their referee mints/buys passes.
+ * Bumps `draftsPurchased` by `quantity` and fires bought1 / bought10
+ * milestones when crossed.
+ *
+ * Behavior note: the legacy verifyPurchase counted completed purchase docs
+ * (1 per tx regardless of quantity); this helper counts actual passes.
+ * One mint of 10 passes now advances the referrer past bought10 in a single
+ * shot, instead of needing 10 separate purchases.
+ *
+ * Returns the number of newly-fired milestones (0, 1, or 2 — bought1 + bought10).
+ */
+async function _incrementReferralPromosInTx(
+  tx: FirebaseFirestore.Transaction,
+  buyerUser: User,
+  buyerUserId: string,
+  quantity: number,
+): Promise<{ referralMilestonesEarned: number }> {
+  if (!buyerUser.referredBy) return { referralMilestonesEarned: 0 };
+
+  const db = getAdminFirestore();
+  const referrerRef = db.collection(USERS_COLLECTION).doc(buyerUser.referredBy);
+  const referrerPromosSnap = await tx.get(referrerRef.collection(PROMOS_SUBCOLLECTION));
+  const referralPromoDoc = referrerPromosSnap.docs.find((doc) => (doc.data() as Promo).type === 'referral');
+  if (!referralPromoDoc) return { referralMilestonesEarned: 0 };
+
+  const referralPromo = deepClone(referralPromoDoc.data() as Promo);
+  if (!referralPromo.modalContent.referralHistory) return { referralMilestonesEarned: 0 };
+
+  const entry = referralPromo.modalContent.referralHistory.find(
+    (e: ReferralEntry) => e.referredUserId === buyerUserId,
+  );
+  if (!entry) return { referralMilestonesEarned: 0 };
+
+  let milestonesEarned = 0;
+  entry.draftsPurchased = (entry.draftsPurchased || 0) + quantity;
+
+  if (entry.draftsPurchased >= 1 && entry.rewards?.bought1 === 'pending') {
+    entry.rewards.bought1 = 'claim';
+    entry.status = 'claim';
+    referralPromo.claimCount = (referralPromo.claimCount || 0) + 1;
+    referralPromo.claimable = true;
+    milestonesEarned += 1;
+  }
+  if (entry.draftsPurchased >= 10 && entry.rewards?.bought10 === 'pending') {
+    entry.rewards.bought10 = 'claim';
+    entry.status = 'claim';
+    referralPromo.claimCount = (referralPromo.claimCount || 0) + 1;
+    referralPromo.claimable = true;
+    milestonesEarned += 1;
+  }
+
+  tx.set(referralPromoDoc.ref, stripUndefined(referralPromo), { merge: true });
+  return { referralMilestonesEarned: milestonesEarned };
+}
+
+export async function incrementReferralPromos(
+  buyerUserId: string,
+  quantity: number,
+): Promise<{ referralMilestonesEarned: number }> {
+  if (quantity <= 0) return { referralMilestonesEarned: 0 };
+  const db = getAdminFirestore();
+  await ensureUserSeeded(buyerUserId);
+  const userRef = db.collection(USERS_COLLECTION).doc(buyerUserId);
+  return db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) return { referralMilestonesEarned: 0 };
+    const buyerUser = userSnap.data() as User;
+    return _incrementReferralPromosInTx(tx, buyerUser, buyerUserId, quantity);
+  });
+}
+
 export async function verifyPurchase(purchaseId: string, txHash: string) {
   const db = getAdminFirestore();
 
@@ -890,43 +962,7 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
       freeDraftsAdded = buyBonusMilestonesEarned * API_CONFIG.promos.buyBonus.bonusFreeDrafts;
     }
 
-    // Referral purchase milestones
-    if (user.referredBy) {
-      const referrerRef = db.collection(USERS_COLLECTION).doc(user.referredBy);
-      const referrerPromosSnap = await tx.get(referrerRef.collection(PROMOS_SUBCOLLECTION));
-      const referralPromoDoc = referrerPromosSnap.docs.find((doc) => (doc.data() as Promo).type === 'referral');
-      if (referralPromoDoc) {
-        const referralPromo = deepClone(referralPromoDoc.data() as Promo);
-        if (referralPromo.modalContent.referralHistory) {
-          // Count total completed purchases for this user
-          const allPurchasesSnap = await db.collection(PURCHASES_COLLECTION)
-            .where('userId', '==', purchase.userId)
-            .where('status', '==', 'completed')
-            .get();
-          const totalPurchases = allPurchasesSnap.size + 1; // +1 for the current one being completed
-
-          const entry = referralPromo.modalContent.referralHistory.find(
-            (e: ReferralEntry) => e.referredUserId === purchase.userId
-          );
-          if (entry) {
-            entry.draftsPurchased = totalPurchases;
-            if (totalPurchases >= 1 && entry.rewards?.bought1 === 'pending') {
-              entry.rewards.bought1 = 'claim';
-              entry.status = 'claim';
-              referralPromo.claimCount = (referralPromo.claimCount || 0) + 1;
-              referralPromo.claimable = true;
-            }
-            if (totalPurchases >= 10 && entry.rewards?.bought10 === 'pending') {
-              entry.rewards.bought10 = 'claim';
-              entry.status = 'claim';
-              referralPromo.claimCount = (referralPromo.claimCount || 0) + 1;
-              referralPromo.claimable = true;
-            }
-          }
-          tx.set(referralPromoDoc.ref, stripUndefined(referralPromo), { merge: true });
-        }
-      }
-    }
+    await _incrementReferralPromosInTx(tx, user, purchase.userId, purchase.quantity);
 
     // Card Purchase Rewards: every 6 card purchases = 1 free draft
     let freePassFromRewards = false;
@@ -1374,6 +1410,46 @@ export async function recordPick10(userId: string, draftId: string, _draftName: 
     promo.progressCurrent = 1;
     promo.claimable = true;
     promo.claimCount = claimableCount;
+
+    tx.set(promoRef, stripUndefined(promo), { merge: true });
+    return deepClone(promo);
+  });
+}
+
+// ==================== JACKPOT-HIT PROMO: RECORD WHEN USER LANDS IN A JACKPOT DRAFT ====================
+
+const JACKPOT_HIT_PROMO_ID = '4';
+
+export async function recordJackpotHit(userId: string, draftId: string): Promise<Promo | null> {
+  const db = getAdminFirestore();
+  await ensureUserSeeded(userId);
+
+  const promoRef = db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(PROMOS_SUBCOLLECTION)
+    .doc(JACKPOT_HIT_PROMO_ID);
+
+  return db.runTransaction(async (tx) => {
+    const promoSnap = await tx.get(promoRef);
+    if (!promoSnap.exists) return null;
+
+    const promo = deepClone(promoSnap.data() as Promo);
+    if (promo.type !== 'jackpot') return null;
+
+    const history = promo.modalContent.jackpotHistory || [];
+
+    if (history.some(h => h.draftName === draftId)) return promo;
+
+    history.unshift({
+      date: new Date().toISOString().split('T')[0],
+      draftName: draftId,
+      amount: 1,
+    });
+    promo.modalContent.jackpotHistory = history;
+    promo.progressCurrent = 1;
+    promo.claimable = true;
+    promo.claimCount = (promo.claimCount || 0) + 1;
 
     tx.set(promoRef, stripUndefined(promo), { merge: true });
     return deepClone(promo);

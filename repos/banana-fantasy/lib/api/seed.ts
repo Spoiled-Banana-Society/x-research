@@ -360,6 +360,40 @@ const seedPromos: Promo[] = [
         'You need to link your X account in your profile. After tweeting, it may take up to a minute for us to verify. Each spin can only be shared once.',
     },
   },
+  {
+    id: '4',
+    type: 'jackpot',
+    title: 'Jackpot Hit → FREE SPIN',
+    description: 'Win a Jackpot draft for a bonus',
+    ctaText: 'View Drafts',
+    ctaLink: '/standings',
+    backgroundColor: '#2a2a35',
+    progressCurrent: 0,
+    progressMax: 1,
+    modalContent: {
+      title: 'Jackpot Hit → FREE SPIN',
+      explanation:
+        '• 1 Jackpot draft in every 100 drafts\n\n• Jackpot hit within first 25 drafts → 1 of the 10 drafters in the Jackpot draft wins 10 free spins\n\n• Jackpot hit within first 50 drafts → 1 of the 10 drafters in the Jackpot draft wins 5 free spins\n\n• Cycle resets after every 100 drafts\n\n• Jackpot League Perk: Win your Jackpot league and go straight to the finals, skipping the first two rounds of playoffs!',
+      jackpotHistory: [],
+    },
+  },
+  {
+    id: 'pwa-install-promo',
+    type: 'add-to-home-screen',
+    title: 'Install SBS — Win 5 Free Spins',
+    description: 'Add to your home screen within 48hrs. 1 random winner gets 5 free spins!',
+    ctaText: 'Install',
+    ctaLink: '#',
+    backgroundColor: '#1a1a2e',
+    claimable: false,
+    isNew: true,
+    timerEndTime: '',
+    modalContent: {
+      title: 'Install SBS — Win Free Spins',
+      explanation:
+        'Add Banana Fantasy to your home screen for a chance to win 5 free spins. 1 random winner chosen after the timer ends.',
+    },
+  },
 ];
 
 export const seedDb: DbSchema = {
