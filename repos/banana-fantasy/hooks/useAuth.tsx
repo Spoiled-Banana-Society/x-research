@@ -180,9 +180,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     wallet: string,
   ) => {
     try {
+      const token = await privy.getAccessToken();
       const res = await fetch('/api/auth/verify-twitter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ twitterId, twitterHandle, walletAddress: wallet }),
       });
       const data = await res.json();
@@ -200,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsTwitterLinking(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check if wallet already has a verified Twitter link (on login)
