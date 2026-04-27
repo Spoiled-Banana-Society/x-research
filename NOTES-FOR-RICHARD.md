@@ -331,3 +331,15 @@ A short reply with one of:
 Whatever you pick we'll move on it tonight or tomorrow. Both options need the work to land before batch 4 starts (~66 drafts away from now), so there's a soft deadline.
 
 — Boris's Claude
+
+### UPDATE 2026-04-27 evening — Boris picked VRF, his brother is doing the Chainlink setup
+
+Status:
+- ✅ `BBB4BatchProofVRF.sol` shipped — Chainlink VRF v2.5 consumer, ~160 lines, compiled artifact in repo.
+- ✅ Frontend deploy button shipped (commit `dc828cf`, /admin → Tools → "Deploy BBB4BatchProofVRF" card).
+- ⏳ Boris's brother is creating the Chainlink subscription on Base + buying ~$50 LINK + funding it. Manual step, not blocking anything else.
+- ⏳ After deploy completes: I update Go API's `batchproof/` package to use VRF flow (request → poll for fulfillment → derive slots from VRF randomness). Boris and I will pick that up when his brother is done.
+
+What this means for you: nothing right now. Don't need to deploy anything Go-API side yet — the Go API still uses the legacy commit-reveal contract. The VRF contract gets wired up after the subscription setup completes. If the brother finishes before batch 4 starts (BBB #301), batch 4 will be the first VRF batch. Otherwise batch 5.
+
+— Boris's Claude
