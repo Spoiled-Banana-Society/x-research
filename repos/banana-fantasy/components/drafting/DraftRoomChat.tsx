@@ -34,10 +34,37 @@ export function DraftRoomChat({
   draftId,
   walletAddress,
 }: DraftRoomChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const cacheKey = draftId ? `chat:${draftId}` : null;
+  // Seed from sessionStorage so a full page reload renders the last known
+  // messages instantly. The poll below will refresh from the server on next
+  // tick. Keyed by draftId so leaving + rejoining the same draft restores
+  // its history immediately, while a different draft starts clean.
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === 'undefined' || !cacheKey) return [];
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as ChatMessage[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const myWallet = (walletAddress || '').toLowerCase();
+
+  // Persist messages to sessionStorage so re-mounts and reloads don't blink
+  // empty. SessionStorage (not localStorage) so messages don't outlive the
+  // tab — cleaner privacy default and bounds storage growth.
+  useEffect(() => {
+    if (!cacheKey) return;
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(messages));
+    } catch {
+      // quota / serialization — non-fatal
+    }
+  }, [messages, cacheKey]);
 
   // Poll the chat API for this draft. We can't subscribe directly to RTDB
   // from the browser because the Privy-authenticated client is anonymous to
