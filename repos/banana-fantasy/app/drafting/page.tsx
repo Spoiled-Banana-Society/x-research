@@ -115,17 +115,13 @@ export default function DraftingPage() {
     setInfoTopic,
   } = useDraftingPageState();
 
-  if (isLoading) {
-    return (
-      <div className="w-full px-4 sm:px-8 lg:px-12 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-white">My Drafts</h1>
-        </div>
-      </div>
-    );
-  }
-
   const topic = infoTopic ? INFO_TOPICS[infoTopic] : null;
+  // Render localStorage-cached drafts instantly. Only show the empty-state
+  // hero once we're sure the user has nothing — both auth done and the live
+  // API has returned. Otherwise a refresh would flash the welcome screen
+  // before the API confirms what's actually active.
+  const showEmptyHero = !isLoading && activeDrafts.length === 0;
+  const showLoadingSkeleton = isLoading && activeDrafts.length === 0;
 
   return (
     <div className="w-full px-4 sm:px-8 lg:px-12 py-8">
@@ -184,7 +180,18 @@ export default function DraftingPage() {
                 formatCountdown={formatCountdown}
               />
 
-              {activeDrafts.length === 0 && (
+              {showLoadingSkeleton && (
+                <div className="space-y-3 pt-2" aria-label="Loading your drafts">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={i}
+                      className="h-20 rounded-xl bg-white/[0.04] border border-white/5 animate-pulse"
+                    />
+                  ))}
+                </div>
+              )}
+
+              {showEmptyHero && (
                 <div className="space-y-4">
                   <div className="text-center pt-10 pb-4">
                     <div className="flex items-center justify-center gap-2.5">
