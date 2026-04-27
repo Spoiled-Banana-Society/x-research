@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatUnits, type Address } from 'viem';
 import { useFundWallet } from '@privy-io/react-auth';
@@ -14,16 +14,15 @@ import { pushNotification } from '@/components/NotificationCenter';
 import { consumePromoDraftType, peekPromoDraftType } from '@/lib/promoDraftType';
 import { fetchJson } from '@/lib/appApiClient';
 import { logger } from '@/lib/logger';
-
-type FlowStep =
-  | 'idle'
-  | 'funding'          // card path — MoonPay is open
-  | 'waiting-for-usdc' // card path — waiting for USDC to land in wallet
-  | 'signing'          // both paths — waiting for wallet signature (permit)
-  | 'processing'       // both paths — server executing on-chain txs
-  | 'success'
-  | 'error';
-type ModalPhase = 'purchase' | 'pick-speed' | 'joining' | 'error';
+import {
+  type FlowStep,
+  type ModalPhase,
+  getPurchaseFlow,
+  subscribePurchaseFlow,
+  setPurchaseFlow,
+  resetPurchaseFlow,
+  isPurchaseFlowActive,
+} from '@/lib/purchaseFlow';
 
 interface BuyPassesModalProps {
   isOpen: boolean;
@@ -45,16 +44,19 @@ export function BuyPassesModal({
     },
   });
 
-  const [quantity, setQuantity] = useState(10);
-  const [flowStep, setFlowStep] = useState<FlowStep>('idle');
-  const [flowError, setFlowError] = useState<string | null>(null);
-
-  // Post-mint phase
-  const [phase, setPhase] = useState<ModalPhase>('purchase');
-  const [mintedCount, setMintedCount] = useState(0);
-  const [joinError, setJoinError] = useState<string | null>(null);
+  // Purchase flow state lives in a module-level store so it survives modal
+  // close/reopen — the card path opens MoonPay externally and a remount
+  // mid-flow used to wipe the user's progress indicator. See lib/purchaseFlow.ts.
+  const flow = useSyncExternalStore(subscribePurchaseFlow, getPurchaseFlow, getPurchaseFlow);
+  const { quantity, flowStep, flowError, phase, mintedCount, joinError, isJoiningDraft } = flow;
+  const setQuantity = (q: number) => setPurchaseFlow({ quantity: q });
+  const setFlowStep = (s: FlowStep) => setPurchaseFlow({ flowStep: s });
+  const setFlowError = (e: string | null) => setPurchaseFlow({ flowError: e });
+  const setPhase = (p: ModalPhase) => setPurchaseFlow({ phase: p });
+  const setMintedCount = (n: number) => setPurchaseFlow({ mintedCount: n });
+  const setJoinError = (e: string | null) => setPurchaseFlow({ joinError: e });
+  const setIsJoiningDraft = (b: boolean) => setPurchaseFlow({ isJoiningDraft: b });
   const joinInFlightRef = useRef(false);
-  const [isJoiningDraft, setIsJoiningDraft] = useState(false);
 
   const loggedInWithWallet = user?.loginMethod === 'wallet';
   const [paymentMethod, setPaymentMethod] = useState<'usdc' | 'card'>('card');
@@ -67,17 +69,13 @@ export function BuyPassesModal({
     }
   }, [user?.loginMethod, loggedInWithWallet, paymentMethodInitialized]);
 
-  // Reset state when modal opens
+  // Reset state when modal opens — but ONLY if there's no in-flight purchase
+  // to preserve. If the user closed mid-MoonPay or before clicking "Pick speed",
+  // reopening shows the in-flight progress instead of starting over.
   useEffect(() => {
-    if (isOpen) {
-      setFlowStep('idle');
-      setFlowError(null);
-      setPhase('purchase');
-      setMintedCount(0);
-      setJoinError(null);
+    if (isOpen && !isPurchaseFlowActive()) {
+      resetPurchaseFlow();
       joinInFlightRef.current = false;
-      setIsJoiningDraft(false);
-      setWaitingForUsdcStartedAt(null);
     }
   }, [isOpen]);
 
@@ -105,7 +103,9 @@ export function BuyPassesModal({
   // Track how long the "waiting for USDC to arrive" step has been running
   // so the modal can show an elapsed timer and an expected duration. MoonPay
   // can take anywhere from ~15s (card) to ~60s (Apple Pay first-run).
-  const [waitingForUsdcStartedAt, setWaitingForUsdcStartedAt] = useState<number | null>(null);
+  const waitingForUsdcStartedAt = flow.waitingForUsdcStartedAt;
+  const setWaitingForUsdcStartedAt = (t: number | null) =>
+    setPurchaseFlow({ waitingForUsdcStartedAt: t });
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
     if (flowStep !== 'waiting-for-usdc') return;
@@ -287,9 +287,11 @@ export function BuyPassesModal({
       // signing → processing → success / error.
       await mint(quantity, { paymentMethod: 'card' });
       setFlowStep('success');
-
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      goToPickSpeed(quantity);
+      setMintedCount(quantity);
+      // Stop here. Don't auto-advance to pick-speed — the user needs to see
+      // the success confirmation, otherwise they come back from MoonPay
+      // wondering whether their card was charged. They click the explicit
+      // "Pick draft speed" button below to continue.
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Payment failed. Please try again.';
       setFlowError(message);
@@ -648,11 +650,11 @@ export function BuyPassesModal({
 
             {/* CTA Button */}
             <button
-              onClick={handlePurchase}
-              disabled={isProcessing || quantity < 1 || (paymentMethod === 'usdc' && !mintActive) || flowStep === 'success'}
+              onClick={flowStep === 'success' ? () => goToPickSpeed(mintedCount || quantity) : handlePurchase}
+              disabled={isProcessing || quantity < 1 || (paymentMethod === 'usdc' && !mintActive)}
               className={`
                 w-full py-5 rounded-2xl font-bold text-xl transition-all shadow-lg shadow-banana/20
-                ${isProcessing || quantity < 1 || flowStep === 'success'
+                ${isProcessing || quantity < 1
                   ? 'bg-banana/50 text-black/50 cursor-not-allowed'
                   : 'bg-banana text-black hover:brightness-110 hover:scale-[1.01]'
                 }
@@ -667,7 +669,10 @@ export function BuyPassesModal({
                   {stepLabels[flowStep as FlowStep] || 'Processing…'}
                 </span>
               ) : flowStep === 'success' ? (
-                'Success!'
+                <span className="flex items-center justify-center gap-2">
+                  <span>✓ Purchase complete — Pick draft speed</span>
+                  <span aria-hidden>→</span>
+                </span>
               ) : (
                 `Buy ${quantity} Draft Pass${quantity !== 1 ? 'es' : ''}`
               )}
