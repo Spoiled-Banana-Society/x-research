@@ -196,6 +196,16 @@ export default function HomePage() {
       updateUser({ freeDrafts: Math.max(0, freePasses - 1) });
     }
 
+    // Decrement in Firestore so the count persists across refreshes.
+    // The Go API consumes the on-chain token but doesn't update our
+    // Firestore counter — without this fetch the home-page Enter Draft
+    // path silently leaves Firestore showing the pre-decrement value.
+    fetch('/api/owner/use-pass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
+    }).catch(() => { /* best-effort — local state already updated */ });
+
     // Consume promo draft type if queued
     const forcedDraftType = peekPromoDraftType();
     if (forcedDraftType) {
