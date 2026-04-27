@@ -24,6 +24,7 @@ import {
 } from '@/lib/onchain/adminMint';
 import { parsePermitSignature } from '@/lib/onchain/usdcPermit';
 import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
+import { incrementMintPromos } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
@@ -301,6 +302,20 @@ export async function POST(req: Request) {
       }
     } else {
       await logActivityEvent(activityInput);
+    }
+
+    // Bump Buy 10 + Buy 2 promo progress. Best-effort — must not roll back
+    // the on-chain mint (already happened) on a Firestore failure.
+    if (isFirestoreConfigured()) {
+      try {
+        await incrementMintPromos(userId, quantity);
+      } catch (promoErr) {
+        logger.warn('card-mint.promo_increment_failed', {
+          userId,
+          quantity,
+          err: (promoErr as Error).message,
+        });
+      }
     }
 
     return json({

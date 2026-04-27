@@ -677,6 +677,77 @@ export async function createPurchase(
   return { purchase: deepClone(purchase), payment };
 }
 
+/**
+ * Bumps mint promo (Buy 10 → Spin) and buy-bonus promo (Buy 2 → 1 Free)
+ * progress for a wallet that just minted N passes. Runs inside the caller's
+ * transaction. Returns milestones earned per promo so the caller can react
+ * (e.g. credit bonus free drafts on the user doc). Idempotency is the
+ * caller's responsibility — don't invoke twice for the same mint event.
+ */
+async function _incrementMintPromosInTx(
+  tx: FirebaseFirestore.Transaction,
+  userRef: FirebaseFirestore.DocumentReference,
+  quantity: number,
+): Promise<{ mintMilestonesEarned: number; buyBonusMilestonesEarned: number }> {
+  const promosSnap = await tx.get(userRef.collection(PROMOS_SUBCOLLECTION));
+
+  let mintMilestonesEarned = 0;
+  const mintPromoDoc = promosSnap.docs.find((doc) => (doc.data() as Promo).type === 'mint');
+  if (mintPromoDoc) {
+    const mintPromo = deepClone(mintPromoDoc.data() as Promo);
+    mintPromo.modalContent.totalMinted = (mintPromo.modalContent.totalMinted || 0) + quantity;
+    const max = mintPromo.progressMax || 10;
+    const current = mintPromo.progressCurrent || 0;
+    const newTotal = current + quantity;
+    const newlyEarned = Math.floor(newTotal / max);
+    const remainder = newTotal % max;
+    mintPromo.progressCurrent = (newlyEarned > 0 && remainder === 0) ? max : remainder;
+    if (newlyEarned > 0) {
+      mintPromo.claimCount = (mintPromo.claimCount || 0) + newlyEarned;
+      recalcPromoClaimable(mintPromo);
+      mintMilestonesEarned = newlyEarned;
+    }
+    tx.set(mintPromoDoc.ref, stripUndefined(mintPromo), { merge: true });
+  }
+
+  let buyBonusMilestonesEarned = 0;
+  const buyBonusDoc = promosSnap.docs.find((doc) => (doc.data() as Promo).type === 'buy-bonus');
+  if (buyBonusDoc) {
+    const buyBonusPromo = deepClone(buyBonusDoc.data() as Promo);
+    const bbMax = buyBonusPromo.progressMax || 2;
+    const bbCurrent = buyBonusPromo.progressCurrent || 0;
+    const bbNewTotal = bbCurrent + quantity;
+    const bbNewlyEarned = Math.floor(bbNewTotal / bbMax);
+    const bbRemainder = bbNewTotal % bbMax;
+    buyBonusPromo.progressCurrent = (bbNewlyEarned > 0 && bbRemainder === 0) ? bbMax : bbRemainder;
+    if (bbNewlyEarned > 0) {
+      buyBonusPromo.claimCount = (buyBonusPromo.claimCount || 0) + bbNewlyEarned;
+      recalcPromoClaimable(buyBonusPromo);
+      buyBonusMilestonesEarned = bbNewlyEarned;
+    }
+    tx.set(buyBonusDoc.ref, stripUndefined(buyBonusPromo), { merge: true });
+  }
+
+  return { mintMilestonesEarned, buyBonusMilestonesEarned };
+}
+
+/**
+ * Public wrapper for routes that don't already have a transaction running.
+ * Used by staging-mint and card-mint, which write `draftPasses` directly
+ * (no purchase doc). For the legacy `verifyPurchase` flow the inner helper
+ * is invoked inside the existing transaction.
+ */
+export async function incrementMintPromos(
+  userId: string,
+  quantity: number,
+): Promise<{ mintMilestonesEarned: number; buyBonusMilestonesEarned: number }> {
+  if (quantity <= 0) return { mintMilestonesEarned: 0, buyBonusMilestonesEarned: 0 };
+  const db = getAdminFirestore();
+  await ensureUserSeeded(userId);
+  const userRef = db.collection(USERS_COLLECTION).doc(userId);
+  return db.runTransaction((tx) => _incrementMintPromosInTx(tx, userRef, quantity));
+}
+
 export async function verifyPurchase(purchaseId: string, txHash: string) {
   const db = getAdminFirestore();
 
@@ -814,42 +885,9 @@ export async function verifyPurchase(purchaseId: string, txHash: string) {
     let freeDraftsAdded = calcBuyBonusFreeDrafts(purchase.quantity);
     user.freeDrafts = (user.freeDrafts || 0) + freeDraftsAdded;
 
-    const promosSnap = await tx.get(userRef.collection(PROMOS_SUBCOLLECTION));
-    const mintPromoDoc = promosSnap.docs.find((doc) => (doc.data() as Promo).type === 'mint');
-    if (mintPromoDoc) {
-      const mintPromo = deepClone(mintPromoDoc.data() as Promo);
-      mintPromo.modalContent.totalMinted = (mintPromo.modalContent.totalMinted || 0) + purchase.quantity;
-      const max = mintPromo.progressMax || 10;
-      const current = mintPromo.progressCurrent || 0;
-      const newTotal = current + purchase.quantity;
-      const newlyEarned = Math.floor(newTotal / max);
-      // Keep progress at max when a milestone is hit (shows 10/10).
-      // Only carry over the remainder if there's leftover beyond the milestone.
-      const remainder = newTotal % max;
-      mintPromo.progressCurrent = (newlyEarned > 0 && remainder === 0) ? max : remainder;
-      if (newlyEarned > 0) {
-        mintPromo.claimCount = (mintPromo.claimCount || 0) + newlyEarned;
-        recalcPromoClaimable(mintPromo);
-      }
-      tx.set(mintPromoDoc.ref, stripUndefined(mintPromo), { merge: true });
-    }
-
-    // Buy-bonus promo progress
-    const buyBonusDoc = promosSnap.docs.find((doc) => (doc.data() as Promo).type === 'buy-bonus');
-    if (buyBonusDoc) {
-      const buyBonusPromo = deepClone(buyBonusDoc.data() as Promo);
-      const bbMax = buyBonusPromo.progressMax || 2;
-      const bbCurrent = buyBonusPromo.progressCurrent || 0;
-      const bbNewTotal = bbCurrent + purchase.quantity;
-      const bbNewlyEarned = Math.floor(bbNewTotal / bbMax);
-      const bbRemainder = bbNewTotal % bbMax;
-      buyBonusPromo.progressCurrent = (bbNewlyEarned > 0 && bbRemainder === 0) ? bbMax : bbRemainder;
-      if (bbNewlyEarned > 0) {
-        buyBonusPromo.claimCount = (buyBonusPromo.claimCount || 0) + bbNewlyEarned;
-        recalcPromoClaimable(buyBonusPromo);
-        freeDraftsAdded = bbNewlyEarned * API_CONFIG.promos.buyBonus.bonusFreeDrafts;
-      }
-      tx.set(buyBonusDoc.ref, stripUndefined(buyBonusPromo), { merge: true });
+    const { buyBonusMilestonesEarned } = await _incrementMintPromosInTx(tx, userRef, purchase.quantity);
+    if (buyBonusMilestonesEarned > 0) {
+      freeDraftsAdded = buyBonusMilestonesEarned * API_CONFIG.promos.buyBonus.bonusFreeDrafts;
     }
 
     // Referral purchase milestones

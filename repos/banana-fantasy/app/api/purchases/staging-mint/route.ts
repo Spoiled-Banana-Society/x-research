@@ -6,6 +6,7 @@ import { json, jsonError, parseBody, requireString } from '@/lib/api/routeUtils'
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { isAdminMintConfigured, reserveTokensToWallet } from '@/lib/onchain/adminMint';
 import { addActivityEventToTx, buildActivityEventDoc, logActivityEvent } from '@/lib/activityEvents';
+import { incrementMintPromos } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 const USERS_COLLECTION = 'v2_users';
@@ -139,6 +140,20 @@ export async function POST(req: Request) {
     // Transfer webhook (real-time, signature-verified) and the admin
     // /api/admin/reconcile-passes endpoint — those are the right places
     // for it.
+
+    // Bump Buy 10 + Buy 2 promo progress. Best-effort: a Firestore failure
+    // here must not roll back the on-chain mint (already happened).
+    if (isFirestoreConfigured()) {
+      try {
+        await incrementMintPromos(userId, quantity);
+      } catch (promoErr) {
+        logger.warn('staging-mint.promo_increment_failed', {
+          userId,
+          quantity,
+          err: (promoErr as Error).message,
+        });
+      }
+    }
 
     return json({ success: true, minted: quantity, tokenIds, txHash, draftPasses: newDraftPasses }, 200);
   } catch (err) {
