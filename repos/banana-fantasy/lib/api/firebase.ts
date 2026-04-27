@@ -10,6 +10,10 @@ import {
   getDatabase,
   onValue,
   ref,
+  push,
+  serverTimestamp,
+  query,
+  limitToLast,
   type Database,
   type Unsubscribe,
   off,
@@ -147,4 +151,90 @@ export function subscribeValue<T = unknown>(
  */
 export function subscribeDraftNumPlayers(draftId: string, cb: (numPlayers: number) => void): Unsubscribe {
   return subscribeValue<number>(`/drafts/${draftId}/numPlayers`, (v) => cb(Number(v || 0)));
+}
+
+// ─────────── Draft Room Chat ───────────
+
+export interface ChatMessageRecord {
+  walletAddress: string;
+  username: string;
+  text: string;
+  timestamp: number;
+}
+
+const CHAT_HISTORY_LIMIT = 200;
+
+/**
+ * Subscribe to the chat for a draft. Messages stream in oldest→newest, capped
+ * at the most recent CHAT_HISTORY_LIMIT entries.
+ *
+ * Firebase path: /drafts/{draftId}/chat/{pushId}
+ */
+export function subscribeChatMessages(
+  draftId: string,
+  cb: (messages: Array<ChatMessageRecord & { id: string }>) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  const db = getFirebaseDatabase();
+  if (!db) {
+    console.warn('[firebase] subscribeChatMessages skipped — Firebase not configured');
+    return () => {};
+  }
+  const r = ref(db, `/drafts/${draftId}/chat`);
+  const q = query(r, limitToLast(CHAT_HISTORY_LIMIT));
+
+  const unsub = onValue(
+    q,
+    (snapshot) => {
+      const out: Array<ChatMessageRecord & { id: string }> = [];
+      snapshot.forEach((child) => {
+        const v = child.val() as Partial<ChatMessageRecord> | null;
+        if (v && typeof v.text === 'string' && typeof v.walletAddress === 'string') {
+          out.push({
+            id: child.key || `${v.timestamp ?? Date.now()}`,
+            walletAddress: v.walletAddress,
+            username: typeof v.username === 'string' ? v.username : v.walletAddress,
+            text: v.text,
+            timestamp: typeof v.timestamp === 'number' ? v.timestamp : Date.now(),
+          });
+        }
+      });
+      // RTDB returns in key order which is chronological for `push()` keys.
+      cb(out);
+    },
+    (error) => {
+      console.error('[firebase] subscribeChatMessages error', error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => {
+    off(r);
+    unsub();
+  };
+}
+
+/**
+ * Append a chat message to the draft's chat log. Uses `push()` so the key is a
+ * server-ordered chronological ID (no client clock skew issues). `timestamp`
+ * is set via `serverTimestamp()` for the same reason.
+ */
+export async function pushChatMessage(
+  draftId: string,
+  msg: { walletAddress: string; username: string; text: string },
+): Promise<void> {
+  const db = getFirebaseDatabase();
+  if (!db) {
+    console.warn('[firebase] pushChatMessage skipped — Firebase not configured');
+    return;
+  }
+  const trimmed = msg.text.trim();
+  if (!trimmed || !msg.walletAddress || !draftId) return;
+  const r = ref(db, `/drafts/${draftId}/chat`);
+  await push(r, {
+    walletAddress: msg.walletAddress.toLowerCase(),
+    username: msg.username || msg.walletAddress,
+    text: trimmed.slice(0, 500),
+    timestamp: serverTimestamp(),
+  });
 }

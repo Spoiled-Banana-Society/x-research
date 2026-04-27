@@ -329,6 +329,8 @@ export function DraftRoomDrafting({
                   playerCount={playerCount}
                   phase={phase}
                   username={user?.username ?? undefined}
+                  draftId={draftId}
+                  walletAddress={walletParam}
                 />
               )}
             </div>
