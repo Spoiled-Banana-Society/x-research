@@ -421,11 +421,13 @@ export function BuyPassesModal({
 
   const stepHelper: Partial<Record<FlowStep, string>> = isWeb2
     ? {
+        funding: 'After paying, tap Continue in the popup to proceed.',
         'waiting-for-usdc': 'This usually takes 15–60 seconds.',
         signing: '',
         processing: 'Finalizing — just a few seconds.',
       }
     : {
+        funding: 'After paying, tap Continue in the popup to proceed.',
         'waiting-for-usdc': 'Typically 15–60s. We poll the chain every few seconds.',
         signing: "Check your wallet — this is just a signature, it won't cost gas.",
         processing: 'Admin wallet is paying gas for you. ~5 seconds.',
