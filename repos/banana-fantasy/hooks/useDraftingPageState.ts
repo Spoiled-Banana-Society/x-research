@@ -104,7 +104,7 @@ export function formatCountdown(totalSeconds: number): string {
 
 export function useDraftingPageState() {
   const router = useRouter();
-  const { isLoggedIn, user, setShowLoginModal, updateUser } = useAuth();
+  const { isLoggedIn, user, setShowLoginModal, updateUser, refreshBalance } = useAuth();
   const contestsQuery = useContests();
   const contest = contestsQuery.data?.[0] ?? null;
   const promosQuery = usePromos({ userId: user?.id });
@@ -279,22 +279,50 @@ export function useDraftingPageState() {
     router.push(buildDraftRoomUrl(draft));
   };
 
-  const enterDraftWithPassType = (passType: 'paid' | 'free', speed: 'fast' | 'slow' = 'fast') => {
+  const enterDraftWithPassType = async (passType: 'paid' | 'free', speed: 'fast' | 'slow' = 'fast') => {
     if (!user?.walletAddress) return;
 
+    const beforePaid = user.draftPasses || 0;
+    const beforeFree = user.freeDrafts || 0;
+
+    // Optimistic local update so the header ticks down on click. Rolled
+    // back below if the backend rejects.
     if (passType === 'paid') {
-      updateUser({ draftPasses: Math.max(0, (user.draftPasses || 0) - 1) });
+      updateUser({ draftPasses: Math.max(0, beforePaid - 1) });
     } else {
-      updateUser({ freeDrafts: Math.max(0, (user.freeDrafts || 0) - 1) });
+      updateUser({ freeDrafts: Math.max(0, beforeFree - 1) });
     }
 
-    // Also decrement in Firestore so the count persists across refreshes
-    // (Go API consumes tokens but doesn't update our Firestore counter)
-    fetch('/api/owner/use-pass', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
-    }).catch(() => { /* best-effort — local state already updated */ });
+    // Backend gate: Firestore is the authoritative source. If the
+    // decrement fails (counter already at 0, even if local state showed
+    // otherwise), abort the join — user genuinely has no passes. The
+    // Go API still has its own ledger; without this gate a stale UI
+    // could let someone enter a draft they shouldn't.
+    let decremented = false;
+    try {
+      const res = await fetch('/api/owner/use-pass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
+      });
+      const body = await res.json().catch(() => ({}));
+      decremented = res.ok && !!body?.decremented;
+    } catch {
+      // Network failure — roll back and tell the user. Don't navigate
+      // because we can't confirm the backend got the decrement.
+      updateUser({ draftPasses: beforePaid, freeDrafts: beforeFree });
+      alert('Network error. Please try again.');
+      return;
+    }
+
+    if (!decremented) {
+      // Backend says no spendable passes. Rollback optimistic update and
+      // re-sync from Firestore so the header reflects truth.
+      updateUser({ draftPasses: beforePaid, freeDrafts: beforeFree });
+      void refreshBalance();
+      alert('No draft passes available. Your balance has been refreshed.');
+      return;
+    }
 
     const params = new URLSearchParams({
       speed,
@@ -327,7 +355,7 @@ export function useDraftingPageState() {
 
   const handleEntryComplete = (passType: 'paid' | 'free', speed: 'fast' | 'slow') => {
     setShowEntryFlow(false);
-    enterDraftWithPassType(passType, speed);
+    void enterDraftWithPassType(passType, speed);
   };
 
   useEffect(() => {

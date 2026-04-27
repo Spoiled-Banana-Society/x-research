@@ -172,7 +172,7 @@ export default function HomePage() {
     modals.push('entry-flow');
   };
 
-  const handleEntryComplete = (passType: 'paid' | 'free', speed: 'fast' | 'slow') => {
+  const handleEntryComplete = async (passType: 'paid' | 'free', speed: 'fast' | 'slow') => {
     modals.closeAll();
 
     if (!user?.walletAddress) return;
@@ -189,40 +189,57 @@ export default function HomePage() {
       return;
     }
 
-    // Deduct the selected pass type (optimistic)
+    // Optimistic local decrement so the header ticks down on click.
+    // Rolled back below if the backend rejects.
     if (passType === 'paid') {
       updateUser({ draftPasses: Math.max(0, paidPasses - 1) });
     } else {
       updateUser({ freeDrafts: Math.max(0, freePasses - 1) });
     }
 
-    // Decrement in Firestore so the count persists across refreshes.
-    // The Go API consumes the on-chain token but doesn't update our
-    // Firestore counter — without this fetch the home-page Enter Draft
-    // path silently leaves Firestore showing the pre-decrement value.
-    fetch('/api/owner/use-pass', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
-    }).catch(() => { /* best-effort — local state already updated */ });
+    // Backend gate: Firestore is the authoritative source. A stale UI
+    // could otherwise let a user join a draft they shouldn't. We await
+    // the decrement and abort if it fails — no navigation, balance
+    // re-syncs from Firestore truth.
+    let decremented = false;
+    try {
+      const res = await fetch('/api/owner/use-pass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id || user.walletAddress, passType }),
+      });
+      const body = await res.json().catch(() => ({}));
+      decremented = res.ok && !!body?.decremented;
+    } catch {
+      updateUser({ draftPasses: paidPasses, freeDrafts: freePasses });
+      alert('Network error. Please try again.');
+      return;
+    }
 
-    // Consume promo draft type if queued
+    if (!decremented) {
+      updateUser({ draftPasses: paidPasses, freeDrafts: freePasses });
+      void refreshBalance();
+      alert('No draft passes available. Your balance has been refreshed.');
+      return;
+    }
+
+    // Consume promo draft type if queued (only after the gate succeeds —
+    // we don't want to burn a queued promo on a failed join).
     const forcedDraftType = peekPromoDraftType();
     if (forcedDraftType) {
       consumePromoDraftType(forcedDraftType);
     }
 
     if (_isStagingMode()) {
-      // Staging: navigate IMMEDIATELY — draft room handles joinDraft + fill-bots
       const params = new URLSearchParams({
         speed,
         mode: 'live',
         wallet: user.walletAddress,
+        passType,
       });
       if (forcedDraftType) params.set('promoType', forcedDraftType);
       router.push(`/draft-room?${params.toString()}`);
     } else {
-      // Non-staging: use local draft with bots (no API call needed)
       const localDraftId = `local-${Date.now()}`;
       const localContestName = `League #${Math.floor(Math.random() * 9000) + 1000}`;
       draftStore.addDraft({
@@ -235,9 +252,6 @@ export default function HomePage() {
         maxPlayers: 10,
         joinedAt: Date.now(),
         phase: 'filling',
-        // Stamp the wallet so this draft passes useActiveDrafts' strict
-        // wallet filter. Without it the draft would be auto-purged on the
-        // next page load as legacy/unattributable.
         liveWalletAddress: user.walletAddress,
       });
       router.push(buildDraftRoomUrl(localDraftId, localContestName, speed));
