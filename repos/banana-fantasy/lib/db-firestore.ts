@@ -229,6 +229,9 @@ export async function getPromos(userId: string): Promise<Promo[]> {
   ]);
 
   const hasVerifiedTwitter = !twitterSnap.empty;
+  const newUserPromoAlreadyClaimed = hasVerifiedTwitter
+    ? (twitterSnap.docs[0].data().newUserPromoClaimed ?? false)
+    : false;
 
   // Lazy backfill: if seeded promo list has entries this user is missing
   // (e.g. new promos added after the user was seeded), insert them now.
@@ -252,6 +255,14 @@ export async function getPromos(userId: string): Promise<Promo[]> {
     // Inject real twitterConnected status for promos that depend on it
     if (promo.type === 'new-user' || promo.type === 'tweet-engagement') {
       promo.modalContent.twitterConnected = hasVerifiedTwitter;
+    }
+    // New-user promo unlocks the moment Twitter is verified. Promo doc itself
+    // doesn't carry claim state — the v2_twitter_links record's
+    // newUserPromoClaimed is the source of truth (so the promo stays
+    // claimable across Firestore re-seeds and resists race conditions).
+    if (promo.type === 'new-user' && hasVerifiedTwitter && !newUserPromoAlreadyClaimed) {
+      promo.claimable = true;
+      promo.claimCount = Math.max(promo.claimCount ?? 0, 1);
     }
     return promo;
   });
