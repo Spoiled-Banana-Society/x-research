@@ -104,7 +104,7 @@ export function formatCountdown(totalSeconds: number): string {
 
 export function useDraftingPageState() {
   const router = useRouter();
-  const { isLoggedIn, user, setShowLoginModal, updateUser, refreshBalance } = useAuth();
+  const { isLoggedIn, user, setShowLoginModal, updateUser, refreshBalance, isLoading: authLoading } = useAuth();
   const contestsQuery = useContests();
   const contest = contestsQuery.data?.[0] ?? null;
   const promosQuery = usePromos({ userId: user?.id });
@@ -116,7 +116,11 @@ export function useDraftingPageState() {
   const [showContestDetails, setShowContestDetails] = useState(false);
   const [infoTopic, setInfoTopic] = useState<string | null>(null);
   const [liveDrafts, setLiveDrafts] = useState<Draft[]>([]);
-  const [isLoading] = useState(false);
+  // Tracks which wallet's live-drafts API call has completed at least once.
+  // Lets us distinguish "still fetching" from "fetched and genuinely empty"
+  // — without it, page refresh briefly renders the empty-state hero before
+  // the API returns active drafts.
+  const [liveDraftsLoadedFor, setLiveDraftsLoadedFor] = useState<string | null>(null);
   const [, setTimers] = useState<Record<string, number>>({});
   const [exitingDraft, setExitingDraft] = useState<Draft | null>(null);
   const [showBuyPasses, setShowBuyPasses] = useState(false);
@@ -474,6 +478,10 @@ export function useDraftingPageState() {
         setLiveDrafts(mapped);
       } catch (err) {
         console.error('[Drafting] Failed to load live drafts:', err);
+      } finally {
+        if (!cancelled && user?.walletAddress) {
+          setLiveDraftsLoadedFor(user.walletAddress);
+        }
       }
     };
 
@@ -1135,6 +1143,13 @@ export function useDraftingPageState() {
       void Promise.allSettled(allIds.map(id => leaveDraft(id, wallet)));
     }
   };
+
+  // Auth is loading, OR we're in live mode but haven't completed the first
+  // live-drafts fetch for this wallet yet. The page renders a placeholder
+  // skeleton instead of the "no drafts" empty state in either case, so a
+  // refresh on a wallet that has active drafts doesn't flicker through the
+  // welcome-screen hero before the API responds.
+  const isLoading = authLoading || (isLive && liveDraftsLoadedFor !== user?.walletAddress);
 
   return {
     contest,
