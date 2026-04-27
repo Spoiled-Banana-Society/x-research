@@ -56,6 +56,27 @@ interface TransferOwnershipResponse {
   requestId?: string;
 }
 
+interface DeployVRFResponse {
+  success: boolean;
+  alreadyDeployed?: boolean;
+  contractAddress?: string;
+  contractVariant?: string;
+  deployTxHash?: string;
+  deployerAddress?: string;
+  vrfCoordinator?: string;
+  subscriptionId?: string;
+  keyHash?: string;
+  initialOwner?: string;
+  blockNumber?: number;
+  gasUsed?: string;
+  basescanContract?: string;
+  basescanTx?: string;
+  nextSteps?: string[];
+  note?: string;
+  error?: string;
+  requestId?: string;
+}
+
 const BASE_RPC = 'https://mainnet.base.org';
 
 async function fetchWalletStatus(): Promise<WalletStatus | null> {
@@ -118,6 +139,13 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
   const [transferring, setTransferring] = useState(false);
   const [transferResult, setTransferResult] = useState<TransferOwnershipResponse | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [vrfCoordinatorInput, setVrfCoordinatorInput] = useState('0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634');
+  const [vrfSubIdInput, setVrfSubIdInput] = useState('');
+  const [vrfKeyHashInput, setVrfKeyHashInput] = useState('');
+  const [vrfInitialOwnerInput, setVrfInitialOwnerInput] = useState('0xe0d0C8ad893aD6F5fa0a51A43260c169C87b67e3');
+  const [deployingVrf, setDeployingVrf] = useState(false);
+  const [vrfResult, setVrfResult] = useState<DeployVRFResponse | null>(null);
+  const [vrfError, setVrfError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setStatusLoading(true);
@@ -222,6 +250,37 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
       setTransferring(false);
     }
   }, [getHeaders, transferring, newOwnerInput]);
+
+  const handleDeployVRF = useCallback(async () => {
+    if (deployingVrf) return;
+    if (!confirm(`Deploy BBB4BatchProofVRF to Base mainnet?\n\n• coordinator: ${vrfCoordinatorInput}\n• subscription: ${vrfSubIdInput}\n• keyHash: ${vrfKeyHashInput}\n• initial owner: ${vrfInitialOwnerInput}\n\nMake sure the subscription is funded with LINK BEFORE batch 4 starts.`)) return;
+    setDeployingVrf(true);
+    setVrfError(null);
+    setVrfResult(null);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch('/api/admin/deploy-batch-proof-vrf', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vrfCoordinator: vrfCoordinatorInput.trim(),
+          subscriptionId: vrfSubIdInput.trim(),
+          keyHash: vrfKeyHashInput.trim(),
+          initialOwner: vrfInitialOwnerInput.trim(),
+        }),
+      });
+      const body = (await res.json()) as DeployVRFResponse;
+      if (!res.ok || !body.success) {
+        setVrfError(body.error || `Request failed (${res.status})`);
+      } else {
+        setVrfResult(body);
+      }
+    } catch (err) {
+      setVrfError((err as Error).message);
+    } finally {
+      setDeployingVrf(false);
+    }
+  }, [getHeaders, deployingVrf, vrfCoordinatorInput, vrfSubIdInput, vrfKeyHashInput, vrfInitialOwnerInput]);
 
   if (!enabled) return null;
 
@@ -481,6 +540,111 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
               </p>
             )}
             {transferResult.note && <p className="text-gray-400 italic">{transferResult.note}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Deploy BBB4BatchProofVRF — Chainlink VRF v2.5 backed contract */}
+      <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+        <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-2">Deploy BBB4BatchProofVRF (Chainlink VRF)</h4>
+        <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+          Deploys the VRF-backed proof contract to Base mainnet. Replaces the legacy commit-reveal contract — Firestore
+          system_config/batchProof gets overwritten to point at this one. Each batch&apos;s randomness comes from
+          Chainlink&apos;s VRF v2.5 oracle network; SBS literally never sees the seed before it lands. ~$3 deploy gas + ~$5/batch in LINK.
+        </p>
+        <p className="text-[11px] text-amber-300 mb-3 leading-relaxed">
+          ⚠ Before you click: create a Chainlink VRF v2.5 subscription at <span className="font-mono">vrf.chain.link</span>,
+          fund it with LINK on Base, and grab the subscription ID. After deploy, return to vrf.chain.link and add the
+          deployed contract address as a Consumer of that subscription.
+        </p>
+
+        <div className="space-y-2 max-w-[36rem]">
+          <label className="block text-[10px] text-gray-400 uppercase tracking-wider">VRF Coordinator (Base mainnet)</label>
+          <input
+            type="text"
+            value={vrfCoordinatorInput}
+            onChange={(e) => setVrfCoordinatorInput(e.target.value)}
+            spellCheck={false}
+            className="w-full px-3 py-1.5 text-xs font-mono bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-purple-500"
+          />
+
+          <label className="block text-[10px] text-gray-400 uppercase tracking-wider mt-2">Subscription ID (uint256, decimal or 0x)</label>
+          <input
+            type="text"
+            value={vrfSubIdInput}
+            onChange={(e) => setVrfSubIdInput(e.target.value)}
+            placeholder="e.g. 12345678901234567890..."
+            spellCheck={false}
+            className="w-full px-3 py-1.5 text-xs font-mono bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-purple-500"
+          />
+
+          <label className="block text-[10px] text-gray-400 uppercase tracking-wider mt-2">Key Hash (gas lane, bytes32)</label>
+          <input
+            type="text"
+            value={vrfKeyHashInput}
+            onChange={(e) => setVrfKeyHashInput(e.target.value)}
+            placeholder="0x... 64 hex chars"
+            spellCheck={false}
+            className="w-full px-3 py-1.5 text-xs font-mono bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-purple-500"
+          />
+
+          <label className="block text-[10px] text-gray-400 uppercase tracking-wider mt-2">Initial Owner (will sign requestRandomness)</label>
+          <input
+            type="text"
+            value={vrfInitialOwnerInput}
+            onChange={(e) => setVrfInitialOwnerInput(e.target.value)}
+            placeholder="0x... 40 hex chars"
+            spellCheck={false}
+            className="w-full px-3 py-1.5 text-xs font-mono bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-purple-500"
+          />
+        </div>
+
+        <div className="mt-3">
+          <button
+            onClick={() => void handleDeployVRF()}
+            disabled={deployingVrf || !vrfCoordinatorInput.trim() || !vrfSubIdInput.trim() || !vrfKeyHashInput.trim() || !vrfInitialOwnerInput.trim()}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            {deployingVrf ? 'Deploying…' : 'Deploy VRF contract'}
+          </button>
+        </div>
+
+        {vrfError && (
+          <div className="mt-3 text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {vrfError}
+          </div>
+        )}
+
+        {vrfResult && (
+          <div className="mt-3 text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 space-y-1.5">
+            <p className="text-emerald-300 font-semibold">
+              {vrfResult.alreadyDeployed ? '✓ Already deployed' : '✓ VRF contract deployed'}
+            </p>
+            {vrfResult.contractAddress && (
+              <p className="text-gray-300 font-mono break-all">
+                contract:{' '}
+                <a href={vrfResult.basescanContract || `https://basescan.org/address/${vrfResult.contractAddress}`} target="_blank" rel="noreferrer" className="text-blue-300 hover:text-blue-200 underline">
+                  {vrfResult.contractAddress}
+                </a>
+              </p>
+            )}
+            {vrfResult.deployTxHash && (
+              <p className="text-gray-300 font-mono break-all">
+                tx:{' '}
+                <a href={vrfResult.basescanTx || `https://basescan.org/tx/${vrfResult.deployTxHash}`} target="_blank" rel="noreferrer" className="text-blue-300 hover:text-blue-200 underline">
+                  {vrfResult.deployTxHash}
+                </a>
+              </p>
+            )}
+            {vrfResult.nextSteps && vrfResult.nextSteps.length > 0 && (
+              <div className="pt-2 mt-2 border-t border-emerald-500/20 space-y-1">
+                <p className="text-emerald-300 font-semibold text-[11px]">Next steps:</p>
+                <ol className="text-gray-300 list-decimal list-inside space-y-1">
+                  {vrfResult.nextSteps.map((s, i) => <li key={i}>{s}</li>)}
+                </ol>
+              </div>
+            )}
+            {vrfResult.note && <p className="text-gray-400 italic">{vrfResult.note}</p>}
           </div>
         )}
       </div>
