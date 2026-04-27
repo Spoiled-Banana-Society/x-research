@@ -36,6 +36,29 @@ RSYNC_EXCLUDES=(
   --exclude='.last-richard-sync'
 )
 
+# 0. Pre-flight: workspace must be in sync with origin/main, otherwise the
+# rsync below would overwrite the other dev's work in sbs-frontend-v2 with
+# stale local files. This check is the deploy-side equivalent of the
+# pre-push hook described in CLAUDE.md — kept here so it can't be skipped.
+cd "$HOME/sbs-claude-shared-workspace"
+git fetch origin --quiet
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+WORKSPACE_HEAD=$(git rev-parse HEAD)
+MAIN_HEAD=$(git rev-parse origin/main)
+if ! git merge-base --is-ancestor "$MAIN_HEAD" "$WORKSPACE_HEAD"; then
+  echo "⛔ DEPLOY ABORTED — origin/main has commits not in $CURRENT_BRANCH."
+  echo ""
+  echo "   Recent commits on origin/main not yet in your branch:"
+  git log --oneline "${WORKSPACE_HEAD}..${MAIN_HEAD}" | sed 's/^/     /'
+  echo ""
+  echo "   Deploying now would overwrite those files in sbs-frontend-v2"
+  echo "   with the older copies in your branch."
+  echo ""
+  echo "   Fix: cd ~/sbs-claude-shared-workspace && git merge origin/main --no-edit"
+  echo "        then re-run this script."
+  exit 1
+fi
+
 # 1. Ensure deploy repo exists and is up to date.
 if [ ! -d "$DEPLOY_REPO/.git" ] || [ ! -f "$DEPLOY_REPO/.git/HEAD" ]; then
   echo "Cloning sbs-frontend-v2..."
