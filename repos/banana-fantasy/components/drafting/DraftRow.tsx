@@ -79,7 +79,7 @@ export function DraftRow({
               <span className="text-sm font-semibold" style={{ color: accentColor }}>
                 {resolvedType === 'jackpot' ? 'JACKPOT' : resolvedType === 'hof' ? 'HALL OF FAME' : 'PRO'}
               </span>
-              <VerifiedBadge type="draft-type" draftType={resolvedType} size="sm" />
+              <VerifiedBadge type="draft-type" draftType={resolvedType} size="sm" draftId={draft.id} />
             </>
           ) : (
             <span className="text-white/30 text-sm italic">Unrevealed</span>

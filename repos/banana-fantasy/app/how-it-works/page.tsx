@@ -84,11 +84,11 @@ const FAQS = [
   },
   {
     q: 'What is a Jackpot draft?',
-    a: 'Every 100 drafts, one is randomly selected as a Jackpot draft with a massively boosted prize pool. Our provably fair RNG system ensures transparent, verifiable randomness.',
+    a: 'Every batch of 100 drafts contains exactly 1 Jackpot, 5 Hall of Fame, and 94 Pro. The position of the Jackpot within the batch is derived from a server seed whose hash is committed on Base mainnet before any draft in the batch fills. Anyone can verify the assignment after the seed is revealed at batch close — see the Verified badge on any drafted league.',
   },
   {
     q: 'What are Hall of Fame (HOF) entries?',
-    a: 'Within every batch of 100 drafts, 5 are designated as HOF drafts. Winners of HOF leagues compete in an end-of-season tournament for bonus prizes.',
+    a: 'The same batch commit that decides Jackpot placement also fixes the 5 HOF positions. Winners of HOF leagues compete in an end-of-season tournament for bonus prizes.',
   },
   {
     q: 'How does scoring work?',
@@ -96,7 +96,7 @@ const FAQS = [
   },
   {
     q: 'Is the draft order fair?',
-    a: 'Yes. Draft order uses our provably fair RNG system — a cryptographic commit-reveal scheme (HMAC-SHA256) that anyone can independently verify. The seed is committed before the draft and revealed after.',
+    a: 'Yes. Both draft order and draft type use a commit-reveal scheme: a server seed is generated, its hash is committed (on Base for batch type, in our audit log for draft order), and the seed is revealed after the event. Anyone can recompute the outcome from the revealed seed using the algorithm published in lib/batchProof.ts and verify it matches the committed hash.',
   },
   {
     q: 'When does the season run?',
