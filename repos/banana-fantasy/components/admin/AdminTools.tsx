@@ -26,6 +26,21 @@ interface RevokeResponse {
   requestId?: string;
 }
 
+interface DeployBatchProofResponse {
+  success: boolean;
+  alreadyDeployed?: boolean;
+  contractAddress?: string;
+  deployTxHash?: string;
+  deployerAddress?: string;
+  blockNumber?: number;
+  gasUsed?: string;
+  basescanContract?: string;
+  basescanTx?: string;
+  note?: string;
+  error?: string;
+  requestId?: string;
+}
+
 const BASE_RPC = 'https://mainnet.base.org';
 
 async function fetchWalletStatus(): Promise<WalletStatus | null> {
@@ -81,6 +96,9 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
   const [revoking, setRevoking] = useState(false);
   const [revokeResult, setRevokeResult] = useState<RevokeResponse | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [deploying, setDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState<DeployBatchProofResponse | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setStatusLoading(true);
@@ -129,6 +147,31 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
       setRevoking(false);
     }
   }, [getHeaders, refresh, revoking]);
+
+  const handleDeployBatchProof = useCallback(async () => {
+    if (deploying) return;
+    if (!confirm('Deploy BBB4BatchProof.sol to Base mainnet using the admin wallet? Costs ~$3 in ETH gas. This action is permanent.')) return;
+    setDeploying(true);
+    setDeployError(null);
+    setDeployResult(null);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch('/api/admin/deploy-batch-proof', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+      const body = (await res.json()) as DeployBatchProofResponse;
+      if (!res.ok || !body.success) {
+        setDeployError(body.error || `Request failed (${res.status})`);
+      } else {
+        setDeployResult(body);
+      }
+    } catch (err) {
+      setDeployError((err as Error).message);
+    } finally {
+      setDeploying(false);
+    }
+  }, [getHeaders, deploying]);
 
   if (!enabled) return null;
 
@@ -245,6 +288,77 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
               </p>
             )}
             {revokeResult.note && <p className="text-gray-400 italic">{revokeResult.note}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Deploy BBB4BatchProof contract */}
+      <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+        <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-2">Deploy BBB4BatchProof Contract</h4>
+        <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+          Deploys the provably-fair commit/reveal contract to Base mainnet. Owner is set to the admin wallet
+          (same one that signs reserveTokens). Idempotent — refuses to redeploy if a contract is already on file
+          in Firestore. ~$3 one-time gas, paid by the admin wallet&apos;s ETH. Required before the Go API can start
+          publishing batch proofs.
+        </p>
+
+        <button
+          onClick={() => void handleDeployBatchProof()}
+          disabled={deploying}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+        >
+          {deploying ? 'Deploying contract…' : 'Deploy BatchProof to Base'}
+        </button>
+
+        {deployError && (
+          <div className="mt-3 text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {deployError}
+          </div>
+        )}
+
+        {deployResult && (
+          <div className="mt-3 text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 space-y-1.5">
+            <p className="text-emerald-300 font-semibold">
+              {deployResult.alreadyDeployed
+                ? '✓ Contract already deployed — using existing address'
+                : '✓ Contract deployed successfully'}
+            </p>
+            {deployResult.contractAddress && (
+              <p className="text-gray-300 font-mono break-all">
+                contract:{' '}
+                <a
+                  href={deployResult.basescanContract || `https://basescan.org/address/${deployResult.contractAddress}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline"
+                >
+                  {deployResult.contractAddress}
+                </a>
+              </p>
+            )}
+            {deployResult.deployTxHash && (
+              <p className="text-gray-300 font-mono break-all">
+                tx:{' '}
+                <a
+                  href={deployResult.basescanTx || `https://basescan.org/tx/${deployResult.deployTxHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline"
+                >
+                  {deployResult.deployTxHash}
+                </a>
+              </p>
+            )}
+            {deployResult.blockNumber && (
+              <p className="text-gray-400">block {deployResult.blockNumber.toLocaleString()} · gas {deployResult.gasUsed}</p>
+            )}
+            {!deployResult.alreadyDeployed && deployResult.contractAddress && (
+              <p className="text-gray-400 italic mt-2">
+                Add <code className="font-mono text-white/80">NEXT_PUBLIC_BBB4_BATCH_PROOF_ADDRESS={deployResult.contractAddress}</code>{' '}
+                to Vercel env. The Go API will read the same address from Firestore (system_config/batchProof).
+              </p>
+            )}
+            {deployResult.note && <p className="text-gray-400 italic">{deployResult.note}</p>}
           </div>
         )}
       </div>
