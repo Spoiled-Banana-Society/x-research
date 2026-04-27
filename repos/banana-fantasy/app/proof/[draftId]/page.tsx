@@ -165,6 +165,15 @@ export default function ProofPage() {
           </p>
         )}
 
+        {proof?.status === 'committed' && (
+          <p className="text-xs text-amber-200/80 bg-amber-500/[0.06] border border-amber-500/20 rounded-lg px-3 py-2 mb-2">
+            <span className="font-semibold">Slot positions are intentionally hidden</span> until this batch closes
+            (BBB #{((proof.batchNumber - 1) * 100) + 100}). Showing them now would let anyone time their draft
+            entry to land in a known Jackpot/HOF slot. The on-chain hash below proves we&apos;ve already
+            committed to a specific outcome — we just can&apos;t prove which outcome until the seed is revealed.
+          </p>
+        )}
+
         {(proof?.status === 'committed' || proof?.status === 'revealed') && (
           <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs">
             <dt className="text-white/50">Commit tx</dt>

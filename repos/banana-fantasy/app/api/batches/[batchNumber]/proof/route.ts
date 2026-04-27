@@ -58,6 +58,13 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
     const data = snap.data() as BatchProofDoc | undefined;
     if (!data) return json(prelaunch(batchNumber));
 
+    // Positions are gated on status='revealed'. Before the seed is on-chain,
+    // exposing them via the API would let users time their draft entries
+    // to land in the slots known to be Jackpot/HOF — defeating the surprise
+    // and giving an unfair edge to anyone who scrapes this endpoint. After
+    // reveal, the seed itself is public, so anyone can recompute positions
+    // independently in the browser via lib/batchProof.ts.
+    const isRevealed = data.status === 'revealed';
     return json({
       batchNumber,
       status: data.status,
@@ -65,11 +72,11 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
       commitTxHash: data.commitTxHash,
       commitBlock: data.commitBlock,
       committedAt: data.committedAt,
-      serverSeed: data.status === 'revealed' ? data.serverSeed : undefined,
+      serverSeed: isRevealed ? data.serverSeed : undefined,
       revealTxHash: data.revealTxHash,
       revealedAt: data.revealedAt,
-      jackpotPositions: data.jackpotPositions,
-      hofPositions: data.hofPositions,
+      jackpotPositions: isRevealed ? data.jackpotPositions : undefined,
+      hofPositions: isRevealed ? data.hofPositions : undefined,
       preLaunchNote: data.preLaunchNote,
     });
   } catch (err) {
