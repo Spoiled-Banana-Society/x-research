@@ -228,3 +228,106 @@ These are the files most affected by the `git add -A` regressions. If your next 
 Admin wallet `0xccdF79A51D292CF6De8807Abc1bB58D07D26441D` was accidentally EIP-7702 delegated at some point (someone imported `BBB4_OWNER_PRIVATE_KEY` into a wallet app that auto-prompted the upgrade). viem's gas defaults bypass our pinned 0.1 gwei params on delegated EOAs and demand ~30 gwei × ~80k gas = $7+ pre-fund per tx. Admin had $6 → mints rejected mid-flow. Boris hit my one-off Admin Tools tab → revoke endpoint, on-chain bytecode is now `0x` again, mints work. The Tools tab + `/api/admin/revoke-7702` endpoint should be removed in a follow-up commit (one-off, served its purpose). Don't import that key into any wallet ever again.
 
 — Boris's Claude
+
+---
+
+## April 27 — BatchProof randomness source decision (Boris wants Richard's input)
+
+**TL;DR:** We shipped the batch proof commit/reveal system today (contract `0x9774687a84ee574fa6162a9603a195549f212d55` on Base, dedicated signer `0xe0d0C8ad893aD6F5fa0a51A43260c169C87b67e3`, frontend at `/proof/[draftId]`, Go API hooked into `models/draft-state.go`'s batch boundary). Today it commits an SBS-generated server seed at batch start, hides slot positions during the batch, and reveals at close. Working end-to-end. Batch 4 (BBB #301-400) will be the first verifiable batch.
+
+**The remaining gap:** at commit time, SBS still picks the seed. We could in theory grind seeds off-chain to bias slot positions ("put Jackpot at position 99 for end-of-batch hype/sales pressure"). The cryptographic commit guarantees we can't change it AFTER commit, but it doesn't guarantee we couldn't pick a favorable seed BEFORE commit.
+
+Boris is rightly worried about the perception problem here — "users will think we're putting JP at the end to drive sales." Wants the most legit infrastructure possible. Two ways to close this gap; we want your input on which to pick.
+
+### Option A — Future Base blockhash mixing
+
+**How it works:**
+1. At batch start, generate `serverSeed` privately
+2. Pick `futureBlock = currentBlock + 50` (~100s ahead on Base)
+3. Submit `commit(batchNumber, keccak256(serverSeed), futureBlock)` on-chain
+4. Wait for `futureBlock` to be mined (we don't know its hash yet)
+5. Read `blockhash(futureBlock)` from chain
+6. Actual derivation seed = `keccak256(serverSeed || blockhash(futureBlock))`
+7. Use that mix to derive slot positions
+8. Reveal `serverSeed` at batch close; anyone re-mixes with chain blockhash to verify
+
+**Why it kills seed grinding:** at commit time we don't know `blockhash(futureBlock)`. Even if we generate seeds in a loop trying to find one that puts JP at position 99, the final mix with an unpredictable blockhash makes the actual JP position unpredictable. We physically cannot bias toward end positions.
+
+**Cost:** ~$0.0001 per batch in extra gas. Free.
+
+**Setup needed:**
+- Contract redeploy (modify `commit()` to accept `futureBlock` param). Existing contract becomes inert (no real batches reference it yet — batches 1-3 are pre-launch).
+- Update Go `batchproof/manager.go` to wait for `futureBlock` before deriving slots. ~30 min of work.
+- Update `lib/batchProof.ts` derivation to mix in blockhash. Browser must read blockhash from RPC.
+
+**Trust delegation:** Base mainnet validators (hundreds, no single one can influence a 50-block-out blockhash for $25 reward).
+
+**Failure modes:**
+- Base reorg deeper than 50 blocks: blockhash changes. Almost never happens; could mitigate with deeper offset.
+- Validator collusion: economically irrational at our stakes.
+
+### Option B — Chainlink VRF (Verifiable Random Function)
+
+**How it works:**
+1. At batch start, contract calls `VRFCoordinator.requestRandomWords()`
+2. Chainlink's oracle network independently generates a random uint256 + cryptographic proof
+3. Coordinator calls back into our contract with the verified random number
+4. We use that as the derivation seed; positions stay private as before
+5. Reveal at batch close = publish the same random number we got from VRF, anyone re-derives
+
+**Why it kills seed grinding:** SBS literally never generates a seed. Chainlink does. We don't see candidate values. We don't get to pick.
+
+**Cost:** ~$5 per batch in LINK tokens (Chainlink's fee for verifiable randomness). At our current volume that's negligible; at 10k drafts/year = 100 batches = $500/year.
+
+**Setup needed:**
+- New contract `BBB4BatchProofVRF.sol` integrating Chainlink VRF v2.5 coordinator on Base. ~150 lines.
+- Boris (one-time, 30 min): create VRF subscription at https://vrf.chain.link, buy ~$50 LINK on Base, fund subscription, add contract as consumer.
+- Update Go API to use the request-callback flow instead of synchronous seed gen.
+- Update frontend to show "Chainlink VRF" branding.
+
+**Trust delegation:** Chainlink's decentralized oracle network. Same source Polymarket and most onchain casinos use.
+
+**Failure modes:**
+- Chainlink outage: batch start stalls until VRF callback fires. Almost never happens but real.
+- LINK subscription runs dry: we'd notice if commits start failing. Easy to monitor.
+- Reorg-resistant by design.
+
+### Honest comparison for SBS's specific stage
+
+| | Option A (blockhash) | Option B (VRF) |
+|---|---|---|
+| **Eliminates seed grinding** | ✓ | ✓ |
+| **Eliminates JP-at-end attack** | ✓ | ✓ |
+| **Slot positions hidden during batch** | ✓ | ✓ |
+| **Statistically verifiable (uniform JP distribution over many batches)** | ✓ | ✓ |
+| **Marketing recognition** | "future blockhash mixing" needs explaining | "Chainlink VRF" instantly recognized by crypto users |
+| **Cost per batch** | ~$0.0001 | ~$5 |
+| **Operational complexity** | Just code | Code + LINK subscription + ongoing LINK balance |
+| **External dependencies** | Just Base | Base + Chainlink |
+| **Code surface area in our contract** | ~30 lines added | ~150 lines added |
+| **Reorg resistance** | Strong (50-block buffer) | Strongest (oracle delivers post-finality) |
+
+For the perception goal Boris is targeting — "users have to actually believe us, not just take our word" — Option B's brand recognition is a real factor. Most non-crypto users don't know what a Base blockhash is, but they've heard "Chainlink VRF" mentioned in passing as the trusted source for onchain randomness. The marketing pitch writes itself: "Provably fair via Chainlink VRF."
+
+### My recommendation as Boris's Claude
+
+For SBS at current stage with current goals: **ship VRF (Option B)**. The $5/batch is "trust insurance" — paying for the brand-recognition shortcut so users don't need a 5-paragraph crypto explainer to trust the system. At ~5 cents per draft of insurance, it's a great trade.
+
+**But** I'm aware:
+- You may have stronger opinions about external dependencies than I do
+- You may have been burned by Chainlink before (or know of edge cases)
+- You may legitimately think VRF is overkill for SBS's stage and Option A is "good enough"
+
+Both options achieve the actual security goal identically. The difference is operational + perception. Boris is leaning VRF for the perception value but wants your read before we commit hours of work.
+
+### What I'd need from you
+
+A short reply with one of:
+- "Ship VRF" → I write the new contract, you set up the subscription
+- "Ship blockhash mixing" → I do the contract redeploy + Go updates, no LINK setup needed
+- "Don't ship either, current commit-reveal is enough" → fully defensible, just keep what we have today
+- A different option I haven't considered
+
+Whatever you pick we'll move on it tonight or tomorrow. Both options need the work to land before batch 4 starts (~66 drafts away from now), so there's a soft deadline.
+
+— Boris's Claude
