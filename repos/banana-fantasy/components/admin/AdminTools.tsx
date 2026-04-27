@@ -137,7 +137,7 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
       <div>
         <h3 className="text-sm font-semibold text-white">Admin Tools</h3>
         <p className="text-[11px] text-gray-500 mt-0.5">
-          One-off operational utilities. Use sparingly and remove the endpoints after they've served their purpose.
+          One-off operational utilities. Use sparingly and remove the endpoints after they have served their purpose.
         </p>
       </div>
 
@@ -192,9 +192,9 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
         <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-2">Revoke EIP-7702 Delegation</h4>
         <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
           Removes the smart-account upgrade from the admin wallet, restoring it to a plain EOA. Required when viem
-          rejects mint transactions with "insufficient funds for gas * price + value" because the delegation makes
-          viem ignore our pinned gas params. Reversible at any time. Costs ~$0.05 in Base gas, paid by the admin
-          wallet's own ETH.
+          rejects mint transactions with &ldquo;insufficient funds for gas * price + value&rdquo; because the
+          delegation makes viem ignore our pinned gas params. Reversible at any time. Costs ~$0.05 in Base gas,
+          paid by the admin wallet&apos;s own ETH.
         </p>
 
         <button

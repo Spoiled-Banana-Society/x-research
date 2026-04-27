@@ -69,6 +69,37 @@ fi
 cd "$DEPLOY_REPO"
 git pull origin main
 
+# Mode B safety: Boris pushes directly to sbs-frontend-v2 from his Mac without
+# always round-tripping through shared workspace. If sbs-frontend-v2/main has
+# advanced since our last deploy, the rsync below would overwrite his commits
+# with stale workspace files. Track the last deployed HEAD and abort if it
+# moved underneath us.
+DEPLOY_MARKER="$HOME/.sbs-last-deploy-frontend-v2-head"
+DEPLOY_HEAD_NOW=$(git rev-parse HEAD)
+if [ -f "$DEPLOY_MARKER" ]; then
+  LAST_DEPLOYED=$(cat "$DEPLOY_MARKER")
+  if [ -n "$LAST_DEPLOYED" ] && [ "$DEPLOY_HEAD_NOW" != "$LAST_DEPLOYED" ]; then
+    # Make sure the previous-deploy SHA is still in history (else marker is stale)
+    if git cat-file -e "$LAST_DEPLOYED^{commit}" 2>/dev/null; then
+      AHEAD_COUNT=$(git rev-list --count "${LAST_DEPLOYED}..${DEPLOY_HEAD_NOW}" 2>/dev/null || echo "?")
+      if [ "$AHEAD_COUNT" != "0" ] && [ "$AHEAD_COUNT" != "?" ]; then
+        echo "⛔ DEPLOY ABORTED — sbs-frontend-v2 has $AHEAD_COUNT new commit(s) since your last deploy."
+        echo ""
+        echo "   New commits Boris pushed directly to sbs-frontend-v2:"
+        git log --oneline "${LAST_DEPLOYED}..${DEPLOY_HEAD_NOW}" | sed 's/^/     /'
+        echo ""
+        echo "   Deploying now would rsync stale workspace files over those commits."
+        echo "   Sync them into shared workspace first, OR ask Boris to push them"
+        echo "   to shared workspace via 'Sync banana-fantasy to shared workspace'."
+        echo ""
+        echo "   To force deploy anyway (only if you've manually verified):"
+        echo "     rm $DEPLOY_MARKER && bash $0 \"$MSG\""
+        exit 1
+      fi
+    fi
+  fi
+fi
+
 # Write sync marker with Boris's latest commit hash (for pre-push hook)
 BORIS_HASH=$(cd "$HOME/sbs-claude-shared-workspace" && git fetch origin --quiet 2>/dev/null && git rev-parse origin/boris 2>/dev/null)
 if [ -n "$BORIS_HASH" ]; then
@@ -108,6 +139,10 @@ git push origin main
 
 # Trigger deploy via hook — the git push auto-deploy gets blocked by Vercel
 # deployment protection, so the hook is what actually deploys.
+# Record the SHA we just shipped so the next deploy can detect a direct push
+# from Boris that would otherwise be silently overwritten.
+git rev-parse HEAD > "$DEPLOY_MARKER"
+
 echo ""
 echo "Triggering Vercel deploy hook..."
 curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_laojah7E1rx3bwkFOPcOAsumG0DO/MjJcGpoznH" | cat

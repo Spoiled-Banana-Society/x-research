@@ -181,3 +181,55 @@ If the admin were a plain EOA (no delegation), there's no such limit and the flo
 The only related code I shipped today was a UX change to `BuyPassesModal.tsx` (success state + survive close/reopen via `lib/purchaseFlow.ts`) and a `scripts/deploy.sh` rewrite to mirror full tree instead of last-commit only. Neither touches the mint pipeline.
 
 — Richard's Claude, end of day April 26
+
+---
+
+## April 26 — Reply to Boris's hook + commit hygiene note
+
+Read your note in `NOTES-FOR-RICHARD.md`. You're correct on every point. Apologies — that's two regressions in one day and the second one (AdminTools quote escapes) was avoidable.
+
+**Confirming what I saw on my side:**
+
+- Diffed `5240174..c950a5e` on sbs-frontend-v2 — that's 8 of your direct-push commits I overwrote (race vs Alchemy, Sentry forwarding, atomic counter txs, mint hardening, Firestore writethrough, gas pin, etc.). My deploy script's rsync rewrote workspace state on top of those, and `git add -A` after the rsync committed everything as one blob.
+- Diffed `d790f27..b094513` on sbs-frontend-v2 — that's the AdminTools quote escapes I reverted on the second deploy.
+- Just confirmed the EIP-7702 thing on-chain too — `eth_getCode(0xccdF79...)` now returns `0x` (plain EOA again). Mints work, allowance to admin from BananaKing99 still sitting at 25 USDC unspent. Nice work on the revoke endpoint.
+
+**What I changed in `scripts/deploy.sh` (commit landing alongside this note):**
+
+Added a Mode B safety check on top of the Mode A check I shipped earlier today. Existing Mode A check verified workspace's current branch contains everything on shared-workspace `origin/main`. The new Mode B check verifies that `sbs-frontend-v2/main` HEAD hasn't moved since our last successful deploy:
+
+```bash
+DEPLOY_MARKER="$HOME/.sbs-last-deploy-frontend-v2-head"
+# ... after git pull origin main on /tmp/sbs-frontend-v2:
+if [ -f "$DEPLOY_MARKER" ]; then
+  LAST_DEPLOYED=$(cat "$DEPLOY_MARKER")
+  AHEAD=$(git rev-list --count "${LAST_DEPLOYED}..HEAD")
+  if [ "$AHEAD" -gt 0 ]; then
+    echo "⛔ DEPLOY ABORTED — sbs-frontend-v2 has $AHEAD new commit(s) since your last deploy."
+    git log --oneline "${LAST_DEPLOYED}..HEAD"
+    exit 1
+  fi
+fi
+# ... after successful deploy:
+git rev-parse HEAD > "$DEPLOY_MARKER"
+```
+
+It already proved itself: when I tested the new script just now, it caught `b094513` (your re-applied ESLint escapes) and aborted with a clear message listing what would have been overwritten. So the next time you push directly between my deploys, the script blocks instead of trampling.
+
+Also: I ported `b094513`'s AdminTools.tsx quote escapes into shared workspace's `repos/banana-fantasy/components/admin/AdminTools.tsx` directly so workspace doesn't drift while waiting for your next "Sync banana-fantasy to shared workspace" commit. Diff is the 4-line `&ldquo;`/`&rdquo;`/`&apos;` replacement, no other changes.
+
+**On `git add -A` in the deploy script:** still there in the deploy repo (`/tmp/sbs-frontend-v2`), but now it runs *after* an rsync that's been gated by the Mode B check. The rsync itself is content-checksum based (`-c --delete`) with explicit excludes; if you push direct between my deploys, the Mode B check fires before rsync runs and aborts. So `-A` is no longer the silent-overwriter it was.
+
+**On your other items:**
+
+1. **Pre-push hook for `~/banana-fantasy/.git/hooks/pre-push`** — I don't have a `~/banana-fantasy/` checkout on this machine. My deploy path is `~/sbs-claude-shared-workspace/scripts/deploy.sh` → `/tmp/sbs-frontend-v2/`, so that hook never applied. The deploy.sh Mode A + Mode B checks are the equivalent guard for my workflow. Happy to also add the pre-push hook if you want belt-and-suspenders, but the deploy.sh checks should now cover the same failure modes.
+
+2. **Local Bash safety hook** (`~/.claude/hooks/sbs-safety.sh`) — never seen the script. Can you paste it (or its path on your Mac) into your next note? I'll install it. The "block git push from `~/banana-fantasy/` if `~/sbs-shared-pushed` is missing/old" pattern sounds like a useful second line of defense, especially the prod-reference repos guard.
+
+3. **Don't import `BBB4_OWNER_PRIVATE_KEY` into any wallet ever again** — saved that to durable memory along with the account-currently-revoked status. Won't repeat.
+
+4. **Files-not-to-revert list** — saved the whole list to memory. The deploy.sh Mode B check is the main guard, but I'll also do a sanity-grep for those filenames before any commit that touches them.
+
+5. **`/api/admin/revoke-7702/` removal** — agreed it's a one-off that should come out. Logged as an open ask in `NOTES-FOR-RICHARD.md` for your next pass; or I can ship the removal commit if you'd rather.
+
+— Richard's Claude
