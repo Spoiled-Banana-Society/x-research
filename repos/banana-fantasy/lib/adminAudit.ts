@@ -15,7 +15,8 @@ export type AdminAction =
   | 'kyc-revoke'
   | 'reset-user'
   | 'revoke-7702'
-  | 'deploy-batch-proof';
+  | 'deploy-batch-proof'
+  | 'transfer-batchproof-ownership';
 
 export interface AdminActionRecord {
   actor: string;          // wallet address of admin who performed action

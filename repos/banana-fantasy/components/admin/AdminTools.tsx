@@ -41,6 +41,21 @@ interface DeployBatchProofResponse {
   requestId?: string;
 }
 
+interface TransferOwnershipResponse {
+  success: boolean;
+  alreadyTransferred?: boolean;
+  contractAddress?: string;
+  currentOwner?: string;
+  previousOwner?: string;
+  newOwner?: string;
+  txHash?: string;
+  blockNumber?: number;
+  basescanTx?: string;
+  note?: string;
+  error?: string;
+  requestId?: string;
+}
+
 const BASE_RPC = 'https://mainnet.base.org';
 
 async function fetchWalletStatus(): Promise<WalletStatus | null> {
@@ -99,6 +114,10 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState<DeployBatchProofResponse | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
+  const [newOwnerInput, setNewOwnerInput] = useState('');
+  const [transferring, setTransferring] = useState(false);
+  const [transferResult, setTransferResult] = useState<TransferOwnershipResponse | null>(null);
+  const [transferError, setTransferError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setStatusLoading(true);
@@ -172,6 +191,37 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
       setDeploying(false);
     }
   }, [getHeaders, deploying]);
+
+  const handleTransferOwnership = useCallback(async () => {
+    if (transferring) return;
+    const trimmed = newOwnerInput.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+      setTransferError('Address must be 0x followed by 40 hex characters.');
+      return;
+    }
+    if (!confirm(`Transfer BBB4BatchProof ownership to ${trimmed}? After this commits, the new address controls all future commit/reveal txs and the OLD admin wallet has no power over the proof contract. The BBB4 NFT contract is unaffected.`)) return;
+    setTransferring(true);
+    setTransferError(null);
+    setTransferResult(null);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch('/api/admin/transfer-batchproof-ownership', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newOwner: trimmed }),
+      });
+      const body = (await res.json()) as TransferOwnershipResponse;
+      if (!res.ok || !body.success) {
+        setTransferError(body.error || `Request failed (${res.status})`);
+      } else {
+        setTransferResult(body);
+      }
+    } catch (err) {
+      setTransferError((err as Error).message);
+    } finally {
+      setTransferring(false);
+    }
+  }, [getHeaders, transferring, newOwnerInput]);
 
   if (!enabled) return null;
 
@@ -359,6 +409,78 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
               </p>
             )}
             {deployResult.note && <p className="text-gray-400 italic">{deployResult.note}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Transfer BBB4BatchProof ownership to a dedicated signer */}
+      <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+        <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-2">Transfer BatchProof Ownership</h4>
+        <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+          Transfers BBB4BatchProof contract ownership to a new address. Lets us run the proof system with a
+          dedicated signer that has no power over BBB4 NFTs or USDC — smaller blast radius if it leaks. The
+          BBB4 NFT contract is untouched. Costs ~$0.001 in Base gas, paid by the current owner.
+        </p>
+        <p className="text-[11px] text-amber-300 mb-3">
+          ⚠ Make sure you have the new address&apos;s private key saved in 1Password BEFORE clicking. After
+          this commits, the OLD admin wallet can no longer sign batch-proof txs.
+        </p>
+
+        <input
+          type="text"
+          value={newOwnerInput}
+          onChange={(e) => setNewOwnerInput(e.target.value)}
+          placeholder="0x... new owner address"
+          spellCheck={false}
+          className="w-full max-w-[28rem] px-3 py-2 mb-2 text-xs font-mono bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-amber-500"
+        />
+
+        <div>
+          <button
+            onClick={() => void handleTransferOwnership()}
+            disabled={transferring || !newOwnerInput.trim()}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            {transferring ? 'Transferring…' : 'Transfer ownership'}
+          </button>
+        </div>
+
+        {transferError && (
+          <div className="mt-3 text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {transferError}
+          </div>
+        )}
+
+        {transferResult && (
+          <div className="mt-3 text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 space-y-1.5">
+            <p className="text-emerald-300 font-semibold">
+              {transferResult.alreadyTransferred
+                ? '✓ Already owned by that address — no tx sent'
+                : '✓ Ownership transferred'}
+            </p>
+            {transferResult.contractAddress && (
+              <p className="text-gray-300 font-mono break-all">contract: {transferResult.contractAddress}</p>
+            )}
+            {transferResult.previousOwner && (
+              <p className="text-gray-400">previous owner: <span className="font-mono">{transferResult.previousOwner}</span></p>
+            )}
+            {(transferResult.newOwner || transferResult.currentOwner) && (
+              <p className="text-gray-300">new owner: <span className="font-mono">{transferResult.newOwner || transferResult.currentOwner}</span></p>
+            )}
+            {transferResult.txHash && (
+              <p className="text-gray-300 font-mono break-all">
+                tx:{' '}
+                <a
+                  href={transferResult.basescanTx || `https://basescan.org/tx/${transferResult.txHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline"
+                >
+                  {transferResult.txHash}
+                </a>
+              </p>
+            )}
+            {transferResult.note && <p className="text-gray-400 italic">{transferResult.note}</p>}
           </div>
         )}
       </div>
