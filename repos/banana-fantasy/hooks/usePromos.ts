@@ -87,7 +87,13 @@ export function usePromos(opts?: { userId?: string }) {
 
         return res;
       } catch (err) {
-        return err instanceof Error ? err : new Error('Failed to claim promo.');
+        const error = err instanceof Error ? err : new Error('Failed to claim promo.');
+        pushNotification({
+          type: 'promo',
+          title: 'Claim failed',
+          message: error.message,
+        });
+        return error;
       }
     },
     [userId, swr.data, updateUser],

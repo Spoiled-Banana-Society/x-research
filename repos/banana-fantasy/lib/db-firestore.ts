@@ -283,6 +283,7 @@ export async function claimPromo(userId: string, promoId: string) {
     const promo = deepClone(promoSnap.data() as Promo);
 
     // Gate new-user and tweet-engagement promos behind X verification
+    let twitterLinkRef: FirebaseFirestore.DocumentReference | null = null;
     if (promo.type === 'new-user' || promo.type === 'tweet-engagement') {
       const twitterSnap = await db
         .collection('v2_twitter_links')
@@ -292,11 +293,24 @@ export async function claimPromo(userId: string, promoId: string) {
       if (twitterSnap.empty) {
         throw new ApiError(400, 'X/Twitter verification required before claiming this promo');
       }
+      twitterLinkRef = twitterSnap.docs[0].ref;
+      if (promo.type === 'new-user') {
+        // Source of truth for the new-user claim is the twitter link doc, not
+        // the promo doc (the promo's `claimable` is flipped on read by getPromos
+        // and never persists, so trusting `promo.claimable` here would always
+        // throw "not claimable").
+        if (twitterSnap.docs[0].data().newUserPromoClaimed) {
+          throw new ApiError(400, 'New-user bonus already claimed');
+        }
+      }
     }
 
     let spinsAdded = 0;
 
-    if (promo.type === 'pick-10' && promo.modalContent.pick10History) {
+    if (promo.type === 'new-user') {
+      // Single-shot claim — Twitter gate above proved verified-and-unclaimed.
+      spinsAdded = 1;
+    } else if (promo.type === 'pick-10' && promo.modalContent.pick10History) {
       const claimables = promo.modalContent.pick10History.filter((h) => h.status === 'claim');
       spinsAdded = claimables.length;
       promo.modalContent.pick10History = promo.modalContent.pick10History.map((h) =>
@@ -349,6 +363,9 @@ export async function claimPromo(userId: string, promoId: string) {
 
     tx.set(userRef, stripUndefined(user), { merge: true });
     tx.set(promoRef, stripUndefined(promo), { merge: true });
+    if (promo.type === 'new-user' && twitterLinkRef) {
+      tx.update(twitterLinkRef, { newUserPromoClaimed: true });
+    }
 
     return { promo: deepClone(promo), spinsAdded, user: deepClone(user), draftPassCount, mintOnChain };
   }).then(async (result) => {
