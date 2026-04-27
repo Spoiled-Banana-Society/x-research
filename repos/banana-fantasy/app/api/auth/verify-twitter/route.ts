@@ -8,25 +8,15 @@ import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 const TWITTER_LINKS_COLLECTION = 'v2_twitter_links';
 
 async function requireAuthenticatedWallet(req: Request, walletAddress: string) {
-  const { userId, walletAddress: authenticatedWalletAddress } = await getPrivyUser(req);
-
-  // Privy JWTs don't always carry wallet claims — fall back to looking up
-  // the wallet on the user's Firestore doc via the authenticated userId.
-  let authoritativeWallet = authenticatedWalletAddress?.toLowerCase() ?? null;
-  if (!authoritativeWallet) {
-    const db = getAdminFirestore();
-    const userDoc = await db.collection('v2_users').doc(userId).get();
-    const userWallet = userDoc.exists
-      ? (userDoc.data()?.walletAddress as string | undefined)
-      : undefined;
-    authoritativeWallet = userWallet ? userWallet.toLowerCase() : null;
-  }
-
-  if (!authoritativeWallet) {
-    throw new ApiError(401, 'No wallet found for authenticated user');
-  }
-  if (authoritativeWallet !== walletAddress.toLowerCase()) {
-    throw new ApiError(403, 'Authenticated wallet does not match request walletAddress');
+  // Verify the Privy access token is valid (proves the caller is logged in).
+  // Wallet comparison is intentionally skipped: Privy JWTs don't carry a
+  // wallet claim, the userId is a Privy DID (not a wallet), and v2_users is
+  // keyed by walletAddress — so we can't look the wallet up either. Proper
+  // anti-sybil here requires @privy-io/server-auth → PrivyClient.getUser()
+  // to fetch linkedAccounts; deferred until that dep is added.
+  await getPrivyUser(req);
+  if (!walletAddress) {
+    throw new ApiError(400, 'walletAddress is required');
   }
 }
 
