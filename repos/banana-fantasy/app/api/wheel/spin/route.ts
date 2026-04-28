@@ -336,6 +336,31 @@ export async function POST(req: Request) {
       });
     }
 
+    // Referral milestone — fire 'verified' on the referrer's referral promo
+    // once the friend has (a) claimed the New User Bonus SPIN
+    // (newUserPromoClaimed === true on their twitter link) AND (b) actually
+    // used a wheel spin (this route). Idempotent: updateReferralRewards
+    // only flips a 'pending' reward to 'claim'.
+    try {
+      const twitterSnap = await db
+        .collection('v2_twitter_links')
+        .where('walletAddress', '==', userId.toLowerCase())
+        .limit(1)
+        .get();
+      if (!twitterSnap.empty && twitterSnap.docs[0].data().newUserPromoClaimed) {
+        const userDoc = await userRef.get();
+        if (userDoc.exists && userDoc.data()?.referredBy) {
+          const { updateReferralRewards } = await import('@/lib/db');
+          await updateReferralRewards(userId, 'verified');
+        }
+      }
+    } catch (refErr) {
+      logger.warn('wheel.spin.referral_milestone_failed', {
+        userId,
+        err: (refErr as Error).message,
+      });
+    }
+
     // Auto-queue for Jackpot/HOF — happens server-side so it can't be interrupted
     if (segment.prizeType === 'custom' && (segment.prizeValue === 'jackpot' || segment.prizeValue === 'hof')) {
       try {
