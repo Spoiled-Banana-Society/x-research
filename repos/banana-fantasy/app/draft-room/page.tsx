@@ -1534,7 +1534,7 @@ function DraftRoomContent() {
                   visibleDraftType === 'hof' ? 'bg-yellow-500/30 text-yellow-400' :
                   'bg-purple-500/30 text-purple-400'
                 }`}>{visibleDraftType.toUpperCase()}</span>
-                <VerifiedBadge type="draft-type" draftType={visibleDraftType} />
+                <VerifiedBadge type="draft-type" draftType={visibleDraftType} draftId={draftId || urlDraftId} />
               </>
             )}
             {phase === 'filling' && !specialTypeParam && (

@@ -123,7 +123,7 @@ export function CompletedDrafts({ drafts, onViewDetails }: CompletedDraftsProps)
                       HOF
                     </span>
                   )}
-                  <VerifiedBadge type="draft-type" draftType={draft.type} size="sm" />
+                  <VerifiedBadge type="draft-type" draftType={draft.type} size="sm" draftId={draft.id} />
                 </div>
                 <div className="flex items-center gap-3 text-sm text-white/50">
                   <span>{formatDate(draft.completedDate)}</span>
