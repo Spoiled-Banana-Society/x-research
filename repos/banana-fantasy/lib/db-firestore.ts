@@ -1510,10 +1510,49 @@ export async function recordPick10(userId: string, draftId: string, _draftName: 
 // ==================== JACKPOT-HIT PROMO: RECORD WHEN USER LANDS IN A JACKPOT DRAFT ====================
 
 const JACKPOT_HIT_PROMO_ID = '4';
+const BATCH_SIZE = 100;
+
+/**
+ * Bonus tiers for the jackpot promo:
+ *   • slot 1–25  → 10 spins (early-batch hit)
+ *   • slot 26–50 → 5 spins
+ *   • slot 51–100 → 1 spin (standard)
+ * `position` is 1-indexed within the current batch (1..100).
+ */
+function jackpotSpinReward(position: number): number {
+  if (position >= 1 && position <= 25) return 10;
+  if (position >= 26 && position <= 50) return 5;
+  return 1;
+}
+
+/**
+ * Resolve the position-in-batch for the JP draft. Prefer reading the
+ * draftTracker.FilledLeaguesCount counter (same source as
+ * /api/batches/current); fall back to the last entry's position+1 if the
+ * counter is unreadable. Slight drift if multiple drafts fill in parallel
+ * is acceptable on staging.
+ */
+async function getCurrentBatchPosition(): Promise<number> {
+  try {
+    const db = getAdminFirestore();
+    const snap = await db.collection('drafts').doc('draftTracker').get();
+    if (!snap.exists) return 1;
+    const filled = Number(((snap.data() as { FilledLeaguesCount?: number } | undefined)?.FilledLeaguesCount) ?? 0);
+    // The JP draft just filled, so its 1-indexed position within this batch
+    // is ((filled - 1) % BATCH_SIZE) + 1, with a guard for filled === 0.
+    if (filled <= 0) return 1;
+    return ((filled - 1) % BATCH_SIZE) + 1;
+  } catch {
+    return 1;
+  }
+}
 
 export async function recordJackpotHit(userId: string, draftId: string): Promise<Promo | null> {
   const db = getAdminFirestore();
   await ensureUserSeeded(userId);
+
+  const position = await getCurrentBatchPosition();
+  const reward = jackpotSpinReward(position);
 
   const promoRef = db
     .collection(USERS_COLLECTION)
@@ -1535,12 +1574,12 @@ export async function recordJackpotHit(userId: string, draftId: string): Promise
     history.unshift({
       date: new Date().toISOString().split('T')[0],
       draftName: draftId,
-      amount: 1,
+      amount: reward,
     });
     promo.modalContent.jackpotHistory = history;
     promo.progressCurrent = 1;
     promo.claimable = true;
-    promo.claimCount = (promo.claimCount || 0) + 1;
+    promo.claimCount = (promo.claimCount || 0) + reward;
 
     tx.set(promoRef, stripUndefined(promo), { merge: true });
     return deepClone(promo);
