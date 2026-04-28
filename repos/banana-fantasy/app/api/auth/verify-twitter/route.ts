@@ -69,12 +69,24 @@ export async function POST(req: Request) {
       // non-fatal
     }
 
-    // Note: referral "verified" milestone is NOT fired here anymore.
-    // Twitter linking alone is too cheap a signal — a referrer would get
-    // their spin before the friend actually engaged with the product.
-    // The milestone is now triggered from /api/wheel/spin once the friend
-    // has (a) claimed the New User Bonus SPIN and (b) used at least one
-    // wheel spin. See route.ts in app/api/wheel/spin.
+    // Trigger referral "verified" reward if this user was referred
+    try {
+      const { updateReferralRewards } = await import('@/lib/db');
+      // Look up user by wallet address in Firestore
+      const usersSnap = await db.collection('v2_users')
+        .where('walletAddress', '==', walletAddress)
+        .limit(1)
+        .get();
+      if (!usersSnap.empty) {
+        const userData = usersSnap.docs[0].data();
+        const userId = usersSnap.docs[0].id;
+        if (userData.referredBy) {
+          await updateReferralRewards(userId, 'verified');
+        }
+      }
+    } catch {
+      // Silent — don't block twitter verification if referral update fails
+    }
 
     return json({ verified: true, handle: twitterHandle, newUserPromoClaimed: false });
   } catch (err) {

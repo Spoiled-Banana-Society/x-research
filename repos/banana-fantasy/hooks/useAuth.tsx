@@ -198,15 +198,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setTwitterError(data.error || 'Verification failed');
         setIsTwitterVerified(false);
-        // Auto-unlink the Twitter account from Privy so the user can retry
-        // with a different X. Otherwise Privy's linkedAccounts keeps the
-        // failed X attached and every reload re-runs the same conflict.
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (privy as any).unlinkTwitter?.(twitterId);
-        } catch (unlinkErr) {
-          console.warn('[SBS Auth] unlinkTwitter after failed verify failed:', unlinkErr);
-        }
       }
     } catch {
       setTwitterError('Failed to verify X account');
@@ -324,28 +315,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.debug('[SBS Auth] loginMethod:', loginMethod);
       }
 
-      // Track referral if a ref code is in sessionStorage and the user
-      // hasn't already been linked to a referrer. Idempotent server-side
-      // (trackReferral skips duplicate entries), but we additionally guard
-      // here so we don't re-overwrite `referredBy` once it's set.
-      const fireReferralTrack = (id: string, username: string) => {
-        const refCode = typeof window !== 'undefined'
-          ? sessionStorage.getItem(REFERRAL_CODE_KEY)
-          : null;
-        if (!refCode) return;
-        fetch('/api/referrals/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            referrerCode: refCode,
-            referredUserId: id,
-            referredUsername: username,
-          }),
-        })
-          .then(() => sessionStorage.removeItem(REFERRAL_CODE_KEY))
-          .catch(() => { /* silent — referral tracking is best-effort */ });
-      };
-
       // Try to fetch real SBS profile from backend
       getOwnerUser(walletAddress)
         .then((backendUser) => {
@@ -361,12 +330,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(merged);
           setIsNewUser(false);
           setShowOnboarding(false);
-          // Auto-seeding on the backend can create the user before this
-          // hook runs, so a 200 response doesn't mean "no referral to track".
-          // Fire the track call if we have a code and no existing referrer.
-          if (!merged.referredBy) {
-            fireReferralTrack(merged.id, merged.username);
-          }
         })
         .catch((err) => {
           // Backend unreachable or user not found — fall back to Privy-only profile
@@ -393,7 +356,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isNotFound) {
             setIsNewUser(true);
             setShowOnboarding(true);
-            fireReferralTrack(fallbackUser.id, fallbackUser.username);
+            // Track referral if ref code exists
+            const refCode = typeof window !== 'undefined' ? sessionStorage.getItem(REFERRAL_CODE_KEY) : null;
+            if (refCode) {
+              fetch('/api/referrals/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  referrerCode: refCode,
+                  referredUserId: fallbackUser.id,
+                  referredUsername: fallbackUser.username,
+                }),
+              })
+                .then(() => sessionStorage.removeItem(REFERRAL_CODE_KEY))
+                .catch(() => { /* silent — referral tracking is best-effort */ });
+            }
           } else {
             setIsNewUser(false);
             setShowOnboarding(false);

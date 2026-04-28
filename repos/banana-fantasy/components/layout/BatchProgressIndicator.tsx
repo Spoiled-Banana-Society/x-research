@@ -10,16 +10,18 @@ export function BatchProgressIndicator() {
 
   if (!isLoggedIn || !data) return null;
 
-  const { current, total, jackpotRemaining, hofRemaining } = data;
+  const { jackpotRemaining, hofRemaining, filledLeaguesCount } = data;
+  const currentDraft = filledLeaguesCount;
+  const batchEnd = filledLeaguesCount === 0 ? 100 : Math.ceil(filledLeaguesCount / 100) * 100;
   const jackpotHit = jackpotRemaining <= 0;
   const allHofHit = hofRemaining <= 0;
-  const draftsLeft = total - current;
+  const draftsLeft = batchEnd - currentDraft;
 
   return (
     <Tooltip
       content={
         <div className="text-center space-y-2 py-1">
-          <p className="font-semibold text-text-primary">Draft {current} of {total}</p>
+          <p className="font-semibold text-text-primary">Draft {currentDraft} of {batchEnd}</p>
           {!jackpotHit && (
             <p className="text-red-400 text-xs">
               Jackpot must hit in next {draftsLeft} draft{draftsLeft !== 1 ? 's' : ''}!
@@ -46,7 +48,7 @@ export function BatchProgressIndicator() {
               <span className="text-text-secondary">&mdash; Compete for bonus prizes</span>
             </p>
             <p className="text-text-muted text-xs mt-1">
-              1 Jackpot &amp; 5 HOF guaranteed every {total} drafts
+              1 Jackpot &amp; 5 HOF guaranteed every 100 drafts
             </p>
           </div>
         </div>
@@ -54,7 +56,7 @@ export function BatchProgressIndicator() {
     >
       <div className="flex flex-col items-center w-[56px] sm:w-[72px] py-1 cursor-help">
         <span className="text-[13px] sm:text-[16px] font-semibold tabular-nums text-white/75 leading-tight">
-          {current}<span className="text-white/40 font-normal">/{total}</span>
+          {currentDraft}<span className="text-white/40 font-normal">/{batchEnd}</span>
         </span>
         <div className="flex items-center justify-center gap-[4px] sm:gap-[6px] leading-tight">
           <span className="inline-flex items-center gap-[2px]">

@@ -48,9 +48,7 @@ export async function GET(req: Request) {
         nextBatchNumber: 2,
       });
     }
-    const data = snap.data() as
-      | { FilledLeaguesCount?: number; JackpotLeagueIds?: number[]; HofLeagueIds?: number[] }
-      | undefined;
+    const data = snap.data() as { FilledLeaguesCount?: number } | undefined;
     const filled = Number.isFinite(data?.FilledLeaguesCount) ? Number(data?.FilledLeaguesCount) : 0;
 
     const currentDraftNumber = filled + 1;
@@ -58,24 +56,12 @@ export async function GET(req: Request) {
     const positionInBatch = filled % BATCH_SIZE;
     const nextBatchNumber = currentBatchNumber + 1;
 
-    // Forward-look at the upcoming special-draft slots in this batch so
-    // testers (and the admin UI) can see "JP rolls at fill #N". The Go API
-    // pre-allocates these into JackpotLeagueIds / HofLeagueIds (PascalCase
-    // — Go struct field names, no firestore tags so they're persisted as-is)
-    // and checks them on every fill.
-    const jackpotIds = Array.isArray(data?.JackpotLeagueIds) ? data!.JackpotLeagueIds! : [];
-    const hofIds = Array.isArray(data?.HofLeagueIds) ? data!.HofLeagueIds! : [];
-    const nextJackpotAt = jackpotIds.find((n) => n > filled) ?? null;
-    const nextHofAt = hofIds.find((n) => n > filled) ?? null;
-
     return json({
       filledLeaguesCount: filled,
       currentDraftNumber,
       currentBatchNumber,
       positionInBatch,
       nextBatchNumber,
-      nextJackpotAt,
-      nextHofAt,
     });
   } catch (err) {
     logger.error('batches.current.failed', { err });

@@ -4,6 +4,36 @@ Boris's current asks, replies, and shipped updates to Richard. See `NOTES-FOR-BO
 
 ---
 
+## April 28 — Reply to your JP-freeze diagnosis (fix deployed)
+
+Read your April 28 note. Diagnosis is solid and the reorder you proposed was the right call — applied + deploying as I write this. About to test on staging once the Go API deploy lands.
+
+**What I shipped in `models/draft-state.go`:**
+
+In `CreateLeagueDraftStateUponFilling`, the JP/HOF detection block now just sets `leagueInfo.Level` in memory + captures `isJackpot`/`isHOF` flags. The actual `MakeLeagueJackpot` / `MakeLeagueHOF` calls — the ones doing the ~10 sequential per-card Firestore writes — got moved to a deferred best-effort step at the very end of the function, AFTER:
+
+1. `leagueInfo` written to Firestore (with Level already set in memory, so the league doc has the right type)
+2. CurrentUsers token loop
+3. `info.Update`, `summary.Update`, `connList.Update`, `rosterMap.Update`
+4. RTDB `realTimeDraftInfo` write
+5. First Cloud Task scheduled
+
+If `MakeLeagueJackpot` errors mid-loop now, RTDB is already up, the cloud task is already scheduled, and the draft is fully functional — the per-card Level field is purely a cosmetic hint for the draft-card UI (slot machine reveal still works because that reads `leagueInfo.Level` which is set in memory before the league doc gets written). Errors are logged with `[deferred]` prefix.
+
+**Why I trust this is the actual fix:**
+
+You're right that the per-card iteration on `drafts/{draftId}/cards` competing with the user-token loop on `leagueInfo.CurrentUsers` (which also touches the same cards via `updateInUseDraftTokenInDatabase`) creates a pre-RTDB failure surface. The state desync you saw — `state/info` exists but `state/summary` and `state/connectionList` 404 — fits a partial-progress crash mid-init, exactly the failure mode this reorder closes. After the reorder, even if MakeLeagueJackpot completely fails, the WS server gets a fully-formed draft state to operate on.
+
+**Note for awareness — there's a separate redundant write I did NOT touch:**
+
+Lines 562-570 had two back-to-back `CreateOrUpdateDocument("drafts", draftId, &leagueInfo)` calls — same write twice. Looks like a copy-paste residual. Left it alone for this commit (don't want to bundle unrelated changes), but flagging since it doubles the failure surface during init. Easy follow-up to drop one.
+
+**On the user-token loop:** still pre-RTDB. If `updateInUseDraftTokenInDatabase` errors for any of the 10 users, we'd still freeze the same way. The JP/HOF path was the most-cited culprit so I targeted that first; if the freeze recurs even on Pro drafts after this fix, we should also defer the per-user token writes with the same pattern. Let me know what the staging behavior shows.
+
+**Status:** deploying now. Once I confirm logs show the manager booted clean on the new revision, I'll have Boris run a JP-tagged draft to verify it doesn't freeze. Will update you with results.
+
+---
+
 ## Open asks
 
 ### April 23 — staging mint env var + full production parity
