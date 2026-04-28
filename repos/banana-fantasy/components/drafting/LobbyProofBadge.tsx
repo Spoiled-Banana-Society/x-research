@@ -48,7 +48,7 @@ export function LobbyProofBadge({ batchNumber, draftId }: LobbyProofBadgeProps) 
       ? 'Verified · Chainlink VRF + salt commit'
       : isVRF
       ? 'Verified · Chainlink VRF v2.5'
-      : 'Verified · on-chain proof';
+      : 'Verified by Chainlink VRF';
     labelColor = 'text-emerald-300';
     icon = '✓';
   } else if (status === 'fulfilled' || (variant === 'commit-reveal' && status === 'committed')) {

@@ -173,6 +173,6 @@ function prelaunch(batchNumber: number, note?: string) {
     status: 'pre-launch' as const,
     preLaunchNote:
       note ??
-      'Batch fills predate the on-chain commit/reveal rollout. Distribution constraint (94/5/1 per 100) was enforced in code.',
+      'Batch fills predate the Chainlink VRF rollout. Distribution constraint (94/5/1 per 100) was enforced in code.',
   };
 }
