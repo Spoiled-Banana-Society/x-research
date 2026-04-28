@@ -56,9 +56,11 @@ export function BatchRandomnessLoading({
         </h2>
 
         <p className="text-sm text-white/70 leading-relaxed mb-4">
-          Your draft type — Pro, HOF, or Jackpot — is being randomized by{' '}
-          <span className="text-blue-300 font-semibold">Chainlink VRF</span>, the same oracle network Polymarket
-          and Aave use. Once Chainlink delivers, your draft type reveals.
+          Every 100 drafts has exactly <span className="text-purple-300 font-semibold">94 Pro</span>,{' '}
+          <span className="text-hof font-semibold">5 HOF</span>, and{' '}
+          <span className="text-red-400 font-semibold">1 Jackpot</span>. Which slot is which type is being
+          randomized right now by <span className="text-blue-300 font-semibold">Chainlink VRF</span>, the same
+          oracle network Polymarket and Aave use. Once Chainlink delivers, your draft type reveals.
         </p>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-4">
