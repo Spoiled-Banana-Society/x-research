@@ -111,6 +111,17 @@ function recalcPromoClaimable(promo: Promo) {
   }
 }
 
+/**
+ * Deterministic per-user referral code so each freshly-seeded user gets
+ * their own code (instead of every user inheriting the seed template's
+ * shared `BANANA-CK99-2026`). Using sha256(userId) so re-seeds are stable
+ * — same wallet always maps to the same code.
+ */
+function buildPerUserReferralCode(userId: string): string {
+  const hash = crypto.createHash('sha256').update(userId.toLowerCase()).digest('hex').toUpperCase();
+  return `BANANA-${hash.slice(0, 4)}-${hash.slice(4, 8)}`;
+}
+
 function buildSeedUser(userId: string): {
   user: User;
   promos: Promo[];
@@ -143,13 +154,25 @@ function buildSeedUser(userId: string): {
     isVerified: false,
   };
   const promos = deepClone(seedDb.promosByUser['1'] ?? []);
+
+  // Override the referral promo's inviteCode/referralLink — seed template
+  // hardcodes a shared code which used to leak everyone's referrals to the
+  // first-seeded user.
+  const code = buildPerUserReferralCode(userId);
+  const link = `https://banana-fantasy-sbs.vercel.app?ref=${code}`;
+  const referralPromo = promos.find((p) => p.type === 'referral');
+  if (referralPromo) {
+    referralPromo.modalContent.inviteCode = code;
+    referralPromo.modalContent.referralLink = link;
+  }
+
   const wheelSpins = deepClone(seedDb.wheelSpinsByUser['1'] ?? []);
   const exposure: UserExposure = {
     ...deepClone(seedDb.exposureByUser['1'] ?? { username: user.username, totalDrafts: 0, exposures: [] }),
     username: user.username,
   };
   const draftHistory = deepClone(seedDb.draftHistoryByUser['1'] ?? []);
-  const referral = deepClone(seedDb.referralsByUser['1'] ?? { code: '', createdAt: todayDate() });
+  const referral = { code, createdAt: todayDate() };
 
   return { user, promos, wheelSpins, exposure, draftHistory, referral };
 }
@@ -250,6 +273,43 @@ export async function getPromos(userId: string): Promise<Promo[]> {
   const allDocs = missing.length > 0
     ? [...promosSnap.docs.map((d) => d.data() as Promo), ...missing.map((p) => deepClone(p))]
     : promosSnap.docs.map((d) => d.data() as Promo);
+
+  // Backfill: existing users were seeded with a hardcoded shared inviteCode
+  // (seedDb.referralsByUser['1'] = 'BANANA-CK99-2026'). Replace with a
+  // per-user deterministic code on read AND persist + claim the reverse
+  // lookup doc so /api/referrals/track resolves to this user.
+  const expectedCode = buildPerUserReferralCode(userId);
+  const expectedLink = `https://banana-fantasy-sbs.vercel.app?ref=${expectedCode}`;
+  const referralPromoToFix = allDocs.find(
+    (p) => p.type === 'referral' && p.modalContent.inviteCode !== expectedCode,
+  );
+  if (referralPromoToFix) {
+    referralPromoToFix.modalContent.inviteCode = expectedCode;
+    referralPromoToFix.modalContent.referralLink = expectedLink;
+    // Fire-and-forget: persist the fix + reverse-lookup doc, plus update
+    // the metadata/referral doc. Don't block the response on it.
+    void (async () => {
+      try {
+        const promoRef = userRef.collection(PROMOS_SUBCOLLECTION).doc(referralPromoToFix.id);
+        const referralMetaRef = userRef.collection('metadata').doc(REFERRAL_DOC);
+        const codeRef = db.collection(REFERRAL_CODES_COLLECTION).doc(expectedCode);
+        const codeSnap = await codeRef.get();
+        const batch = db.batch();
+        batch.set(
+          promoRef,
+          { modalContent: { inviteCode: expectedCode, referralLink: expectedLink } },
+          { merge: true },
+        );
+        batch.set(referralMetaRef, { code: expectedCode }, { merge: true });
+        if (!codeSnap.exists) {
+          batch.set(codeRef, { userId, code: expectedCode });
+        }
+        await batch.commit();
+      } catch {
+        /* best-effort backfill */
+      }
+    })();
+  }
 
   return allDocs.map((promo) => {
     // Inject real twitterConnected status for promos that depend on it
