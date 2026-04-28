@@ -530,8 +530,11 @@ export async function trackReferral(referrerUserId: string, referredUserId: stri
     const referredSnap = await tx.get(referredRef);
     const promosSnap = await tx.get(referrerRef.collection(PROMOS_SUBCOLLECTION));
 
-    // Process referred user
+    // Process referred user — never overwrite an existing referrer.
     const referredUser = referredSnap.data() as User;
+    if (referredUser.referredBy && referredUser.referredBy !== referrerUserId) {
+      return { success: false, alreadyReferred: true };
+    }
     referredUser.referredBy = referrerUserId;
 
     // Find referrer's referral promo
