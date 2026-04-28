@@ -135,6 +135,28 @@ export async function deriveBatchSlots(
 }
 
 /**
+ * Combine a server-side salt with on-chain VRF randomness into the seed
+ * used by the vrf-commit hybrid. Mirrors the Go-side `CombinedSeed` —
+ * `sha256(salt || randomness)`. The result is a 32-byte hex string ready
+ * to feed into deriveBatchSlots.
+ *
+ * Mixing both sources means neither party alone can predetermine the
+ * outcome: SBS can't grind seeds (VRF entropy is bound on-chain), and the
+ * public can't peek (salt is hidden until reveal).
+ */
+export async function combinedSeedHex(saltHex: string, randomnessHex: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto subtle unavailable in this runtime');
+  const salt = hexToBytes(saltHex);
+  const randomness = hexToBytes(randomnessHex);
+  const merged = new Uint8Array(salt.length + randomness.length);
+  merged.set(salt, 0);
+  merged.set(randomness, salt.length);
+  const digest = await subtle.digest('SHA-256', merged as BufferSource);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+/**
  * SHA-256 of a hex-encoded seed. The on-chain commit is keccak256, but we
  * also publish a SHA-256 alongside for browser-native verification without
  * pulling a keccak library.

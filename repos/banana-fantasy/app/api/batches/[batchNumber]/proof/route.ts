@@ -30,7 +30,7 @@ type ProofStatus =
   | 'fulfilled'
   | 'pre-launch';
 
-type ProofVariant = 'commit-reveal' | 'vrf';
+type ProofVariant = 'commit-reveal' | 'vrf' | 'vrf-commit';
 
 interface BatchProofDoc {
   batchNumber: number;
@@ -57,6 +57,12 @@ interface BatchProofDoc {
   vrfRandomness?: string;
   vrfFulfilledAt?: number;
   vrfCoordinator?: string;
+
+  // VRF + commit hybrid
+  saltHash?: string;
+  serverSalt?: string;       // gated until revealed
+  commitTxHashVrf?: string;  // tx that submitted requestRandomnessAndCommit
+  revealSaltTxHash?: string;
 
   // Common (gated)
   jackpotPositions?: number[];
@@ -93,10 +99,23 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
     // defeating the surprise and giving an unfair edge to anyone who scrapes
     // this endpoint.
     //   - commit-reveal: gated on status==='revealed' (server seed published).
-    //   - vrf: gated on status==='fulfilled' (coordinator delivered randomness).
-    const variant: ProofVariant = data.variant === 'vrf' ? 'vrf' : 'commit-reveal';
+    //   - vrf:           gated on status==='fulfilled' (coordinator delivered randomness).
+    //                    Note: with vrf-only, randomness lands at batch start so
+    //                    positions become public ~30s after batch starts. Users
+    //                    can still scrape on-chain regardless of API gating.
+    //   - vrf-commit:    gated on status==='revealed' (salt revealed at batch end).
+    //                    The hybrid hides positions through the entire batch
+    //                    because half the entropy (salt) is sealed off-chain
+    //                    until reveal — the API gating actually matches the
+    //                    on-chain reality.
+    const variant: ProofVariant =
+      data.variant === 'vrf' ? 'vrf'
+      : data.variant === 'vrf-commit' ? 'vrf-commit'
+      : 'commit-reveal';
     const isPubliclyVerifiable =
-      variant === 'vrf' ? data.status === 'fulfilled' : data.status === 'revealed';
+      variant === 'vrf'
+        ? data.status === 'fulfilled'
+        : data.status === 'revealed';
 
     return json({
       batchNumber,
@@ -115,14 +134,27 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
       revealBlock: data.revealBlock,
       revealedAt: data.revealedAt,
 
-      // VRF fields
+      // VRF fields (always public — they're on-chain regardless)
       vrfRequestId: data.vrfRequestId,
       vrfRequestTxHash: data.vrfRequestTxHash,
       vrfRequestBlock: data.vrfRequestBlock,
       vrfRequestedAt: data.vrfRequestedAt,
-      vrfRandomness: variant === 'vrf' && isPubliclyVerifiable ? data.vrfRandomness : undefined,
+      vrfRandomness:
+        // vrf-only: gate on fulfillment. vrf-commit: only meaningful once
+        // combined with the salt, but the randomness itself is on-chain
+        // anyway so we expose it as soon as we have it.
+        (variant === 'vrf' || variant === 'vrf-commit') && data.vrfFulfilledAt
+          ? data.vrfRandomness
+          : undefined,
       vrfFulfilledAt: data.vrfFulfilledAt,
       vrfCoordinator: data.vrfCoordinator,
+
+      // VRF+commit fields. SaltHash is public from request time;
+      // serverSalt is gated until reveal.
+      saltHash: variant === 'vrf-commit' ? data.saltHash : undefined,
+      commitTxHashVrf: variant === 'vrf-commit' ? data.commitTxHashVrf : undefined,
+      serverSalt: variant === 'vrf-commit' && isPubliclyVerifiable ? data.serverSalt : undefined,
+      revealSaltTxHash: variant === 'vrf-commit' ? data.revealSaltTxHash : undefined,
 
       // Common (gated)
       jackpotPositions: isPubliclyVerifiable ? data.jackpotPositions : undefined,

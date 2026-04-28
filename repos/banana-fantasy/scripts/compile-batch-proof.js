@@ -28,6 +28,13 @@ const TARGETS = [
     bytecodeConst: 'BBB4_BATCH_PROOF_VRF_BYTECODE',
     abiConst: 'BBB4_BATCH_PROOF_VRF_ABI',
   },
+  {
+    sourceFile: 'BBB4BatchProofVRFCommit.sol',
+    contractName: 'BBB4BatchProofVRFCommit',
+    outRel: 'lib/contracts/bbb4BatchProofVRFCommitArtifact.ts',
+    bytecodeConst: 'BBB4_BATCH_PROOF_VRF_COMMIT_BYTECODE',
+    abiConst: 'BBB4_BATCH_PROOF_VRF_COMMIT_ABI',
+  },
 ];
 
 for (const t of TARGETS) {

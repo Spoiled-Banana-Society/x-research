@@ -4,6 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ActiveDraftsList } from '@/components/drafting/ActiveDraftsList';
+import { BatchProofBanner } from '@/components/drafting/BatchProofBanner';
 // CompletedDraftsList moved to Standings page
 import { PromosSidebar } from '@/components/drafting/PromosSidebar';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -169,6 +170,8 @@ export default function DraftingPage() {
         <div className="flex-1 min-w-0">
           {true ? (
             <>
+              <BatchProofBanner />
+
               <ActiveDraftsList
                 regularDrafts={regularDrafts}
                 specialDrafts={specialDrafts}

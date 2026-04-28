@@ -147,6 +147,14 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
   const [vrfResult, setVrfResult] = useState<DeployVRFResponse | null>(null);
   const [vrfError, setVrfError] = useState<string | null>(null);
 
+  // VRF+Commit hybrid deploy state. Reuses the same form values as the
+  // VRF-only deploy above — they're identical Chainlink config + initial
+  // owner — but writes contractVariant='vrf-commit' to Firestore so the
+  // Go API picks up the salt-commit + reveal flow.
+  const [deployingVrfCommit, setDeployingVrfCommit] = useState(false);
+  const [vrfCommitResult, setVrfCommitResult] = useState<DeployVRFResponse | null>(null);
+  const [vrfCommitError, setVrfCommitError] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
     setStatusLoading(true);
     setStatusError(null);
@@ -281,6 +289,37 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
       setDeployingVrf(false);
     }
   }, [getHeaders, deployingVrf, vrfCoordinatorInput, vrfSubIdInput, vrfKeyHashInput, vrfInitialOwnerInput]);
+
+  const handleDeployVrfCommit = useCallback(async () => {
+    if (deployingVrfCommit) return;
+    if (!confirm(`Deploy BBB4BatchProofVRFCommit (VRF + commit/reveal hybrid) to Base mainnet?\n\n• coordinator: ${vrfCoordinatorInput}\n• subscription: ${vrfSubIdInput}\n• keyHash: ${vrfKeyHashInput}\n• initial owner: ${vrfInitialOwnerInput}\n\nThis is the airtight version: VRF prevents SBS from grinding, salt-commit prevents users from peeking. The Firestore variant flips to 'vrf-commit' on success.`)) return;
+    setDeployingVrfCommit(true);
+    setVrfCommitError(null);
+    setVrfCommitResult(null);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch('/api/admin/deploy-batch-proof-vrf-commit', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vrfCoordinator: vrfCoordinatorInput.trim(),
+          subscriptionId: vrfSubIdInput.trim(),
+          keyHash: vrfKeyHashInput.trim(),
+          initialOwner: vrfInitialOwnerInput.trim(),
+        }),
+      });
+      const body = (await res.json()) as DeployVRFResponse;
+      if (!res.ok || !body.success) {
+        setVrfCommitError(body.error || `Request failed (${res.status})`);
+      } else {
+        setVrfCommitResult(body);
+      }
+    } catch (err) {
+      setVrfCommitError((err as Error).message);
+    } finally {
+      setDeployingVrfCommit(false);
+    }
+  }, [getHeaders, deployingVrfCommit, vrfCoordinatorInput, vrfSubIdInput, vrfKeyHashInput, vrfInitialOwnerInput]);
 
   if (!enabled) return null;
 
@@ -645,6 +684,90 @@ export function AdminTools({ enabled }: { enabled: boolean }) {
               </div>
             )}
             {vrfResult.note && <p className="text-gray-400 italic">{vrfResult.note}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Deploy BBB4BatchProofVRFCommit — VRF + commit/reveal hybrid (airtight) */}
+      <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-4">
+        <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-2">
+          Deploy BBB4BatchProofVRFCommit (VRF + Salt Commit · airtight)
+        </h4>
+        <p className="text-[11px] text-gray-300 mb-3 leading-relaxed">
+          Deploys the <span className="font-semibold text-emerald-200">salt-commit + Chainlink VRF v2.5 hybrid</span>.
+          This is the version that hides slot positions from the public during a batch (commit-reveal property)
+          while still binding entropy to a decentralized oracle (VRF property). Neither SBS nor users can manipulate
+          outcomes — VRF prevents seed grinding, the salt commit prevents on-chain peeking. Firestore
+          system_config/batchProof flips to <code className="font-mono text-emerald-200">contractVariant: &quot;vrf-commit&quot;</code>.
+          Re-uses the form fields above.
+        </p>
+        <p className="text-[11px] text-amber-300 mb-3 leading-relaxed">
+          ⚠ Same prerequisites as VRF: subscription must exist, be funded with LINK, and after deploy you must add this
+          contract address as a Consumer of the subscription on <span className="font-mono">vrf.chain.link</span>.
+        </p>
+
+        <div className="mt-3">
+          <button
+            onClick={() => void handleDeployVrfCommit()}
+            disabled={
+              deployingVrfCommit ||
+              !vrfCoordinatorInput.trim() ||
+              !vrfSubIdInput.trim() ||
+              !vrfKeyHashInput.trim() ||
+              !vrfInitialOwnerInput.trim()
+            }
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            {deployingVrfCommit ? 'Deploying…' : 'Deploy VRF+Commit contract'}
+          </button>
+        </div>
+
+        {vrfCommitError && (
+          <div className="mt-3 text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {vrfCommitError}
+          </div>
+        )}
+
+        {vrfCommitResult && (
+          <div className="mt-3 text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 space-y-1.5">
+            <p className="text-emerald-300 font-semibold">
+              {vrfCommitResult.alreadyDeployed ? '✓ Already deployed' : '✓ VRF+Commit contract deployed'}
+            </p>
+            {vrfCommitResult.contractAddress && (
+              <p className="text-gray-300 font-mono break-all">
+                contract:{' '}
+                <a
+                  href={vrfCommitResult.basescanContract || `https://basescan.org/address/${vrfCommitResult.contractAddress}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline"
+                >
+                  {vrfCommitResult.contractAddress}
+                </a>
+              </p>
+            )}
+            {vrfCommitResult.deployTxHash && (
+              <p className="text-gray-300 font-mono break-all">
+                tx:{' '}
+                <a
+                  href={vrfCommitResult.basescanTx || `https://basescan.org/tx/${vrfCommitResult.deployTxHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline"
+                >
+                  {vrfCommitResult.deployTxHash}
+                </a>
+              </p>
+            )}
+            {vrfCommitResult.nextSteps && vrfCommitResult.nextSteps.length > 0 && (
+              <div className="pt-2 mt-2 border-t border-emerald-500/20 space-y-1">
+                <p className="text-emerald-300 font-semibold text-[11px]">Next steps:</p>
+                <ol className="text-gray-300 list-decimal list-inside space-y-1">
+                  {vrfCommitResult.nextSteps.map((s, i) => <li key={i}>{s}</li>)}
+                </ol>
+              </div>
+            )}
+            {vrfCommitResult.note && <p className="text-gray-400 italic">{vrfCommitResult.note}</p>}
           </div>
         )}
       </div>
