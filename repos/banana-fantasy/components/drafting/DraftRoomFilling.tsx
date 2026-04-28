@@ -21,8 +21,6 @@ interface DraftRoomFillingProps {
   user?: UserLike | null;
   visibleDraftType: DraftType | null;
   controls?: React.ReactNode;
-  /** Optional verification badge (Chainlink VRF + commit-reveal status). */
-  proofBadge?: React.ReactNode;
 }
 
 export function DraftRoomFilling({
@@ -35,7 +33,6 @@ export function DraftRoomFilling({
   user,
   visibleDraftType,
   controls,
-  proofBadge,
 }: DraftRoomFillingProps) {
   const isRandomizing = waitingForServer || isRandomizingFromStore;
   const randomizingProgress = Math.max(serverWaitProgress, randomizingProgressFromStore);
@@ -152,10 +149,6 @@ export function DraftRoomFilling({
             </span>
           )}
         </div>
-
-        {proofBadge && (
-          <div className="px-3 pt-2 flex justify-center">{proofBadge}</div>
-        )}
 
         {controls}
       </div>

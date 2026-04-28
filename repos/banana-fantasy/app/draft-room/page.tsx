@@ -13,7 +13,6 @@ import { DraftRoomFilling } from '@/components/drafting/DraftRoomFilling';
 import { DraftRoomReveal } from '@/components/drafting/DraftRoomReveal';
 import { DraftRoomDrafting } from '@/components/drafting/DraftRoomDrafting';
 import { BatchRandomnessLoading } from '@/components/drafting/BatchRandomnessLoading';
-import { LobbyProofBadge } from '@/components/drafting/LobbyProofBadge';
 import { useBatchProofReady } from '@/hooks/useBatchProofReady';
 import { parseDraftNumber, locateDraft } from '@/lib/batchProof';
 import type { DraftTab } from '@/components/drafting/DraftTabs';
@@ -1623,9 +1622,6 @@ function DraftRoomContent() {
               user={user}
               visibleDraftType={visibleDraftType}
               controls={bannerControls}
-              proofBadge={
-                batchInfo ? <LobbyProofBadge batchNumber={batchInfo.batchNumber} draftId={draftId || urlDraftId} /> : null
-              }
             />
           )}
 
@@ -1656,9 +1652,6 @@ function DraftRoomContent() {
                 reelOffsets={reelOffsets}
                 draftType={draftType}
                 slotAnimationDone={slotAnimationDone}
-                proofBadge={
-                  batchInfo ? <LobbyProofBadge batchNumber={batchInfo.batchNumber} draftId={draftId || urlDraftId} /> : null
-                }
                 draftId={draftId || urlDraftId}
                 onCloseSlotMachine={() => {
                   setShowSlotMachine(false);

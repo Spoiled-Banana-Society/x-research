@@ -33,10 +33,6 @@ interface DraftRoomRevealProps {
   draftType: DraftType | null;
   slotAnimationDone: boolean;
   onCloseSlotMachine: () => void;
-  /** Optional verification badge rendered near the countdown so the
-   *  Chainlink/commit-reveal trust story is visible alongside the live
-   *  draft state. Pass null/undefined for legacy batches. */
-  proofBadge?: React.ReactNode;
   /** Forwarded into the slot-machine overlay so the post-spin
    *  VerifiedBadge links to /proof/[draftId]. */
   draftId?: string;
@@ -63,7 +59,6 @@ export function DraftRoomReveal({
   draftType,
   slotAnimationDone,
   onCloseSlotMachine,
-  proofBadge,
   draftId,
 }: DraftRoomRevealProps) {
   const myName = user?.username && !user.username.startsWith('0x') ? user.username : 'You';
@@ -236,9 +231,6 @@ export function DraftRoomReveal({
             <span className="text-white/70">Draft starting in {formatTime(mainCountdown)}</span>
           )}
         </div>
-        {proofBadge && (
-          <div className="px-3 pt-2 flex justify-center">{proofBadge}</div>
-        )}
 
         {controls}
       </div>
