@@ -1659,6 +1659,7 @@ function DraftRoomContent() {
                 proofBadge={
                   batchInfo ? <LobbyProofBadge batchNumber={batchInfo.batchNumber} draftId={draftId || urlDraftId} /> : null
                 }
+                draftId={draftId || urlDraftId}
                 onCloseSlotMachine={() => {
                   setShowSlotMachine(false);
                   slotActiveRef.current = false;

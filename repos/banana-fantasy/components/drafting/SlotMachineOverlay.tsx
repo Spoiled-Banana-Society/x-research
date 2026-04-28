@@ -17,6 +17,10 @@ interface SlotMachineOverlayProps {
   onClose: () => void;
   rngSeedData?: RngSeedData | null;
   autoVerifyRng?: boolean;
+  /** When provided, the VerifiedBadge next to the result becomes a link
+   *  to /proof/[draftId] for the full Chainlink VRF + salt-commit
+   *  receipt. */
+  draftId?: string;
 }
 
 export function SlotMachineOverlay({
@@ -30,6 +34,7 @@ export function SlotMachineOverlay({
   onClose,
   rngSeedData,
   autoVerifyRng = true,
+  draftId,
 }: SlotMachineOverlayProps) {
   const itemHeight = 130;
   const landingIndex = (allReelItems[0]?.length || 50) - 8;
@@ -148,7 +153,7 @@ export function SlotMachineOverlay({
                   <div className="text-5xl font-black" style={{ color: DRAFT_TYPES[draftType].color, textShadow: `0 0 30px ${DRAFT_TYPES[draftType].color}` }}>
                     JACKPOT!
                   </div>
-                  <VerifiedBadge type="draft-type" draftType="jackpot" size="md" />
+                  <VerifiedBadge type="draft-type" draftType="jackpot" size="md" draftId={draftId} />
                 </div>
                 <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-4 max-w-sm mx-auto text-left">
                   <p className="text-red-300 font-bold text-lg mb-3">Skip to the Finals</p>
@@ -162,7 +167,7 @@ export function SlotMachineOverlay({
                   <div className="text-5xl font-black" style={{ color: DRAFT_TYPES[draftType].color, textShadow: `0 0 30px ${DRAFT_TYPES[draftType].color}` }}>
                     HALL OF FAME
                   </div>
-                  <VerifiedBadge type="draft-type" draftType="hof" size="md" />
+                  <VerifiedBadge type="draft-type" draftType="hof" size="md" draftId={draftId} />
                 </div>
                 <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-4 mb-4 max-w-sm mx-auto text-left">
                   <p className="text-yellow-300 font-bold text-lg mb-3">Bonus Prizes</p>
@@ -173,7 +178,7 @@ export function SlotMachineOverlay({
             ) : (
               <div className="flex items-center justify-center gap-2 mb-2">
                 <p className="text-white/70 text-2xl font-bold">Pro Draft</p>
-                <VerifiedBadge type="draft-type" draftType="pro" size="md" />
+                <VerifiedBadge type="draft-type" draftType="pro" size="md" draftId={draftId} />
               </div>
             )}
             {rngSeedData && (
