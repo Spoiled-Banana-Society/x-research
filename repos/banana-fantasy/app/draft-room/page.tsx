@@ -12,6 +12,10 @@ import { leaveDraft } from '@/lib/api/leagues';
 import { DraftRoomFilling } from '@/components/drafting/DraftRoomFilling';
 import { DraftRoomReveal } from '@/components/drafting/DraftRoomReveal';
 import { DraftRoomDrafting } from '@/components/drafting/DraftRoomDrafting';
+import { BatchRandomnessLoading } from '@/components/drafting/BatchRandomnessLoading';
+import { LobbyProofBadge } from '@/components/drafting/LobbyProofBadge';
+import { useBatchProofReady } from '@/hooks/useBatchProofReady';
+import { parseDraftNumber, locateDraft } from '@/lib/batchProof';
 import type { DraftTab } from '@/components/drafting/DraftTabs';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import {
@@ -95,6 +99,22 @@ function DraftRoomContent() {
     : 0;
 
   const stored = draftId ? draftStore.getDraft(draftId) : undefined;
+
+  // Provably-fair batch readiness gate. Derives the batch this draft falls
+  // into from the draftId (e.g. "2025-fast-draft-347" → batch 4). The slot
+  // machine reveal is gated on the batch's randomness being available so
+  // it never spins to a wrong type. For pre-launch batches the hook
+  // returns ready=true immediately, so existing UX is unchanged for old
+  // batches. See docs/proof system overview in /how-it-works#fairness.
+  const batchInfo = (() => {
+    const candidates = [draftId, urlDraftId].filter(Boolean) as string[];
+    for (const id of candidates) {
+      const n = parseDraftNumber(id);
+      if (n) return locateDraft(n);
+    }
+    return null;
+  })();
+  const batchProof = useBatchProofReady(batchInfo?.batchNumber ?? null);
 
   const [phase, setPhase] = useState<RoomPhase>(() => {
     if (isLiveMode && stored && (
@@ -1603,37 +1623,62 @@ function DraftRoomContent() {
               user={user}
               visibleDraftType={visibleDraftType}
               controls={bannerControls}
+              proofBadge={
+                batchInfo ? <LobbyProofBadge batchNumber={batchInfo.batchNumber} draftId={draftId || urlDraftId} /> : null
+              }
             />
           )}
 
           {(phase === 'pre-spin' || phase === 'countdown' || phase === 'spinning' || phase === 'result') && (
-            <DraftRoomReveal
-              draftOrder={draftOrder}
-              phase={phase}
-              user={user}
-              visibleDraftType={visibleDraftType}
-              mainCountdown={mainCountdown}
-              preSpinCountdown={preSpinCountdown}
-              formatTime={formatTime}
-              controls={bannerControls}
-              showFlash={showFlash}
-              confetti={confetti}
-              jackpotRain={jackpotRain}
-              particleBurst={particleBurst}
-              pulseGlow={pulseGlow}
-              specialTypeParam={specialTypeParam}
-              showSlotMachine={showSlotMachine}
-              allReelItems={allReelItems}
-              reelOffsets={reelOffsets}
-              draftType={draftType}
-              slotAnimationDone={slotAnimationDone}
-              onCloseSlotMachine={() => {
-                setShowSlotMachine(false);
-                slotActiveRef.current = false;
-                cleanupAudio();
-                if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
-              }}
-            />
+            <>
+              <DraftRoomReveal
+                draftOrder={draftOrder}
+                phase={phase}
+                user={user}
+                visibleDraftType={visibleDraftType}
+                mainCountdown={mainCountdown}
+                preSpinCountdown={preSpinCountdown}
+                formatTime={formatTime}
+                controls={bannerControls}
+                showFlash={showFlash}
+                confetti={confetti}
+                jackpotRain={jackpotRain}
+                particleBurst={particleBurst}
+                pulseGlow={pulseGlow}
+                specialTypeParam={specialTypeParam}
+                // Gate the slot machine on the batch's randomness being
+                // available. Without this, on a fresh batch boundary the
+                // slot would spin before Chainlink VRF returns and risk
+                // landing on a wrong type. For pre-launch / already-ready
+                // batches batchProof.ready=true so behavior is unchanged.
+                showSlotMachine={showSlotMachine && batchProof.ready}
+                allReelItems={allReelItems}
+                reelOffsets={reelOffsets}
+                draftType={draftType}
+                slotAnimationDone={slotAnimationDone}
+                proofBadge={
+                  batchInfo ? <LobbyProofBadge batchNumber={batchInfo.batchNumber} draftId={draftId || urlDraftId} /> : null
+                }
+                onCloseSlotMachine={() => {
+                  setShowSlotMachine(false);
+                  slotActiveRef.current = false;
+                  cleanupAudio();
+                  if (draftId) draftStore.updateDraft(draftId, { slotDismissed: true });
+                }}
+              />
+
+              {/* Batch randomness loading overlay — shows when the slot
+                  would otherwise spin but the batch's VRF hasn't yet
+                  returned. Auto-dismisses once batchProof.ready flips true. */}
+              {showSlotMachine && !batchProof.ready && batchInfo && (
+                <BatchRandomnessLoading
+                  batchNumber={batchInfo.batchNumber}
+                  secondsElapsed={batchProof.secondsElapsed}
+                  status={batchProof.status}
+                  commitTxHash={batchProof.commitTxHashVrf || batchProof.vrfRequestTxHash}
+                />
+              )}
+            </>
           )}
 
           <DraftRoomDrafting
