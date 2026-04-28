@@ -580,19 +580,20 @@ export default function ProofPage() {
         <ul className="text-xs text-white/60 space-y-1.5 leading-relaxed list-disc list-inside">
           {isVRFCommit ? (
             <>
-              <li>Two independent entropy sources, both publicly bound before any draft in the batch fills: <strong className="text-white/80">Chainlink VRF</strong> randomness (oracle-supplied, signed) AND a <strong className="text-white/80">SBS-side salt commit</strong> (its hash published before the batch).</li>
+              <li><strong className="text-white/80">Chainlink VRF</strong> is the decentralized oracle network used by Polymarket, Aave, OpenSea, and hundreds of other major web3 protocols. Independent node operators run it — SBS doesn&apos;t.</li>
+              <li>Two independent entropy sources are bound publicly before any draft in the batch fills: Chainlink VRF randomness (oracle-supplied, cryptographically signed) AND a SBS-side salt commit (its hash published before the batch).</li>
               <li>VRF prevents SBS from grinding seeds — SBS never picks the random number and can&apos;t retry per batch.</li>
-              <li>The salt commit prevents anyone from computing positions during the batch — half the entropy is sealed.</li>
+              <li>The salt commit prevents anyone from computing slot positions during the batch — half the entropy is sealed.</li>
               <li>At batch close, SBS reveals the salt; the contract verifies <code className="font-mono">keccak256(salt) == saltHash</code> from the original commit. Mismatch would expose tampering.</li>
-              <li>After reveal, anyone can re-derive every position in their browser via <code className="font-mono">HMAC-SHA256(sha256(salt || randomness), tag)</code> — same algorithm we use server-side.</li>
+              <li>After reveal, anyone can re-derive every position in their browser via <code className="font-mono">HMAC-SHA256(sha256(salt || randomness), tag)</code> — same algorithm we use server-side. Everything runs onchain.</li>
             </>
           ) : isVRF ? (
             <>
-              <li>The randomness comes from <strong className="text-white/80">Chainlink VRF v2.5</strong>, a decentralized oracle network of independent node operators.</li>
-              <li>SBS submits the randomness request <em>before</em> any draft in the batch fills — the timestamp is publicly verifiable.</li>
-              <li>The coordinator returns a random number along with a cryptographic proof. The contract verifies the proof before accepting the value.</li>
+              <li><strong className="text-white/80">Chainlink VRF</strong> is the decentralized oracle network used by Polymarket, Aave, OpenSea, and hundreds of other major web3 protocols. Independent node operators deliver the random number; SBS doesn&apos;t.</li>
+              <li>The randomness request is submitted <em>before</em> any draft in the batch fills — the timestamp is publicly verifiable.</li>
+              <li>Chainlink returns a random number along with a cryptographic proof. The contract verifies the proof before accepting the value.</li>
               <li>SBS never picks the random number, never sees a candidate value, and cannot retry — the request is bound to the batch number permanently.</li>
-              <li>Slot derivation is deterministic; the recomputation above runs in your browser using the same HMAC-SHA256 algorithm we use server-side.</li>
+              <li>Slot derivation is deterministic; the recomputation above runs in your browser using the same HMAC-SHA256 algorithm we use server-side. Everything runs onchain.</li>
             </>
           ) : (
             <>

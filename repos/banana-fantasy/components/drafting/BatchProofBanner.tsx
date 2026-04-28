@@ -95,7 +95,7 @@ export function BatchProofBanner() {
 
   if (isPrelaunch) {
     icon = '·';
-    copy = <>Provably fair: rolling out next batch.</>;
+    copy = <>Chainlink VRF verification rolls out next batch.</>;
     proofLink = null;
   } else if (isAwaiting) {
     icon = '🎲';
@@ -104,8 +104,7 @@ export function BatchProofBanner() {
     icon = '✓';
     copy = (
       <>
-        Batch #{info.currentBatchNumber} verified · randomized by{' '}
-        {isVRFCommit ? 'Chainlink VRF + salt commit' : isVRF ? 'Chainlink VRF' : 'commit/reveal'}
+        Batch #{info.currentBatchNumber} verified by Chainlink VRF
       </>
     );
   } else {
@@ -113,7 +112,7 @@ export function BatchProofBanner() {
     icon = '🔒';
     copy = (
       <>
-        Batch #{info.currentBatchNumber} randomized · {isVRFCommit ? 'Chainlink VRF + salt commit' : isVRF ? 'Chainlink VRF' : 'provably fair'}
+        Batch #{info.currentBatchNumber} randomized — verifiable by Chainlink VRF
       </>
     );
   }

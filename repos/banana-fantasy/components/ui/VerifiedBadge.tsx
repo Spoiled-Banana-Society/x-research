@@ -63,17 +63,19 @@ export function VerifiedBadge({ type: _type, draftType: rawDraftType = 'pro', si
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: colors.accent }}>
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         </svg>
-        Provably Fair
+        Verified by Chainlink VRF
       </div>
 
       <p className="text-[11px] text-white/70 mb-2 leading-relaxed">
         Every 100 drafts contains exactly <span className="font-semibold text-white">94 Pro, 5 HOF, 1 Jackpot</span>.
-        SBS does not pick which slot is which type — slot assignments are determined by Chainlink VRF + a salt
-        commit before each batch begins, and revealed after it closes. Anyone can recompute and verify.
+        SBS does not pick which slot is which type — randomness comes from{' '}
+        <span className="font-semibold text-white">Chainlink VRF</span>, the decentralized oracle network used by
+        Polymarket, Aave, and hundreds of other major protocols. Everything runs onchain. Anyone can independently
+        verify.
       </p>
 
       <div className="text-[10px] text-white/40 text-center mt-2 pt-2 border-t border-white/10">
-        {interactive ? 'Click to view this draft’s proof' : 'Provably-fair proof rolling out — see /how-it-works'}
+        {interactive ? 'Click to view this draft’s Chainlink VRF proof' : 'Chainlink VRF verification rolling out — see /how-it-works'}
       </div>
     </div>,
     document.body
