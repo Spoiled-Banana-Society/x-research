@@ -57,9 +57,9 @@ export function BatchRandomnessLoading({
 
         <p className="text-sm text-white/70 leading-relaxed mb-4">
           Your draft type — Pro, HOF, or Jackpot — is being determined by a verifiable random number from{' '}
-          <span className="text-blue-300 font-semibold">Chainlink VRF</span> combined with a SBS-side salt
-          committed on Base. SBS literally never sees the random number until the oracle delivers it on-chain,
-          and nobody can tell which slot is which type until the batch closes.
+          <span className="text-blue-300 font-semibold">Chainlink VRF</span> combined with a SBS-side salt that
+          was committed before the batch started. SBS literally never sees the random number until the oracle
+          delivers it, and nobody can tell which slot is which type until the batch closes.
         </p>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-4">
@@ -98,7 +98,7 @@ export function BatchRandomnessLoading({
               {status === 'requested' || status === 'fulfilled' || status === 'revealed' ? '✓' : '○'}
             </span>
             <span className="text-white/70">
-              Salt hash committed + VRF request submitted to Base
+              Salt hash committed + VRF request submitted
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export function BatchRandomnessLoading({
               rel="noreferrer"
               className="text-[11px] text-blue-300 hover:text-blue-200 underline font-mono break-all"
             >
-              View commit + VRF request on Basescan ↗
+              View proof of commit + VRF request ↗
             </a>
           </div>
         )}

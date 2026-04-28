@@ -205,20 +205,20 @@ export default function ProofPage() {
           {isVRFCommit ? (
             <> The 6 special slot positions come from <em>two independent sources of entropy</em> mixed together:
             randomness from Chainlink VRF (a decentralized oracle network — SBS doesn&apos;t pick it) and a SBS-side
-            salt whose hash is committed on Base before the batch starts. The salt stays hidden until the batch closes,
-            so even with the on-chain randomness public, no one can compute which draft is which type during the batch.
-            At batch close, the salt is revealed and anyone can re-derive every position from{' '}
+            salt whose hash is committed before the batch starts. The salt stays hidden until the batch closes, so
+            even with the verifiable randomness public, no one can compute which draft is which type during the
+            batch. At batch close, the salt is revealed and anyone can re-derive every position from{' '}
             <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(sha256(salt || randomness), &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.
             VRF prevents SBS from grinding seeds; the salt commit prevents users from peeking ahead.</>
           ) : isVRF ? (
             <> The 6 special slot positions are derived from a 32-byte random number delivered by Chainlink VRF — an
-            independent decentralized oracle network. SBS never sees the random number until the coordinator publishes
-            it on-chain. The Go API derives slot positions deterministically from{' '}
+            independent decentralized oracle network. SBS never sees the random number until the coordinator
+            publishes it. Slot positions derive deterministically from{' '}
             <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(randomness, &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.</>
           ) : (
-            <> Assignments are derived from a server seed whose hash is committed on Base mainnet before the batch
-            starts; the seed itself is revealed after the batch closes. The Go API derives slot positions deterministically
-            from <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(seed, &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.</>
+            <> Assignments are derived from a server seed whose hash is committed before the batch starts; the seed
+            itself is revealed after the batch closes. Slot positions derive deterministically from{' '}
+            <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(seed, &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.</>
           )}
         </p>
         <p className="text-xs text-white/40">
@@ -230,7 +230,7 @@ export default function ProofPage() {
 
       <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 space-y-3">
         <h2 className="text-sm font-semibold text-white uppercase tracking-wider">
-          {isVRFCommit ? 'On-chain randomness + salt commit' : isVRF ? 'On-chain randomness request' : 'On-chain commit'}
+          {isVRFCommit ? 'Verifiable randomness + salt commit' : isVRF ? 'Verifiable randomness request' : 'Provably-fair commit'}
         </h2>
 
         {proofError && (
@@ -245,12 +245,12 @@ export default function ProofPage() {
           <div className="text-sm text-white/70 leading-relaxed">
             <p className="mb-2">
               <span className="inline-block px-2 py-0.5 text-[10px] font-semibold rounded bg-white/10 text-white/70 uppercase tracking-wider mr-2">Pre-launch</span>
-              This batch predates the on-chain proof system.
+              This batch predates the provably-fair proof system.
             </p>
             <p className="text-xs text-white/50">
-              The 94/5/1 distribution constraint was enforced in code for this batch, but no cryptographic proof was
-              published on Base. Every batch from the rollout date forward carries a full on-chain proof anyone can
-              verify here.
+              The 94/5/1 distribution constraint was enforced in code for this batch, but no cryptographic proof
+              was published yet. Every batch from the rollout date forward carries a full verifiable proof anyone
+              can independently verify here.
             </p>
             {proof.preLaunchNote && (
               <p className="text-[11px] text-white/40 mt-2 italic">{proof.preLaunchNote}</p>
@@ -271,17 +271,17 @@ export default function ProofPage() {
             <span className="font-semibold">Slot positions are sealed</span> until this batch closes (BBB #{lastDraftInBatch}).
             {' '}
             {isVRFCommit ? (
-              <>The on-chain randomness from Chainlink AND the SBS-side salt commit hash are both published on Base
+              <>The verifiable randomness from Chainlink AND the SBS-side salt commit hash are both published
               already — proving the math is locked in. Half the entropy (the salt) stays sealed until batch close,
-              so neither SBS nor a user with full Basescan access can compute which draft is which type during the
-              batch. When BBB #{lastDraftInBatch} fills, SBS reveals the salt on-chain → anyone can re-derive every
-              position and verify the assignments were honest.</>
+              so neither SBS nor anyone else can compute which draft is which type during the batch. When BBB
+              #{lastDraftInBatch} fills, SBS reveals the salt → anyone can re-derive every position and verify the
+              assignments were honest.</>
             ) : isVRF ? (
-              <>The Chainlink VRF coordinator will publish the random number on-chain when fulfillment fires — at that
+              <>The Chainlink VRF coordinator will publish the random number when fulfillment fires — at that
               point, anyone can recompute the 6 special slot positions in their browser.</>
             ) : (
-              <>The on-chain hash below proves we&apos;ve already committed to a specific outcome — we just can&apos;t
-              prove which outcome until the seed is revealed.</>
+              <>The hash below proves we&apos;ve already committed to a specific outcome — we just can&apos;t prove
+              which outcome until the seed is revealed.</>
             )}
           </p>
         )}
@@ -471,7 +471,7 @@ export default function ProofPage() {
 
               <dt className="text-white/50">Source of trust</dt>
               <dd className="text-emerald-300">
-                ✓ Chainlink VRF (entropy) + on-chain salt commit (timing) verified
+                ✓ Chainlink VRF (entropy) + salt commit (timing) verified
               </dd>
             </dl>
           )}
@@ -517,7 +517,7 @@ export default function ProofPage() {
 
                 <dt className="text-white/50">Source of trust</dt>
                 <dd className="text-emerald-300">
-                  ✓ Chainlink VRF coordinator · cryptographic proof verified on-chain
+                  ✓ Chainlink VRF coordinator · cryptographic proof verified
                 </dd>
               </>
             )}
@@ -531,7 +531,7 @@ export default function ProofPage() {
           {recomputed && (
             <div className="space-y-2">
               <p className="text-xs text-white/60">
-                Re-derived from the {isVRFCommit ? 'salt + on-chain randomness' : isVRF ? 'on-chain randomness' : 'revealed seed'} in your browser:
+                Re-derived from the {isVRFCommit ? 'revealed salt + verifiable randomness' : isVRF ? 'verifiable randomness' : 'revealed seed'} in your browser:
               </p>
               <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs">
                 <dt className="text-white/50">Jackpot slot(s)</dt>
@@ -580,24 +580,24 @@ export default function ProofPage() {
         <ul className="text-xs text-white/60 space-y-1.5 leading-relaxed list-disc list-inside">
           {isVRFCommit ? (
             <>
-              <li>Two independent entropy sources, both bound on-chain before any draft in the batch fills: <strong className="text-white/80">Chainlink VRF</strong> randomness (oracle-supplied, signed) AND a <strong className="text-white/80">SBS-side salt commit</strong> (hash on Base).</li>
+              <li>Two independent entropy sources, both publicly bound before any draft in the batch fills: <strong className="text-white/80">Chainlink VRF</strong> randomness (oracle-supplied, signed) AND a <strong className="text-white/80">SBS-side salt commit</strong> (its hash published before the batch).</li>
               <li>VRF prevents SBS from grinding seeds — SBS never picks the random number and can&apos;t retry per batch.</li>
-              <li>The salt commit prevents anyone (including determined Basescan readers) from computing positions during the batch — half the entropy is sealed.</li>
-              <li>At batch close, SBS reveals the salt on-chain; the contract verifies <code className="font-mono">keccak256(salt) == saltHash</code> from the original commit. Mismatch would expose tampering.</li>
-              <li>After reveal, anyone can re-derive every position in their browser via <code className="font-mono">HMAC-SHA256(sha256(salt || randomness), tag)</code> — same algorithm as the Go API.</li>
+              <li>The salt commit prevents anyone from computing positions during the batch — half the entropy is sealed.</li>
+              <li>At batch close, SBS reveals the salt; the contract verifies <code className="font-mono">keccak256(salt) == saltHash</code> from the original commit. Mismatch would expose tampering.</li>
+              <li>After reveal, anyone can re-derive every position in their browser via <code className="font-mono">HMAC-SHA256(sha256(salt || randomness), tag)</code> — same algorithm we use server-side.</li>
             </>
           ) : isVRF ? (
             <>
               <li>The randomness comes from <strong className="text-white/80">Chainlink VRF v2.5</strong>, a decentralized oracle network of independent node operators.</li>
-              <li>SBS submits <code className="font-mono">requestRandomness(batchNumber)</code> on Base <em>before</em> any draft in the batch fills — chain timestamp is independent.</li>
-              <li>The coordinator returns a random number along with a cryptographic proof. The contract verifies the proof on-chain before accepting the value.</li>
-              <li>SBS never picks the random number, never sees a candidate value, and cannot retry — the request is bound to the batch number on-chain.</li>
-              <li>Slot derivation is deterministic; the recomputation above runs in your browser using the same HMAC-SHA256 algorithm as the Go API.</li>
+              <li>SBS submits the randomness request <em>before</em> any draft in the batch fills — the timestamp is publicly verifiable.</li>
+              <li>The coordinator returns a random number along with a cryptographic proof. The contract verifies the proof before accepting the value.</li>
+              <li>SBS never picks the random number, never sees a candidate value, and cannot retry — the request is bound to the batch number permanently.</li>
+              <li>Slot derivation is deterministic; the recomputation above runs in your browser using the same HMAC-SHA256 algorithm we use server-side.</li>
             </>
           ) : (
             <>
-              <li>Hash is published on Base mainnet <em>before</em> any draft in the batch fills — chain timestamp is independent.</li>
-              <li>Anyone with a Base RPC node (or basescan) can read the commit and verify when it landed.</li>
+              <li>Hash is published <em>before</em> any draft in the batch fills — the timestamp is publicly verifiable.</li>
+              <li>Anyone can read the commit and verify when it landed.</li>
               <li>Reveal must hash to the committed value — math, not trust.</li>
               <li>Slot derivation is deterministic; the recomputation above runs in your browser, no server call needed.</li>
               <li>If we ever published a different seed than the one we committed, the hash check above would say <span className="text-red-300">⚠ hash mismatch</span>.</li>

@@ -68,12 +68,12 @@ export function VerifiedBadge({ type: _type, draftType: rawDraftType = 'pro', si
 
       <p className="text-[11px] text-white/70 mb-2 leading-relaxed">
         Every 100 drafts contains exactly <span className="font-semibold text-white">94 Pro, 5 HOF, 1 Jackpot</span>.
-        SBS does not pick which slot is which type — slot assignments are committed on Base before each batch begins
-        and revealed after it closes. Anyone can recompute and verify.
+        SBS does not pick which slot is which type — slot assignments are determined by Chainlink VRF + a salt
+        commit before each batch begins, and revealed after it closes. Anyone can recompute and verify.
       </p>
 
       <div className="text-[10px] text-white/40 text-center mt-2 pt-2 border-t border-white/10">
-        {interactive ? 'Click to view this draft’s on-chain proof' : 'On-chain proof rolling out — see /how-it-works'}
+        {interactive ? 'Click to view this draft’s proof' : 'Provably-fair proof rolling out — see /how-it-works'}
       </div>
     </div>,
     document.body

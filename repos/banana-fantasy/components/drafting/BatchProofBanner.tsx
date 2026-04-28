@@ -95,7 +95,7 @@ export function BatchProofBanner() {
 
   if (isPrelaunch) {
     icon = '·';
-    copy = <>Provably-fair on-chain proofs roll out next batch.</>;
+    copy = <>Provably fair: rolling out next batch.</>;
     proofLink = null;
   } else if (isAwaiting) {
     icon = '🎲';
@@ -113,7 +113,7 @@ export function BatchProofBanner() {
     icon = '🔒';
     copy = (
       <>
-        Batch #{info.currentBatchNumber} randomized · {isVRFCommit ? 'Chainlink VRF + salt commit' : isVRF ? 'Chainlink VRF' : 'on-chain commit'}
+        Batch #{info.currentBatchNumber} randomized · {isVRFCommit ? 'Chainlink VRF + salt commit' : isVRF ? 'Chainlink VRF' : 'provably fair'}
       </>
     );
   }
