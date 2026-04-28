@@ -67,11 +67,9 @@ export function VerifiedBadge({ type: _type, draftType: rawDraftType = 'pro', si
       </div>
 
       <p className="text-[11px] text-white/70 mb-2 leading-relaxed">
-        Every 100 drafts contains exactly <span className="font-semibold text-white">94 Pro, 5 HOF, 1 Jackpot</span>.
-        SBS does not pick which slot is which type — randomness comes from{' '}
-        <span className="font-semibold text-white">Chainlink VRF</span>, the decentralized oracle network used by
-        Polymarket, Aave, and hundreds of other major protocols. Everything runs onchain. Anyone can independently
-        verify.
+        Every 100 drafts has exactly <span className="font-semibold text-white">94 Pro, 5 HOF, 1 Jackpot</span>.
+        The 6 special slots are randomized by <span className="font-semibold text-white">Chainlink VRF</span> —
+        the same oracle network Polymarket and Aave use. Anyone can verify.
       </p>
 
       <div className="text-[10px] text-white/40 text-center mt-2 pt-2 border-t border-white/10">

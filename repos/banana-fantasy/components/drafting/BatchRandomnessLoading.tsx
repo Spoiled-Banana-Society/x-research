@@ -56,10 +56,9 @@ export function BatchRandomnessLoading({
         </h2>
 
         <p className="text-sm text-white/70 leading-relaxed mb-4">
-          Your draft type — Pro, HOF, or Jackpot — is being determined by a verifiable random number from{' '}
-          <span className="text-blue-300 font-semibold">Chainlink VRF</span> combined with a SBS-side salt that
-          was committed before the batch started. SBS literally never sees the random number until the oracle
-          delivers it, and nobody can tell which slot is which type until the batch closes.
+          Your draft type — Pro, HOF, or Jackpot — is being randomized by{' '}
+          <span className="text-blue-300 font-semibold">Chainlink VRF</span>, the same oracle network Polymarket
+          and Aave use. Once Chainlink delivers, your draft type reveals.
         </p>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-4">

@@ -201,23 +201,21 @@ export default function ProofPage() {
           Every 100 drafts contains exactly{' '}
           <span className="font-semibold text-purple-300">94 Pro</span>,{' '}
           <span className="font-semibold text-hof">5 HOF</span>,{' '}
-          and <span className="font-semibold text-red-400">1 Jackpot</span>. SBS does not pick which slot is which type.
+          and <span className="font-semibold text-red-400">1 Jackpot</span>.
           {isVRFCommit ? (
-            <> The 6 special slot positions come from <em>two independent sources of entropy</em> mixed together:
-            randomness from Chainlink VRF (a decentralized oracle network — SBS doesn&apos;t pick it) and a SBS-side
-            salt whose hash is committed before the batch starts. The salt stays hidden until the batch closes, so
-            even with the verifiable randomness public, no one can compute which draft is which type during the
-            batch. At batch close, the salt is revealed and anyone can re-derive every position from{' '}
-            <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(sha256(salt || randomness), &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.
-            VRF prevents SBS from grinding seeds; the salt commit prevents users from peeking ahead.</>
+            <> The 6 special slot positions come from two sources of entropy mixed together: a random number from{' '}
+            <strong className="text-white">Chainlink VRF</strong> and a SBS-side salt whose hash is committed
+            before the batch starts. The salt stays hidden during the batch — so the slot positions are locked in
+            but no one can compute them. When the batch closes, the salt is revealed and anyone can re-derive every
+            position via{' '}
+            <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(sha256(salt || randomness), &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.</>
           ) : isVRF ? (
-            <> The 6 special slot positions are derived from a 32-byte random number delivered by Chainlink VRF — an
-            independent decentralized oracle network. SBS never sees the random number until the coordinator
-            publishes it. Slot positions derive deterministically from{' '}
+            <> The 6 special slot positions are derived from a 32-byte random number delivered by{' '}
+            <strong className="text-white">Chainlink VRF</strong>. Slot positions derive deterministically from{' '}
             <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(randomness, &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.</>
           ) : (
-            <> Assignments are derived from a server seed whose hash is committed before the batch starts; the seed
-            itself is revealed after the batch closes. Slot positions derive deterministically from{' '}
+            <> Slot positions are derived from a server seed whose hash is committed before the batch starts; the
+            seed is revealed after the batch closes via{' '}
             <code className="font-mono text-white/80 bg-white/5 px-1 rounded">HMAC-SHA256(seed, &quot;slot:&quot; + batchNumber + &quot;:&quot; + i)</code>.</>
           )}
         </p>
@@ -271,17 +269,16 @@ export default function ProofPage() {
             <span className="font-semibold">Slot positions are sealed</span> until this batch closes (BBB #{lastDraftInBatch}).
             {' '}
             {isVRFCommit ? (
-              <>The verifiable randomness from Chainlink AND the SBS-side salt commit hash are both published
-              already — proving the math is locked in. Half the entropy (the salt) stays sealed until batch close,
-              so neither SBS nor anyone else can compute which draft is which type during the batch. When BBB
-              #{lastDraftInBatch} fills, SBS reveals the salt → anyone can re-derive every position and verify the
-              assignments were honest.</>
+              <>Chainlink VRF has delivered, and the salt was committed at the same moment. The 6 positions are
+              locked in but the salt stays sealed until BBB #{lastDraftInBatch} fills — so no one can compute
+              which draft is which type during the batch. After close, the salt is revealed and anyone can
+              re-derive every position.</>
             ) : isVRF ? (
-              <>The Chainlink VRF coordinator will publish the random number when fulfillment fires — at that
-              point, anyone can recompute the 6 special slot positions in their browser.</>
+              <>Once Chainlink VRF delivers, anyone can recompute the 6 special slot positions in their
+              browser.</>
             ) : (
-              <>The hash below proves we&apos;ve already committed to a specific outcome — we just can&apos;t prove
-              which outcome until the seed is revealed.</>
+              <>The hash below proves the outcome is locked in — but the seed stays sealed until the batch
+              closes.</>
             )}
           </p>
         )}
@@ -580,24 +577,23 @@ export default function ProofPage() {
         <ul className="text-xs text-white/60 space-y-1.5 leading-relaxed list-disc list-inside">
           {isVRFCommit ? (
             <>
-              <li><strong className="text-white/80">Chainlink VRF</strong> is the decentralized oracle network used by Polymarket, Aave, OpenSea, and hundreds of other major web3 protocols. Independent node operators run it — SBS doesn&apos;t.</li>
-              <li>Two independent entropy sources are bound publicly before any draft in the batch fills: Chainlink VRF randomness (oracle-supplied, cryptographically signed) AND a SBS-side salt commit (its hash published before the batch).</li>
-              <li>VRF prevents SBS from grinding seeds — SBS never picks the random number and can&apos;t retry per batch.</li>
-              <li>The salt commit prevents anyone from computing slot positions during the batch — half the entropy is sealed.</li>
-              <li>At batch close, SBS reveals the salt; the contract verifies <code className="font-mono">keccak256(salt) == saltHash</code> from the original commit. Mismatch would expose tampering.</li>
-              <li>After reveal, anyone can re-derive every position in their browser via <code className="font-mono">HMAC-SHA256(sha256(salt || randomness), tag)</code> — same algorithm we use server-side. Everything runs onchain.</li>
+              <li><strong className="text-white/80">Chainlink VRF</strong> is the same oracle network Polymarket, Aave, and OpenSea use to produce verifiable randomness.</li>
+              <li>The random number is requested before any draft in the batch fills — the timestamp is public.</li>
+              <li>The salt is hashed and committed at the same moment, then sealed until the batch closes — so positions are locked in but can&apos;t be computed during the batch.</li>
+              <li>When the batch closes, the salt is revealed. The contract verifies <code className="font-mono">keccak256(salt) == saltHash</code> from the original commit. Tampering would fail this check.</li>
+              <li>After reveal, anyone can re-derive every position in their browser via <code className="font-mono">HMAC-SHA256(sha256(salt || randomness), tag)</code>.</li>
             </>
           ) : isVRF ? (
             <>
-              <li><strong className="text-white/80">Chainlink VRF</strong> is the decentralized oracle network used by Polymarket, Aave, OpenSea, and hundreds of other major web3 protocols. Independent node operators deliver the random number; SBS doesn&apos;t.</li>
-              <li>The randomness request is submitted <em>before</em> any draft in the batch fills — the timestamp is publicly verifiable.</li>
-              <li>Chainlink returns a random number along with a cryptographic proof. The contract verifies the proof before accepting the value.</li>
-              <li>SBS never picks the random number, never sees a candidate value, and cannot retry — the request is bound to the batch number permanently.</li>
-              <li>Slot derivation is deterministic; the recomputation above runs in your browser using the same HMAC-SHA256 algorithm we use server-side. Everything runs onchain.</li>
+              <li><strong className="text-white/80">Chainlink VRF</strong> is the same oracle network Polymarket, Aave, and OpenSea use to produce verifiable randomness.</li>
+              <li>The randomness request is submitted before any draft in the batch fills — the timestamp is public.</li>
+              <li>Chainlink returns the random number with a cryptographic proof. The contract verifies the proof before accepting.</li>
+              <li>The randomness is bound to the batch number permanently — it can&apos;t be retried.</li>
+              <li>Slot derivation is deterministic; the recomputation above runs in your browser using the same algorithm we use server-side.</li>
             </>
           ) : (
             <>
-              <li>Hash is published <em>before</em> any draft in the batch fills — the timestamp is publicly verifiable.</li>
+              <li>The seed&apos;s hash is published before any draft in the batch fills — the timestamp is public.</li>
               <li>Anyone can read the commit and verify when it landed.</li>
               <li>Reveal must hash to the committed value — math, not trust.</li>
               <li>Slot derivation is deterministic; the recomputation above runs in your browser, no server call needed.</li>

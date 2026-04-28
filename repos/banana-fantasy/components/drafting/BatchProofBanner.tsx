@@ -95,26 +95,17 @@ export function BatchProofBanner() {
 
   if (isPrelaunch) {
     icon = '·';
-    copy = <>Chainlink VRF verification rolls out next batch.</>;
+    copy = <>Chainlink VRF verification starts next batch.</>;
     proofLink = null;
   } else if (isAwaiting) {
     icon = '🎲';
-    copy = <>Locking in Batch #{info.currentBatchNumber}&apos;s randomness via Chainlink VRF…</>;
+    copy = <>Randomizing Batch #{info.currentBatchNumber} with Chainlink VRF…</>;
   } else if (isRevealed) {
     icon = '✓';
-    copy = (
-      <>
-        Batch #{info.currentBatchNumber} verified by Chainlink VRF
-      </>
-    );
+    copy = <>Batch #{info.currentBatchNumber} verified by Chainlink VRF</>;
   } else {
-    // sealed / committed / fulfilled mid-batch
     icon = '🔒';
-    copy = (
-      <>
-        Batch #{info.currentBatchNumber} randomized — verifiable by Chainlink VRF
-      </>
-    );
+    copy = <>Batch #{info.currentBatchNumber} randomized by Chainlink VRF</>;
   }
 
   return (
