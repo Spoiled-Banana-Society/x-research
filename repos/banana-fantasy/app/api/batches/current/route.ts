@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       });
     }
     const data = snap.data() as
-      | { FilledLeaguesCount?: number; jackpotLeagueIds?: number[]; hofLeagueIds?: number[] }
+      | { FilledLeaguesCount?: number; JackpotLeagueIds?: number[]; HofLeagueIds?: number[] }
       | undefined;
     const filled = Number.isFinite(data?.FilledLeaguesCount) ? Number(data?.FilledLeaguesCount) : 0;
 
@@ -60,10 +60,11 @@ export async function GET(req: Request) {
 
     // Forward-look at the upcoming special-draft slots in this batch so
     // testers (and the admin UI) can see "JP rolls at fill #N". The Go API
-    // pre-allocates these values into JackpotLeagueIds / HOFLeagueIds and
-    // checks them on every fill.
-    const jackpotIds = Array.isArray(data?.jackpotLeagueIds) ? data!.jackpotLeagueIds! : [];
-    const hofIds = Array.isArray(data?.hofLeagueIds) ? data!.hofLeagueIds! : [];
+    // pre-allocates these into JackpotLeagueIds / HofLeagueIds (PascalCase
+    // — Go struct field names, no firestore tags so they're persisted as-is)
+    // and checks them on every fill.
+    const jackpotIds = Array.isArray(data?.JackpotLeagueIds) ? data!.JackpotLeagueIds! : [];
+    const hofIds = Array.isArray(data?.HofLeagueIds) ? data!.HofLeagueIds! : [];
     const nextJackpotAt = jackpotIds.find((n) => n > filled) ?? null;
     const nextHofAt = hofIds.find((n) => n > filled) ?? null;
 
