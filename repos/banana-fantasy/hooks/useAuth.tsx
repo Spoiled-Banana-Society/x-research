@@ -198,6 +198,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setTwitterError(data.error || 'Verification failed');
         setIsTwitterVerified(false);
+        // Auto-unlink the Twitter account from Privy so the user can retry
+        // with a different X. Otherwise Privy's linkedAccounts keeps the
+        // failed X attached and every reload re-runs the same conflict.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (privy as any).unlinkTwitter?.(twitterId);
+        } catch (unlinkErr) {
+          console.warn('[SBS Auth] unlinkTwitter after failed verify failed:', unlinkErr);
+        }
       }
     } catch {
       setTwitterError('Failed to verify X account');

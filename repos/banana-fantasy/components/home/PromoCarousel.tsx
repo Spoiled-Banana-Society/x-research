@@ -72,6 +72,14 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
     if (aClaim && !bClaim) return -1;
     if (!aClaim && bClaim) return 1;
 
+    // Pin the unclaimed new-user bonus near the top — it's the user's first
+    // call to action and the card has interactive state (Connect button)
+    // even when not yet claimable, so it shouldn't fall behind static promos.
+    const aIsNewUser = a.type === 'new-user' && !(claimedPromos.has(a.id) || newUserPromoClaimed);
+    const bIsNewUser = b.type === 'new-user' && !(claimedPromos.has(b.id) || newUserPromoClaimed);
+    if (aIsNewUser && !bIsNewUser) return -1;
+    if (!aIsNewUser && bIsNewUser) return 1;
+
     // Then by progress percent (higher first)
     const aProgress = a.progressMax ? (a.progressCurrent || 0) / a.progressMax : 0;
     const bProgress = b.progressMax ? (b.progressCurrent || 0) / b.progressMax : 0;
