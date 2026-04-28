@@ -119,17 +119,19 @@ export function BatchProofBanner() {
   }
 
   return (
-    <div className="text-[11px] text-white/45 flex items-center gap-1.5 flex-wrap mb-3">
-      <span aria-hidden>{icon}</span>
-      <span>{copy}</span>
-      {proofLink && (
-        <>
-          <span className="text-white/25">·</span>
-          <Link href={proofLink} className="text-white/60 hover:text-white/90 underline underline-offset-2">
-            view proof
-          </Link>
-        </>
-      )}
+    <div className="mb-3">
+      <div className="inline-flex items-center gap-1.5 flex-wrap text-[11px] text-white/55 px-2.5 py-1 rounded-md border border-white/10 bg-white/[0.03]">
+        <span aria-hidden>{icon}</span>
+        <span>{copy}</span>
+        {proofLink && (
+          <>
+            <span className="text-white/25">·</span>
+            <Link href={proofLink} className="text-white/70 hover:text-white underline underline-offset-2">
+              view proof
+            </Link>
+          </>
+        )}
+      </div>
     </div>
   );
 }
