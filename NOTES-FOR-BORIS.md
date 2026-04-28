@@ -261,3 +261,66 @@ The `== 2` strict-equality "accelerated 8s schedule" at `models/draft-actions.go
 If you'd rather keep `>= 3` for a different reason (over-aggressive concerns?), let me know and I'll revert the workspace edit.
 
 — Richard's Claude
+
+---
+
+## April 28 — Jackpot drafts hang at pick 1 (state desync)
+
+**Bug:** Any draft tagged `Level: "Jackpot"` freezes at pick 1 immediately after fill. The countdown ticks forever, no auto-pick fires, manual picks aren't broadcast. Affects bots AND humans — the guard isn't drafter-type-specific.
+
+### Repro
+1. Add a slot to `drafts/draftTracker.JackpotLeagueIds` ahead of next fill.
+2. Fill any fast draft to consume that slot.
+3. Slot reveal correctly shows JACKPOT, but `pickNumber` stays at 1 indefinitely.
+
+Last failure case: `2024-fast-draft-175` on staging (BBB #240). Forensic state still on Firestore as of writing — feel free to inspect.
+
+### Diagnosis (state desync between Firestore and RTDB)
+
+Calling the auto-draft endpoint manually returns:
+```
+the current drafter is not the drafter of the default pick
+```
+
+That's the guard at `models/draft-actions.go` (`CalculateAutoPickForUser`):
+```go
+if realTimeDraftInfo.CurrentDrafter != currentDrafter { return nil, err }
+```
+
+`realTimeDraftInfo` is read from RTDB. The Cloud Task that fired it had the URL-encoded `currentDrafter` from when the task was scheduled. They don't match → robot refuses to act → forever.
+
+Other supporting evidence on the affected draft:
+- `GET /draft/2024-fast-draft-175/state/info` → 200, but `state/summary` and `state/connectionList` return 404.
+- `POST /draft/2024-fast-draft-175/createDraft` (WS server) errors: `connectionList not found`.
+- The `state` subcollection is partially written.
+
+### Root cause (very likely)
+
+In `models/draft-state.go:CreateLeagueDraftStateUponFilling`, the ordering is:
+1. Increment `FilledLeaguesCount` ✓
+2. Set `leagueInfo.DisplayName` ✓
+3. Check JP/HOF slot match. **If JP** → call `MakeLeagueJackpot(draftId, &leagueInfo)` which iterates every card in `drafts/{draftId}/cards` and writes `Level = "Jackpot"` via `updateInUseDraftTokenInDatabase`. ~10 round-trips.
+4. Write league info to Firestore ✓
+5. Create draft state docs (info, playerState, summary, connectionList).
+6. Write RTDB `realTimeDraftInfo` (the doc the auto-pick guard reads).
+7. Schedule first Cloud Task.
+
+If `MakeLeagueJackpot` errors mid-loop (any card write fails), the function may bubble the error up and skip steps 4–7. But `FilledLeaguesCount` already incremented, draftTracker already saved (line ~80). Result: doc fragments + RTDB never initialized + counter advanced.
+
+Pro drafts skip step 3 entirely so they never hit this path.
+
+### Suggested fix
+
+Reorder so RTDB lives before the JP card loop:
+1. Write league info + state docs first (info, summary, connectionList, etc.).
+2. Write `realTimeDraftInfo` to RTDB.
+3. Schedule the first Cloud Task.
+4. **Then** call `MakeLeagueJackpot` / `MakeLeagueHOF` as a best-effort post-step. If it partially fails, the draft is still drafting-functional (cards just don't have the Level tag yet — fixable later via a sweeper).
+
+Or wrap the JP/HOF writes in a transaction so they're all-or-nothing, but that doesn't solve the "partial write breaks live state" problem unless the transaction includes the RTDB write — which crosses datastore boundaries and isn't really transactional.
+
+### Severity
+
+**Pre-prod blocker.** Every JP draft will freeze, which is 1% of all drafts. HOF drafts (`MakeLeagueHOF` has the same shape) likely affected too — that's another 5%. Combined 6% of paid drafts unusable until this lands.
+
+— Richard's Claude
