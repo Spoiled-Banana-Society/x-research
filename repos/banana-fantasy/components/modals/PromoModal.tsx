@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { InstallModal } from '@/components/home/AddToHomeScreenCard';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 import { useNotificationOptIn } from '@/hooks/useNotificationOptIn';
+import { JackpotWinnerCycle } from '@/components/promos/JackpotWinnerCycle';
 
 interface PromoModalProps {
   isOpen: boolean;
@@ -422,28 +423,37 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
     );
   };
 
-  const renderJackpotContent = () => (
-    <>
-      {renderProgressSection()}
-      {promo.modalContent.jackpotHistory && promo.modalContent.jackpotHistory.length > 0 ? (
-        <div className="bg-bg-tertiary rounded-xl p-4">
-          <h4 className="font-semibold mb-3 text-text-primary">Jackpot Wins</h4>
-          <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-hover pr-3">
-            {promo.modalContent.jackpotHistory.map((entry, index) => (
-              <div key={index} className="flex justify-between py-2 border-b border-bg-elevated last:border-0">
-                <span className="text-text-secondary">{entry.draftName}</span>
-                <span className="text-jackpot font-semibold">{entry.amount} {entry.amount === 1 ? 'spin' : 'spins'}</span>
-              </div>
-            ))}
+  const renderJackpotContent = () => {
+    const history = promo.modalContent.jackpotHistory;
+    const hasHistory = history && history.length > 0;
+    // Seed the winner-picker animation from the most recent JP draftId
+    // (real win) or a stable demo string (so the visual still plays
+    // when the user has no JP hits yet — useful for previews/testing).
+    const animationSeed = hasHistory ? history![0].draftName : 'jackpot-promo-demo';
+    return (
+      <>
+        {renderProgressSection()}
+        <JackpotWinnerCycle seed={animationSeed} />
+        {hasHistory ? (
+          <div className="bg-bg-tertiary rounded-xl p-4">
+            <h4 className="font-semibold mb-3 text-text-primary">Jackpot Wins</h4>
+            <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-hover pr-3">
+              {history!.map((entry, index) => (
+                <div key={index} className="flex justify-between py-2 border-b border-bg-elevated last:border-0">
+                  <span className="text-text-secondary">{entry.draftName}</span>
+                  <span className="text-jackpot font-semibold">{entry.amount} {entry.amount === 1 ? 'spin' : 'spins'}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        <p className="text-text-muted text-sm text-center py-4">
-          No Jackpots hit yet. Keep drafting for a chance to win!
-        </p>
-      )}
-    </>
-  );
+        ) : (
+          <p className="text-text-muted text-sm text-center py-4">
+            No Jackpots hit yet. Keep drafting for a chance to win!
+          </p>
+        )}
+      </>
+    );
+  };
 
   const renderMintContent = () => {
     return (
