@@ -1156,6 +1156,27 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverPollResult]);
 
+  // Jackpot-hit promo POST. Fires whenever the resolved draftType is
+  // 'jackpot' for a paid draft — independent of whether the user was on
+  // the page during the slot-machine animation. Idempotent via
+  // localStorage promo-jackpot:* + the server's draftId dedupe.
+  useEffect(() => {
+    if (!isLiveMode || draftType !== 'jackpot') return;
+    const id = draftId || urlDraftId;
+    if (!id || !isPaidDraft) return;
+    const promoUserId = user?.id || walletParam?.toLowerCase();
+    if (!promoUserId) return;
+    const jackpotKey = `promo-jackpot:${id}`;
+    if (localStorage.getItem(jackpotKey)) return;
+    localStorage.setItem(jackpotKey, '1');
+    fetch('/api/promos/jackpot-hit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: promoUserId, draftId: id }),
+    }).catch(err => console.error('[Promo] Jackpot tracking failed:', err));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftType, draftId, urlDraftId, isLiveMode, isPaidDraft, walletParam, user?.id]);
+
   useEffect(() => {
     if (phase !== 'pre-spin') return;
     const startedAt = preSpinStartedAtRef.current;
@@ -1385,20 +1406,6 @@ function DraftRoomContent() {
           setPhase('result');
           const currentDraftId = draftIdRef.current;
           if (currentDraftId) draftStore.updateDraft(currentDraftId, { phase: 'result', type: draftType, draftType });
-
-          // Jackpot-hit promo: fire once per draft, idempotent on the server too.
-          if (draftType === 'jackpot' && currentDraftId && isPaidDraft) {
-            const promoUserId = user?.id || walletParam?.toLowerCase();
-            const jackpotKey = `promo-jackpot:${currentDraftId}`;
-            if (promoUserId && !localStorage.getItem(jackpotKey)) {
-              localStorage.setItem(jackpotKey, '1');
-              fetch('/api/promos/jackpot-hit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: promoUserId, draftId: currentDraftId }),
-              }).catch(err => console.error('[Promo] Jackpot tracking failed:', err));
-            }
-          }
         }, 400);
       }
     };

@@ -3,6 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+function AnimatedEllipsis() {
+  return (
+    <span aria-hidden className="inline-flex ml-0.5">
+      <span className="animate-pulse" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}>.</span>
+      <span className="animate-pulse" style={{ animationDelay: '200ms', animationDuration: '1.4s' }}>.</span>
+      <span className="animate-pulse" style={{ animationDelay: '400ms', animationDuration: '1.4s' }}>.</span>
+    </span>
+  );
+}
+
 /**
  * BatchProofBanner — small inline status chip on /drafting indicating
  * the current batch's randomization state.
@@ -99,13 +109,18 @@ export function BatchProofBanner() {
     proofLink = null;
   } else if (isAwaiting) {
     icon = '🎲';
-    copy = <>Randomizing Batch #{info.currentBatchNumber} with Chainlink VRF…</>;
+    copy = (
+      <>
+        Randomizing Batch #{info.currentBatchNumber} with Chainlink VRF
+        <AnimatedEllipsis />
+      </>
+    );
   } else if (isRevealed) {
     icon = '✓';
     copy = <>Batch #{info.currentBatchNumber} verified by Chainlink VRF</>;
   } else {
     icon = '🔒';
-    copy = <>Batch #{info.currentBatchNumber} randomized by Chainlink VRF</>;
+    copy = <>Batch #{info.currentBatchNumber} randomized by Chainlink VRF · types sealed until batch closes</>;
   }
 
   return (
