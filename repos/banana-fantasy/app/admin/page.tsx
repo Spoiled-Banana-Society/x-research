@@ -23,8 +23,9 @@ import { ErrorLog } from '@/components/admin/ErrorLog';
 import { SupportInbox } from '@/components/admin/SupportInbox';
 import { AuditLog } from '@/components/admin/AuditLog';
 import { AdminTools } from '@/components/admin/AdminTools';
+import { SpectateBrowser } from '@/components/admin/SpectateBrowser';
 
-type TabKey = 'metrics' | 'errors' | 'support' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'live' | 'activity' | 'audit' | 'tools';
+type TabKey = 'metrics' | 'errors' | 'support' | 'users' | 'drafts' | 'withdrawals' | 'promos' | 'live' | 'activity' | 'audit' | 'tools' | 'spectate';
 
 interface NavItem {
   key: TabKey;
@@ -43,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'live', label: 'Live Activity', group: 'Records' },
   { key: 'activity', label: 'Admin + Signups', group: 'Records' },
   { key: 'audit', label: 'Audit Log', group: 'Records' },
+  { key: 'spectate', label: 'Spectate', group: 'Records' },
   { key: 'tools', label: 'Tools', group: 'Records' },
 ];
 
@@ -185,6 +187,7 @@ export default function AdminPage() {
           {activeTab === 'live' && <LiveActivity enabled={isAuthorized} />}
           {activeTab === 'activity' && <ActivityCombined enabled={isAuthorized} />}
           {activeTab === 'audit' && <AuditLog enabled={isAuthorized} />}
+          {activeTab === 'spectate' && <SpectateBrowser enabled={isAuthorized} />}
           {activeTab === 'tools' && <AdminTools enabled={isAuthorized} />}
         </div>
       </main>
