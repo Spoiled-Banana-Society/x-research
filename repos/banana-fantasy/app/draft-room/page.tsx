@@ -1465,7 +1465,14 @@ function DraftRoomContent() {
     return () => clearInterval(ticker);
   }, [isRandomizingFromStore, waitingForServer]);
 
-  const visibleDraftType = specialTypeParam || slotAnimationDone || phase === 'drafting' || phase === 'filling' || phase === 'countdown' || !showSlotMachine ? draftType : null;
+  // Keep the JP/HOF badge hidden during pre-reveal phases. The
+  // backend sets league.Level the moment the league fills (10th player
+  // joins), which previously leaked the type into the UI during the
+  // 'filling' and 'countdown' phases — defeating the slot-machine
+  // reveal. Now we only show the type after the slot animation
+  // completes, drafting has actually started, an explicit URL override
+  // sets it, or the slot machine is disabled entirely.
+  const visibleDraftType = specialTypeParam || slotAnimationDone || phase === 'drafting' || !showSlotMachine ? draftType : null;
   const [rosterViewPlayer, setRosterViewPlayer] = useState<string | undefined>(undefined);
   const handleViewRoster = (playerName: string) => {
     setRosterViewPlayer(playerName);
