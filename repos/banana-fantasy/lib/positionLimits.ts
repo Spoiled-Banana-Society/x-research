@@ -1,0 +1,54 @@
+// Per-position auto-draft limits.
+//
+// Caps the auto-picker so a single seat can't grind out 8 QBs and freeze
+// the other 9 drafters out of the position. Limits ONLY apply to auto-pick
+// (airplane mode, user timeout, bot picks). Manual clicks bypass entirely.
+//
+// When every position is at its cap, the picker relaxes and grabs BPA so
+// the draft never stalls — caps block, they never force fills.
+
+import { POSITION_COLORS } from '@/lib/draftRoomConstants';
+
+export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'DST';
+export const POSITIONS: readonly Position[] = Object.keys(POSITION_COLORS) as Position[];
+
+export type PositionLimits = Record<Position, number>;
+
+export const DEFAULT_POSITION_LIMITS: PositionLimits = {
+  QB: 3,
+  RB: 7,
+  WR: 7,
+  TE: 3,
+  DST: 3,
+};
+
+export const TOTAL_DRAFT_ROUNDS = 15;
+
+/** Min/max each cap can be set to via the rankings UI. */
+export const LIMIT_BOUNDS = { min: 1, max: 15 } as const;
+
+/** Returns true if the partial-limits object would block a full 15-round
+ *  roster fill (sum of caps < 15). Caller can use this to surface a UI
+ *  warning, but saves are still allowed — the picker relaxes when stuck. */
+export function isUnderfilled(limits: PositionLimits): boolean {
+  return totalCap(limits) < TOTAL_DRAFT_ROUNDS;
+}
+
+export function totalCap(limits: PositionLimits): number {
+  return POSITIONS.reduce((acc, p) => acc + limits[p], 0);
+}
+
+/** Merges a partial / unknown shape with defaults. Used at read boundaries
+ *  (Firestore reads, API responses) so the rest of the code can rely on
+ *  every position being present. */
+export function applyDefaults(partial: Partial<Record<string, unknown>> | null | undefined): PositionLimits {
+  const out = { ...DEFAULT_POSITION_LIMITS };
+  if (!partial) return out;
+  for (const pos of POSITIONS) {
+    const v = partial[pos];
+    if (typeof v === 'number' && Number.isInteger(v) && v >= LIMIT_BOUNDS.min && v <= LIMIT_BOUNDS.max) {
+      out[pos] = v;
+    }
+  }
+  return out;
+}

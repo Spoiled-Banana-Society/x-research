@@ -11,6 +11,8 @@ import {
 import type { PlayerData, DraftPick, PositionRoster } from '@/lib/draftRoomConstants';
 import type { RealTimeDraftInfo, LastPickInfo } from '@/hooks/useRealTimeDraftInfo';
 import { logger } from '@/lib/logger';
+import { DEFAULT_POSITION_LIMITS, type Position, type PositionLimits } from '@/lib/positionLimits';
+import { usePositionLimits } from '@/hooks/usePositionLimits';
 
 export type DraftPlayer = typeof DRAFT_PLAYERS[number];
 export type DraftMode = 'local' | 'live';
@@ -708,25 +710,58 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   }, [mode, draftStatus, currentPickNumber, availablePlayers, draftOrder, currentDrafterIndex, currentRound, walletAddress, endOfTurnTimestamp]);
 
   // ==================== AUTO-PICK AI ====================
-  const autoPickForPlayer = useCallback((playerRoster: PositionRoster, queue: PlayerData[], available: PlayerData[], round: number, sortBy: 'adp' | 'rank' = 'adp'): string => {
+  // positionLimits caps the auto-picker so a single seat can't grind out 8 QBs.
+  // Filters apply to queue, BPA, and position-fill candidates. If every
+  // position is at its cap, we relax and pick BPA so the draft never stalls
+  // (caps block, they never force fills — manual picks bypass entirely).
+  const autoPickForPlayer = useCallback((
+    playerRoster: PositionRoster,
+    queue: PlayerData[],
+    available: PlayerData[],
+    round: number,
+    sortBy: 'adp' | 'rank' = 'adp',
+    positionLimits: PositionLimits = DEFAULT_POSITION_LIMITS,
+  ): string => {
+    const isAtCap = (playerId: string): boolean => {
+      const pos = positionFromPlayerId(playerId) as Position;
+      const cap = positionLimits[pos];
+      if (typeof cap !== 'number') return false;
+      const rosterPos = pos as keyof PositionRoster;
+      return (playerRoster[rosterPos]?.length ?? 0) >= cap;
+    };
+    const sortByMetric = (a: PlayerData, b: PlayerData) =>
+      sortBy === 'adp' ? a.adp - b.adp : a.rank - b.rank;
+
     if (queue.length > 0) {
-      const queuePick = queue.find(q => available.some(a => a.playerId === q.playerId));
+      const queuePick = queue.find(q =>
+        available.some(a => a.playerId === q.playerId) && !isAtCap(q.playerId),
+      );
       if (queuePick) return queuePick.playerId;
     }
     if (round < 12) {
-      const sorted = [...available].sort((a, b) => sortBy === 'adp' ? a.adp - b.adp : a.rank - b.rank);
+      const sorted = available.filter(p => !isAtCap(p.playerId)).sort(sortByMetric);
       if (sorted.length > 0) return sorted[0].playerId;
     }
     const needOrder: (keyof PositionRoster)[] = ['RB', 'WR', 'QB', 'TE', 'DST'];
     for (const pos of needOrder) {
-      if (playerRoster[pos].length === 0) {
+      const cap = positionLimits[pos as Position];
+      const belowCap = typeof cap === 'number' ? playerRoster[pos].length < cap : true;
+      if (belowCap) {
         const match = available.find(p => positionFromPlayerId(p.playerId) === pos);
         if (match) return match.playerId;
       }
     }
-    const sorted = [...available].sort((a, b) => sortBy === 'adp' ? a.adp - b.adp : a.rank - b.rank);
+    const filtered = [...available].filter(p => !isAtCap(p.playerId)).sort(sortByMetric);
+    if (filtered.length > 0) return filtered[0].playerId;
+    // RELAX: every position is at cap and the cap-passing pool is empty.
+    // Fall back to unconstrained BPA so the draft progresses.
+    const sorted = [...available].sort(sortByMetric);
     return sorted[0]?.playerId || '';
   }, []);
+
+  // User's per-wallet limits (loaded from Firestore via usePositionLimits).
+  // Falls back to defaults until loaded or for non-wallet contexts.
+  const { limits: userLimits } = usePositionLimits();
 
   // ==================== AIRPLANE MODE FUNCTIONS ====================
 
@@ -734,8 +769,8 @@ export function useDraftEngine(mode: DraftMode = 'local') {
   const getAutoPickPlayer = useCallback((): string => {
     const rosterKey = mode === 'live' ? walletAddress : (currentDrafter?.name || '');
     const roster = rosters[rosterKey] || createEmptyRoster();
-    return autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference);
-  }, [mode, walletAddress, currentDrafter, rosters, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference, autoPickForPlayer]);
+    return autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference, userLimits);
+  }, [mode, walletAddress, currentDrafter, rosters, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference, autoPickForPlayer, userLimits]);
 
   /** Called by the page when user manually picks a player */
   const markManualPick = useCallback(() => {
@@ -887,11 +922,11 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     }
 
     const roster = rosters[currentDrafter?.name || ''] || createEmptyRoster();
-    const pickId = autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference);
+    const pickId = autoPickForPlayer(roster, queuedPlayers, availablePlayers, currentRound, autoPickSortPreference, userLimits);
     if (pickId) {
       draftPlayer(pickId);
     }
-  }, [mode, isUserTurn, timeRemaining, draftStatus, rosters, currentDrafter, queuedPlayers, availablePlayers, currentRound, autoPickForPlayer, autoPickSortPreference, draftPlayer, airplaneMode]);
+  }, [mode, isUserTurn, timeRemaining, draftStatus, rosters, currentDrafter, queuedPlayers, availablePlayers, currentRound, autoPickForPlayer, autoPickSortPreference, draftPlayer, airplaneMode, userLimits]);
 
   // ==================== LOCAL MODE BOT AUTO-PICK ====================
   useEffect(() => {
@@ -904,7 +939,10 @@ export function useDraftEngine(mode: DraftMode = 'local') {
     const delay = 1000 + Math.random() * 2000;
     botTimeoutRef.current = setTimeout(() => {
       const roster = rosters[drafter.name] || createEmptyRoster();
-      const pickId = autoPickForPlayer(roster, [], availablePlayers, currentRound);
+      // Bots in local mode use defaults; they don't have wallets / per-user
+      // overrides. Mirrors the live-mode behavior we'll mirror in the Go
+      // API once Boris ships the server-side change.
+      const pickId = autoPickForPlayer(roster, [], availablePlayers, currentRound, 'adp', DEFAULT_POSITION_LIMITS);
       if (pickId) {
         draftPlayer(pickId);
       }

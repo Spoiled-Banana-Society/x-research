@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { TeamPosition } from '@/types';
 import { useRankings } from '@/hooks/useRankings';
+import { PositionLimitsPanel } from '@/components/rankings/PositionLimitsPanel';
 
 // Position color mapping
 const getPositionColor = (position: string): string => {
@@ -135,6 +136,8 @@ export default function RankingsPage() {
         <h1 className="text-3xl font-bold text-text-primary mb-2">Rankings</h1>
         <p className="text-text-secondary">Draft team positions, not players. Each week you score the highest-scoring player at that position.</p>
       </div>
+
+      <PositionLimitsPanel />
 
       {/* CSV Controls */}
       <div className="flex items-center justify-end mb-6">

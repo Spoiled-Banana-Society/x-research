@@ -264,6 +264,129 @@ If you'd rather keep `>= 3` for a different reason (over-aggressive concerns?), 
 
 ---
 
+## April 29 — Auto-draft positional limits (need Go-side mirror)
+
+Shipped frontend today: per-position auto-draft caps so a single seat can't
+grind out 8 QBs and freeze everyone else out of the position. Frontend covers
+airplane mode + local-mode auto-pick (timeout + bots). **Live AFK and live
+bots are still uncapped** until the Go API mirrors the same logic.
+
+### What's already live (frontend)
+- New top-level Firestore collection: `userPositionalLimits`
+- Doc ID: lowercased walletAddress
+- Fields: `{ walletAddress, QB, RB, WR, TE, DST, updatedAt }`
+- Defaults (used when doc missing or fields missing): `QB:3 RB:7 WR:7 TE:3 DST:3`
+- Bots get defaults; humans can override via `/rankings` page UI
+- Validation: each value is integer in [1, 15]. Sub-15 sums are allowed —
+  picker relaxes when stuck rather than refusing to pick.
+
+### What's needed on the Go side (in `models/draft-actions.go`'s `CalculateAutoPickForUser`)
+
+**1. New file `models/position-limits.go`:**
+```go
+package models
+
+import (
+  "context"
+  "strings"
+  "cloud.google.com/go/firestore"
+)
+
+var DefaultPositionLimits = map[string]int{
+  "QB":  3,
+  "RB":  7,
+  "WR":  7,
+  "TE":  3,
+  "DST": 3,
+}
+
+// FetchPositionLimitsForOwner reads userPositionalLimits/{ownerId} and merges
+// with defaults. Bots (ownerId starts with "bot-") and missing docs both
+// return defaults. Same shape as the frontend's applyDefaults() in
+// lib/positionLimits.ts.
+func FetchPositionLimitsForOwner(ctx context.Context, client *firestore.Client, ownerId string) map[string]int {
+  out := make(map[string]int, len(DefaultPositionLimits))
+  for k, v := range DefaultPositionLimits {
+    out[k] = v
+  }
+  ownerId = strings.ToLower(strings.TrimSpace(ownerId))
+  if ownerId == "" || strings.HasPrefix(ownerId, "bot-") {
+    return out
+  }
+  snap, err := client.Collection("userPositionalLimits").Doc(ownerId).Get(ctx)
+  if err != nil || !snap.Exists() {
+    return out
+  }
+  data := snap.Data()
+  for pos := range out {
+    if v, ok := data[pos]; ok {
+      if n, ok := v.(int64); ok && n >= 1 && n <= 15 {
+        out[pos] = int(n)
+      }
+    }
+  }
+  return out
+}
+```
+
+**2. Edit `CalculateAutoPickForUser` (auto-pick selection):**
+
+The frontend's `autoPickForPlayer` in `hooks/useDraftEngine.ts` is the
+reference behavior. Pseudocode for the cap logic:
+
+```go
+limits := FetchPositionLimitsForOwner(ctx, client, currentDrafter)
+roster := /* existing per-owner roster from realTimeDraftInfo */
+
+isAtCap := func(playerId string) bool {
+  pos := positionFromPlayerId(playerId) // "KC-QB" -> "QB"
+  if cap, ok := limits[pos]; ok {
+    return len(roster[pos]) >= cap
+  }
+  return false
+}
+
+// 1. Queue head: skip cap-breaching entries
+// 2. BPA early rounds: filter available by !isAtCap, return top by ADP/rank
+// 3. Late rounds (>= 12): position-fill loop, skip positions at cap
+// 4. Cap-filtered BPA fallback
+// 5. RELAX: if every cap is hit, return unconstrained BPA so the draft
+//    never stalls
+```
+
+The relax step (5) is critical — if a user sets caps summing to 12 and the
+draft is 15 rounds, picker WILL hit all caps by round 12-13. It should
+keep going past caps rather than refusing to pick. Caps block, never force.
+
+**Manual picks bypass entirely** — only `CalculateAutoPickForUser` (and bot
+auto-pick) consult limits. The submit-pick path for human clicks should
+ignore them.
+
+### Deploy
+
+```bash
+gcloud run deploy sbs-drafts-api-staging \
+  --source ~/sbs-drafts-api-deploy \
+  --region us-central1 \
+  --project sbs-staging-env
+```
+
+Once live, every JP/HOF/Pro draft on staging will respect the caps for
+both human-AFK and bot picks. No frontend redeploy needed — the Firestore
+collection and defaults are already in place.
+
+### Verification
+1. Check Cloud Run logs for `FetchPositionLimitsForOwner` invocations
+2. Fill a fast draft, let one human seat miss 2+ picks (auto-draft kicks
+   in per the existing `>= 2` threshold) — verify the AFK seat's roster
+   respects defaults / their custom limits if they set any
+3. Compare a pre-deploy bot draft to post-deploy: pre-deploy bots tend to
+   stack one position when ADP favors it; post-deploy should be balanced
+
+— Richard's Claude
+
+---
+
 ## April 28 — Jackpot drafts hang at pick 1 (state desync)
 
 **Bug:** Any draft tagged `Level: "Jackpot"` freezes at pick 1 immediately after fill. The countdown ticks forever, no auto-pick fires, manual picks aren't broadcast. Affects bots AND humans — the guard isn't drafter-type-specific.
