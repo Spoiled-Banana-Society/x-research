@@ -63,13 +63,15 @@ function getServerDraftsApiUrl(): string {
   return (process.env.STAGING_DRAFTS_API_URL || STAGING_DRAFTS_API_URL).replace(/\/$/, '');
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
+async function fetchJson<T>(url: string): Promise<{ ok: true; data: T } | { ok: false; status?: number; error: string }> {
   try {
     const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: `HTTP ${res.status}` };
+    }
+    return { ok: true, data: (await res.json()) as T };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'fetch threw' };
   }
 }
 
@@ -83,25 +85,30 @@ export async function GET(req: Request) {
     if (!draftId) throw new ApiError(400, 'draftId required');
 
     const base = getServerDraftsApiUrl();
-    const [info, summaryRaw, rosters] = await Promise.all([
-      fetchJson<DraftInfoResponse>(`${base}/draft/${encodeURIComponent(draftId)}/state/info`),
+    const infoUrl = `${base}/draft/${encodeURIComponent(draftId)}/state/info`;
+    const [infoRes, summaryRes, rostersRes] = await Promise.all([
+      fetchJson<DraftInfoResponse>(infoUrl),
       fetchJson<DraftSummaryItem[] | { summary: DraftSummaryItem[] }>(
         `${base}/draft/${encodeURIComponent(draftId)}/state/summary`,
       ),
       fetchJson<RosterState>(`${base}/draft/${encodeURIComponent(draftId)}/state/rosters`),
     ]);
 
-    if (!info) {
-      throw new ApiError(404, 'draft not found');
+    if (!infoRes.ok) {
+      // Surface diagnostic info so we can see what went wrong without
+      // needing Vercel logs. Safe on staging.
+      return jsonError(`info fetch failed: ${infoRes.error} url=${infoUrl}`, 502);
     }
 
+    const summaryRaw = summaryRes.ok ? summaryRes.data : null;
+    const rosters = rostersRes.ok ? rostersRes.data : {};
     const summary: DraftSummaryItem[] = Array.isArray(summaryRaw)
       ? summaryRaw
       : Array.isArray((summaryRaw as { summary?: DraftSummaryItem[] } | null)?.summary)
         ? (summaryRaw as { summary: DraftSummaryItem[] }).summary
         : [];
 
-    return json({ draftId, info, summary, rosters: rosters ?? {} }, 200);
+    return json({ draftId, info: infoRes.data, summary, rosters }, 200);
   } catch (err) {
     if (err instanceof ApiError) return jsonError(err.message, err.status);
     logger.error('spectate.draft_state.failed', { err });
