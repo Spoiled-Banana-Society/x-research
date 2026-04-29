@@ -16,6 +16,7 @@ import { useContests } from '@/hooks/useContests';
 import { fetchJson } from '@/lib/appApiClient';
 import type { DraftQueue, Promo } from '@/types';
 import { logger } from '@/lib/logger';
+import { subscribeDraftNumPlayers } from '@/lib/api/firebase';
 import type { Draft, LiveState } from '@/components/drafting/DraftRow';
 import type { DraftInfoPayload, TimerPayload } from '@/hooks/useDraftWebSocket';
 
@@ -510,26 +511,25 @@ export function useDraftingPageState() {
     [localDrafts, user?.walletAddress],
   );
 
+  // Live player counts on /drafting cards — uses Firebase RTDB directly
+  // instead of polling our /api/drafts/league-players endpoint every 3s.
+  // The Go API writes drafts/{draftId}/numPlayers to RTDB on every join, so
+  // a frontend onValue subscription gets push updates within milliseconds.
+  // Replaces a 3s polling loop that left a race window where a user's
+  // "8/10" card was already actually 10/10. Same Firebase project + bandwidth
+  // we already pay for; per-connection cost is effectively zero.
   useEffect(() => {
     if (fillingLiveDraftIds.length === 0) return;
-    let cancelled = false;
-
-    const pollAll = async () => {
-      for (const draftId of fillingLiveDraftIds) {
-        if (cancelled) return;
-        try {
-          const res = await fetch(`/api/drafts/league-players?draftId=${encodeURIComponent(draftId)}`);
-          if (!res.ok || cancelled) continue;
-          const data = await res.json();
-          const count = Number(data.numPlayers) || 0;
-          if (count > 0) draftStore.updateDraft(draftId, { players: count });
-        } catch { /* ignore */ }
+    const unsubs = fillingLiveDraftIds.map((draftId) =>
+      subscribeDraftNumPlayers(draftId, (count) => {
+        if (count > 0) draftStore.updateDraft(draftId, { players: count });
+      }),
+    );
+    return () => {
+      for (const unsub of unsubs) {
+        try { unsub(); } catch { /* ignore */ }
       }
     };
-
-    pollAll();
-    const interval = setInterval(pollAll, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
   }, [fillingLiveDraftIds]);
 
   useEffect(() => {
