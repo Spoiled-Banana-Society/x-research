@@ -35,6 +35,14 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   const [installModalBrowser, setInstallModalBrowser] = useState<'safari' | 'chrome' | null>(null);
   const { triggerInstall, isStandalone } = useInstallPrompt();
   const { isSubscribed, isLoading: notifLoading, acceptOptIn } = useNotificationOptIn();
+  // Jackpot reveal flow: existing rules/progress modal stays as-is until
+  // user clicks CLAIM, then we swap to the winner-picker animation. After
+  // the cycle settles the user can confirm to actually claim.
+  const [jpRevealing, setJpRevealing] = useState(false);
+  const [jpRevealLabels, setJpRevealLabels] = useState<string[] | null>(null);
+  const [jpRevealSeed, setJpRevealSeed] = useState<string | null>(null);
+  const [jpRevealSettled, setJpRevealSettled] = useState(false);
+  const [jpRevealError, setJpRevealError] = useState<string | null>(null);
 
   // Timer tick for countdown updates
   useEffect(() => {
@@ -68,6 +76,11 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
       setClaimedRewards(new Set());
       setClaimSuccess({ show: false, count: 0 });
       setTweetVerifying(false);
+      setJpRevealing(false);
+      setJpRevealLabels(null);
+      setJpRevealSeed(null);
+      setJpRevealSettled(false);
+      setJpRevealError(null);
       // Don't reset tweetVerifyResult — preserve checkmarks across modal close/reopen
     } else if (promo?.type === 'tweet-engagement' && promo.claimable && (promo.claimCount ?? 0) > 0) {
       // Pre-populate checkmarks for already-verified tweet engagement promos
@@ -95,21 +108,61 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
     }
   };
 
-  const handleClaim = () => {
-    // Claim all remaining at once
+  const finalizeClaim = () => {
     if (remainingClaims > 0) {
       const claimCount = remainingClaims;
-      // Mark all as claimed locally
       for (let i = 0; i < claimCount; i++) {
         setClaimedRewards(prev => new Set([...Array.from(prev), `main-claim-${i}`]));
       }
-      // Persist new-user promo claim to Firestore
       if (promo.type === 'new-user') {
         claimNewUserPromo();
       }
       onClaim(promo);
       setClaimSuccess({ show: true, count: claimCount });
     }
+  };
+
+  const startJackpotReveal = async () => {
+    const history = promo.modalContent.jackpotHistory;
+    const draftId = history && history.length > 0 ? history[0].draftName : null;
+    setJpRevealing(true);
+    setJpRevealSettled(false);
+    setJpRevealError(null);
+    if (!draftId) {
+      // Shouldn't happen — CLAIM is only enabled when there's a credited
+      // hit, which always writes a history entry. Fall back to a synthetic
+      // seed and generic labels so the animation still plays.
+      setJpRevealSeed('jackpot-promo-fallback');
+      setJpRevealLabels(null);
+      return;
+    }
+    setJpRevealSeed(draftId);
+    try {
+      const res = await fetch(`/api/promos/jackpot-reveal?draftId=${encodeURIComponent(draftId)}`);
+      if (!res.ok) throw new Error(`reveal lookup failed: ${res.status}`);
+      const data = (await res.json()) as { labels?: string[] };
+      if (Array.isArray(data?.labels) && data.labels.length === 10) {
+        setJpRevealLabels(data.labels);
+      } else {
+        setJpRevealLabels(null);
+      }
+    } catch (err) {
+      setJpRevealError(err instanceof Error ? err.message : 'Failed to load drafters');
+      setJpRevealLabels(null);
+    }
+  };
+
+  const handleClaim = () => {
+    if (remainingClaims <= 0) return;
+    if (promo.type === 'jackpot' && !jpRevealing) {
+      startJackpotReveal();
+      return;
+    }
+    if (promo.type === 'jackpot' && jpRevealing && !jpRevealSettled) {
+      // Don't double-trigger while cycle is mid-animation
+      return;
+    }
+    finalizeClaim();
   };
 
   const renderProgressSection = () => {
@@ -426,14 +479,27 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   const renderJackpotContent = () => {
     const history = promo.modalContent.jackpotHistory;
     const hasHistory = history && history.length > 0;
-    // Seed the winner-picker animation from the most recent JP draftId
-    // (real win) or a stable demo string (so the visual still plays
-    // when the user has no JP hits yet — useful for previews/testing).
-    const animationSeed = hasHistory ? history![0].draftName : 'jackpot-promo-demo';
+
+    if (jpRevealing && jpRevealSeed) {
+      return (
+        <>
+          <JackpotWinnerCycle
+            seed={jpRevealSeed}
+            labels={jpRevealLabels ?? undefined}
+            onSettled={() => setJpRevealSettled(true)}
+          />
+          {jpRevealError && (
+            <p className="text-text-muted text-xs text-center">
+              Couldn&apos;t load drafter names — animation falls back to position labels.
+            </p>
+          )}
+        </>
+      );
+    }
+
     return (
       <>
         {renderProgressSection()}
-        <JackpotWinnerCycle seed={animationSeed} />
         {hasHistory ? (
           <div className="bg-bg-tertiary rounded-xl p-4">
             <h4 className="font-semibold mb-3 text-text-primary">Jackpot Wins</h4>
@@ -800,8 +866,18 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
   // For new-user and tweet-engagement promos, require login + Twitter verification before claiming
   const requiresTwitter = promo.type === 'new-user' || promo.type === 'tweet-engagement';
   const alreadyClaimed = promo.type === 'new-user' ? newUserPromoClaimed : false;
-  const canClaim = promo.claimable && remainingClaims > 0 && !isPromoClaimed && !alreadyClaimed && isLoggedIn && (!requiresTwitter || isTwitterVerified);
-  const claimButtonText = remainingClaims > 1
+  const baseCanClaim = promo.claimable && remainingClaims > 0 && !isPromoClaimed && !alreadyClaimed && isLoggedIn && (!requiresTwitter || isTwitterVerified);
+  // Jackpot needs an extra step: clicking CLAIM once enters the reveal
+  // animation; the button only finalizes after the cycle has settled.
+  const canClaim = baseCanClaim && (promo.type !== 'jackpot' || !jpRevealing || jpRevealSettled);
+  const jpRevealRunning = promo.type === 'jackpot' && jpRevealing && !jpRevealSettled;
+  const claimButtonText = jpRevealRunning
+    ? 'Picking winner…'
+    : promo.type === 'jackpot' && jpRevealing && jpRevealSettled
+    ? 'CONFIRM'
+    : promo.type === 'jackpot' && baseCanClaim
+    ? 'REVEAL'
+    : remainingClaims > 1
     ? `CLAIM (${remainingClaims})`
     : 'CLAIM';
 
