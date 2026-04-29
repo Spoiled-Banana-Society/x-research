@@ -1526,6 +1526,43 @@ function jackpotSpinReward(position: number): number {
 }
 
 /**
+ * Deterministically pick the JP winner index (0..9) from the draftId.
+ * Same draftId always resolves to the same index, so every drafter who
+ * calls recordJackpotHit can independently agree on who won. Eventually
+ * this should derive from the same VRF seed used for slot derivation;
+ * for now sha256(draftId) is fine on staging.
+ */
+function jackpotWinnerIndex(draftId: string): number {
+  const hash = crypto.createHash('sha256').update(draftId).digest();
+  // Use the first 4 bytes as a uint32 to keep modulo bias negligible.
+  const n = hash.readUInt32BE(0);
+  return n % 10;
+}
+
+/**
+ * Look up the draft order from the Go API and return the ownerId at the
+ * given index. Used to gate recordJackpotHit so only the deterministically
+ * picked winner gets credited.
+ */
+async function getDraftWinnerOwner(draftId: string, winnerIndex: number): Promise<string | null> {
+  try {
+    const baseUrl = (
+      process.env.STAGING_DRAFTS_API_URL ||
+      process.env.NEXT_PUBLIC_DRAFTS_API_URL ||
+      'https://sbs-drafts-api-staging-652484219017.us-central1.run.app'
+    ).replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/draft/${encodeURIComponent(draftId)}/state/info`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { draftOrder?: { ownerId?: string }[] };
+    const order = Array.isArray(data?.draftOrder) ? data.draftOrder : [];
+    const winner = order[winnerIndex];
+    return typeof winner?.ownerId === 'string' ? winner.ownerId.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolve the position-in-batch for the JP draft. Prefer reading the
  * draftTracker.FilledLeaguesCount counter (same source as
  * /api/batches/current); fall back to the last entry's position+1 if the
@@ -1550,6 +1587,21 @@ async function getCurrentBatchPosition(): Promise<number> {
 export async function recordJackpotHit(userId: string, draftId: string): Promise<Promo | null> {
   const db = getAdminFirestore();
   await ensureUserSeeded(userId);
+
+  // Only 1 of the 10 drafters wins, per the promo rules. Pick the winner
+  // deterministically from sha256(draftId). Every drafter calls this
+  // endpoint when their slot machine reveals JACKPOT, but the gate below
+  // makes sure only the picked winner's promo gets credited.
+  const winnerIndex = jackpotWinnerIndex(draftId);
+  const winnerOwnerId = await getDraftWinnerOwner(draftId, winnerIndex);
+  if (winnerOwnerId === null) {
+    // Couldn't fetch draft order — bail rather than risk crediting wrong wallet.
+    return null;
+  }
+  if (winnerOwnerId !== userId.toLowerCase()) {
+    // Caller is in the JP draft but isn't the picked winner. No credit.
+    return null;
+  }
 
   const position = await getCurrentBatchPosition();
   const reward = jackpotSpinReward(position);

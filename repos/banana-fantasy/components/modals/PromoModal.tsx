@@ -432,7 +432,7 @@ export function PromoModal({ isOpen, onClose, promo, onClaim, isPromoClaimed = f
             {promo.modalContent.jackpotHistory.map((entry, index) => (
               <div key={index} className="flex justify-between py-2 border-b border-bg-elevated last:border-0">
                 <span className="text-text-secondary">{entry.draftName}</span>
-                <span className="text-jackpot font-semibold">${entry.amount}</span>
+                <span className="text-jackpot font-semibold">{entry.amount} {entry.amount === 1 ? 'spin' : 'spins'}</span>
               </div>
             ))}
           </div>
