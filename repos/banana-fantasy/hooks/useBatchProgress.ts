@@ -43,8 +43,16 @@ export function useBatchProgress(): UseBatchProgressReturn {
     refresh();
     // Poll every 30 seconds for live updates
     const interval = setInterval(refresh, 30_000);
+
+    // Slot machine completion in /draft-room dispatches this event;
+    // gives the JP/HOF counter an instant refresh instead of waiting
+    // for the next poll cycle. See app/draft-room/page.tsx.
+    const onTypeRevealed = () => refresh();
+    window.addEventListener('bbb:type-revealed', onTypeRevealed);
+
     return () => {
       clearInterval(interval);
+      window.removeEventListener('bbb:type-revealed', onTypeRevealed);
       controllerRef.current?.abort();
       controllerRef.current = null;
     };

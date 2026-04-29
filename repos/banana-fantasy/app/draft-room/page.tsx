@@ -1274,6 +1274,16 @@ function DraftRoomContent() {
     }
   }, [mainCountdown, showSlotMachine, slotAnimationDone, draftId]);
 
+  // Notify the global header's BatchProgressIndicator that a draft's
+  // type just got revealed — gives the JP/HOF remaining counter an
+  // instant refresh trigger instead of waiting for the 30s poll. The
+  // listener on the other end is in useBatchProgress.ts.
+  useEffect(() => {
+    if (slotAnimationDone) {
+      window.dispatchEvent(new CustomEvent('bbb:type-revealed'));
+    }
+  }, [slotAnimationDone]);
+
   useEffect(() => {
     if (mainCountdown <= 15 && screenShake) setScreenShake(false);
   }, [mainCountdown, screenShake]);
