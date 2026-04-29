@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { AnimatedEllipsis } from '@/components/ui/AnimatedEllipsis';
 
 interface BatchRandomnessLoadingProps {
   batchNumber: number;
@@ -52,7 +53,7 @@ export function BatchRandomnessLoading({
         </div>
 
         <h2 className="text-xl font-semibold text-white mb-2">
-          🎲 Randomizing Batch #{batchNumber}
+          🎲 Randomizing Batch #{batchNumber}<AnimatedEllipsis />
         </h2>
 
         <p className="text-sm text-white/70 leading-relaxed mb-4">

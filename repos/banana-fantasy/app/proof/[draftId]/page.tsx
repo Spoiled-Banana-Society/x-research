@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { AnimatedEllipsis } from '@/components/ui/AnimatedEllipsis';
 import {
   classifyDraftType,
   combinedSeedHex,
@@ -376,7 +377,7 @@ export default function ProofPage() {
               ) : proof?.status === 'fulfilled' ? (
                 <span className="text-blue-300">🔒 Sealed during batch — salt revealed at BBB #{lastDraftInBatch}</span>
               ) : (
-                <span className="text-amber-300">⏳ Awaiting Chainlink fulfillment</span>
+                <span className="text-amber-300">⏳ Awaiting Chainlink fulfillment<AnimatedEllipsis /></span>
               )}
             </dd>
           </dl>
@@ -428,7 +429,7 @@ export default function ProofPage() {
               {proof.status === 'fulfilled' ? (
                 <span className="text-emerald-300">✓ Fulfilled</span>
               ) : (
-                <span className="text-amber-300">⏳ Awaiting coordinator callback</span>
+                <span className="text-amber-300">⏳ Awaiting coordinator callback<AnimatedEllipsis /></span>
               )}
             </dd>
           </dl>

@@ -2,28 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-function AnimatedEllipsis() {
-  return (
-    <>
-      <style jsx>{`
-        @keyframes vrfDot {
-          0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
-          40% { opacity: 1; transform: translateY(-2px); }
-        }
-        .vrf-dot {
-          display: inline-block;
-          animation: vrfDot 1.2s ease-in-out infinite both;
-        }
-      `}</style>
-      <span aria-hidden className="inline-flex ml-1 gap-[1px]">
-        <span className="vrf-dot" style={{ animationDelay: '0ms' }}>.</span>
-        <span className="vrf-dot" style={{ animationDelay: '160ms' }}>.</span>
-        <span className="vrf-dot" style={{ animationDelay: '320ms' }}>.</span>
-      </span>
-    </>
-  );
-}
+import { AnimatedEllipsis } from '@/components/ui/AnimatedEllipsis';
 
 /**
  * BatchProofBanner — small inline status chip on /drafting indicating
