@@ -36,6 +36,12 @@ interface DraftRoomRevealProps {
   /** Forwarded into the slot-machine overlay so the post-spin
    *  VerifiedBadge links to /proof/[draftId]. */
   draftId?: string;
+  /** When the slot reveal lands on JACKPOT, the parent runs a
+   *  winner-picker animation that cycles through draft positions and
+   *  lands on the deterministic winner. These props drive the tile
+   *  highlight + final celebration treatment. */
+  jpHighlightIdx?: number | null;
+  jpWinnerSettled?: boolean;
 }
 
 export function DraftRoomReveal({
@@ -60,6 +66,8 @@ export function DraftRoomReveal({
   slotAnimationDone,
   onCloseSlotMachine,
   draftId,
+  jpHighlightIdx = null,
+  jpWinnerSettled = false,
 }: DraftRoomRevealProps) {
   const myName = user?.username && !user.username.startsWith('0x') ? user.username : 'You';
 
@@ -150,29 +158,59 @@ export function DraftRoomReveal({
               : '???';
             const truncatedName = displayName.length > 14 ? `${displayName.substring(0, 12)}...` : displayName;
             const showCountdown = i === 0;
-            const bgColor = isUser
+            const isJpCycling = visibleDraftType === 'jackpot' && jpHighlightIdx === i && !jpWinnerSettled;
+            const isJpWinner = visibleDraftType === 'jackpot' && jpWinnerSettled && jpHighlightIdx === i;
+            const bgColor = isJpWinner
+              ? '#FF474C'
+              : isJpCycling
+              ? '#fbbf24'
+              : isUser
               ? (visibleDraftType === 'hof' ? '#F3E216' : visibleDraftType === 'jackpot' ? '#FF474C' : '#222')
               : '#222';
-            const textColor = isUser && visibleDraftType === 'hof' ? '#111'
-              : isUser && visibleDraftType === 'jackpot' ? '#222'
+            const textColor = (isJpWinner || (isUser && visibleDraftType === 'jackpot')) ? '#222'
+              : isJpCycling ? '#111'
+              : isUser && visibleDraftType === 'hof' ? '#111'
               : '#fff';
+            const tileBorder = isJpWinner ? '#fff' : isJpCycling ? '#fbbf24' : isUser ? '#F3E216' : '#444';
+            const tileBoxShadow = isJpWinner
+              ? '0 0 24px 4px rgba(255, 71, 76, 0.85), 0 0 60px 10px rgba(255, 71, 76, 0.5)'
+              : isJpCycling
+              ? '0 0 14px 2px rgba(251, 191, 36, 0.7)'
+              : 'none';
+            const tileTransform = isJpWinner ? 'scale(1.08)' : isJpCycling ? 'scale(1.04)' : 'scale(1)';
 
             return (
               <div
                 key={i}
-                className="flex-shrink-0 text-center overflow-hidden cursor-pointer"
+                className={`flex-shrink-0 text-center overflow-hidden cursor-pointer relative ${isJpWinner ? 'animate-pulse' : ''}`}
                 style={{
                   minWidth: 'clamp(100px, 12vw, 140px)',
                   flex: 1,
                   padding: '10px 0 0 0',
                   borderRadius: '5px',
-                  borderWidth: 1,
+                  borderWidth: isJpWinner ? 2 : 1,
                   borderStyle: 'solid',
-                  borderColor: isUser ? '#F3E216' : '#444',
-                  transition: 'all 0.4s ease-in-out',
+                  borderColor: tileBorder,
+                  transition: 'all 120ms ease-out',
                   background: bgColor,
+                  boxShadow: tileBoxShadow,
+                  transform: tileTransform,
+                  zIndex: isJpWinner ? 10 : isJpCycling ? 5 : 1,
                 }}
               >
+                {isJpWinner && (
+                  <div
+                    className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full font-black text-[10px] tracking-wider"
+                    style={{
+                      background: '#fff',
+                      color: '#FF474C',
+                      boxShadow: '0 0 12px rgba(255,255,255,0.6)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    WINNER
+                  </div>
+                )}
                 <div>
                   {isUser && user?.profilePicture ? (
                     // eslint-disable-next-line @next/next/no-img-element

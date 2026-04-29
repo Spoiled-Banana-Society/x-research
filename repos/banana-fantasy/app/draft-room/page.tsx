@@ -161,6 +161,15 @@ function DraftRoomContent() {
   const [particleBurst, setParticleBurst] = useState<Array<{ id: number; x: number; y: number; angle: number; color: string }>>([]);
   const [pulseGlow, setPulseGlow] = useState(false);
 
+  // Jackpot winner-picker animation state. After the slot reveal lands
+  // on JACKPOT, we deterministically pick a winner index (sha256(draftId)
+  // mod 10 — same algorithm as recordJackpotHit on the server) and
+  // animate a highlight cycling through the 10 draft-order tiles before
+  // settling on the winner.
+  const [jpHighlightIdx, setJpHighlightIdx] = useState<number | null>(null);
+  const [jpWinnerSettled, setJpWinnerSettled] = useState(false);
+  const jpAnimationStartedRef = useRef<string | null>(null);
+
   const [draftOrder, setDraftOrder] = useState<typeof DRAFT_PLAYERS>(() => {
     if (stored?.draftOrder) return stored.draftOrder;
     if (isLiveMode && walletParam) {
@@ -1177,6 +1186,68 @@ function DraftRoomContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftType, draftId, urlDraftId, isLiveMode, isPaidDraft, walletParam, user?.id]);
 
+  // Jackpot winner-picker animation. Once the slot reveal lands on
+  // JACKPOT and the slot animation completes, cycle a highlight through
+  // the 10 draft-order tiles, slowing down with quadratic easing, and
+  // land on the deterministic winner (sha256(draftId) mod 10 — matches
+  // recordJackpotHit on the server). Tile styling treats the cycling
+  // and settled-winner states differently in DraftRoomReveal.tsx.
+  useEffect(() => {
+    if (draftType !== 'jackpot' || !slotAnimationDone) return;
+    const id = draftId || urlDraftId;
+    if (!id) return;
+    if (jpAnimationStartedRef.current === id) return;
+    jpAnimationStartedRef.current = id;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    (async () => {
+      let winnerIdx = 0;
+      try {
+        const enc = new TextEncoder();
+        const digest = await crypto.subtle.digest('SHA-256', enc.encode(id));
+        const view = new DataView(digest);
+        winnerIdx = view.getUint32(0, false) % 10;
+      } catch {
+        // If WebCrypto somehow unavailable, fall back to a string-hash
+        // shim so the animation still runs (server-side will still gate
+        // claim correctly).
+        let h = 0;
+        for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+        winnerIdx = Math.abs(h) % 10;
+      }
+      if (cancelled) return;
+
+      const totalTicks = 28;
+      // Pre-position so the natural cycle lands on winnerIdx at the last tick.
+      let curr = ((winnerIdx - (totalTicks - 1)) % 10 + 10) % 10;
+      setJpWinnerSettled(false);
+
+      const tick = (n: number) => {
+        if (cancelled) return;
+        if (n >= totalTicks) {
+          setJpHighlightIdx(winnerIdx);
+          setJpWinnerSettled(true);
+          return;
+        }
+        setJpHighlightIdx(curr);
+        curr = (curr + 1) % 10;
+        // Quadratic ease-out on tick interval: starts ~70ms, ends ~450ms.
+        const t = n / totalTicks;
+        const interval = 70 + Math.pow(t, 2) * 380;
+        timeoutId = setTimeout(() => tick(n + 1), interval);
+      };
+      tick(0);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftType, slotAnimationDone, draftId, urlDraftId]);
+
   useEffect(() => {
     if (phase !== 'pre-spin') return;
     const startedAt = preSpinStartedAtRef.current;
@@ -1684,6 +1755,8 @@ function DraftRoomContent() {
                 draftType={draftType}
                 slotAnimationDone={slotAnimationDone}
                 draftId={draftId || urlDraftId}
+                jpHighlightIdx={jpHighlightIdx}
+                jpWinnerSettled={jpWinnerSettled}
                 onCloseSlotMachine={() => {
                   setShowSlotMachine(false);
                   slotActiveRef.current = false;
