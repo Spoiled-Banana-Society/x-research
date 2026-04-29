@@ -228,7 +228,7 @@ async function readBatchOnChain(
       abi: BBB4_BATCH_PROOF_VRF_COMMIT_ABI,
       functionName: 'getBatch',
       args: [batchNumber],
-    })) as readonly [bigint, bigint, `0x${string}`, `0x${string}`, bigint, bigint, bigint];
+    })) as readonly [bigint, bigint, `0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean, boolean];
     return {
       vrfRequestId: result[0],
       randomness: result[1],
