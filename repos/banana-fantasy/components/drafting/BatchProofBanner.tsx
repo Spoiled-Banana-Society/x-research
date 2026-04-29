@@ -84,7 +84,6 @@ export function BatchProofBanner() {
     proof.status === 'pending' ||
     (isVRF && proof.status === 'requested') ||
     (isVRFCommit && proof.status === 'requested');
-  const isRevealed = proof.status === 'revealed';
 
   const batchStart = (info.currentBatchNumber - 1) * 100 + 1;
   const sampleDraftId = `2025-fast-draft-${batchStart}`;
@@ -106,12 +105,9 @@ export function BatchProofBanner() {
         <AnimatedEllipsis />
       </>
     );
-  } else if (isRevealed) {
-    icon = '✓';
-    copy = <>Batch #{info.currentBatchNumber} verified by Chainlink VRF</>;
   } else {
-    icon = '🔒';
-    copy = <>Batch #{info.currentBatchNumber} randomized by Chainlink VRF · types sealed until batch closes</>;
+    icon = '✓';
+    copy = <>Batch #{info.currentBatchNumber} randomizing done · verified by Chainlink VRF</>;
   }
 
   return (

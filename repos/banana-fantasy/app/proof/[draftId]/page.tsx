@@ -372,12 +372,10 @@ export default function ProofPage() {
 
             <dt className="text-white/50">Status</dt>
             <dd>
-              {proof?.status === 'revealed' ? (
-                <span className="text-emerald-300">✓ Salt revealed — math fully verifiable</span>
-              ) : proof?.status === 'fulfilled' ? (
-                <span className="text-blue-300">🔒 Sealed during batch — salt revealed at BBB #{lastDraftInBatch}</span>
+              {proof?.status === 'revealed' || proof?.status === 'fulfilled' ? (
+                <span className="text-emerald-300">✓ Randomizing done — verified by Chainlink VRF</span>
               ) : (
-                <span className="text-amber-300">⏳ Awaiting Chainlink fulfillment<AnimatedEllipsis /></span>
+                <span className="text-amber-300">⏳ Randomizing<AnimatedEllipsis /></span>
               )}
             </dd>
           </dl>
