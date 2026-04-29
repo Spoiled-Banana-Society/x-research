@@ -6,22 +6,19 @@ import { ApiError } from '@/lib/api/errors';
 import { json, jsonError } from '@/lib/api/routeUtils';
 import { requireAdmin } from '@/lib/adminAuth';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
-import { getDraftInfo } from '@/lib/draftApi';
 import { logger } from '@/lib/logger';
 
 // GET /api/spectate/active-drafts
 //
 // Admin-gated. Returns the most recent in-progress drafts so the
 // /admin Spectate tab can list them. Strategy:
-// 1. Read drafts/draftTracker.FilledLeaguesCount to get the highest draft #.
-// 2. Probe the latest 30 draft IDs (both fast + slow) by hitting the Go
-//    API getDraftInfo for each in parallel.
-// 3. Keep only drafts where 1 <= pickNumber <= 150 (drafting) OR the
-//    Firestore doc exists but no info yet (filling).
-// 4. Sort by draft # desc and trim to top 50.
-//
-// 30 lookups per side is acceptable for an admin tool that loads on
-// demand. Could be replaced with a Firestore composite query later.
+// 1. Read drafts/draftTracker.FilledLeaguesCount as the high-water mark.
+// 2. Probe the latest 30 fast + 30 slow draft IDs in parallel via the
+//    Go API state/info endpoint (server-side URL, never PROD).
+// 3. Keep drafts where 1 <= pickNumber <= 150 (drafting). Anything that
+//    404s is either a future fill slot or pre-state-init filling — we
+//    flag those as filling=true if a Firestore doc exists for the id.
+// 4. Sort newest first.
 
 const PROBE_DEPTH = 30;
 const SPEEDS = ['fast', 'slow'] as const;
@@ -36,6 +33,30 @@ interface ActiveDraft {
   filling: boolean;
 }
 
+interface DraftInfoResponse {
+  pickNumber: number;
+  currentDrafter: string;
+  displayName: string;
+}
+
+function getServerDraftsApiUrl(): string {
+  return (
+    process.env.STAGING_DRAFTS_API_URL ||
+    process.env.NEXT_PUBLIC_DRAFTS_API_URL ||
+    'https://sbs-drafts-api-staging-652484219017.us-central1.run.app'
+  ).replace(/\/$/, '');
+}
+
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: Request) {
   const rateLimited = rateLimit(req, RATE_LIMITS.admin);
   if (rateLimited) return rateLimited;
@@ -46,72 +67,56 @@ export async function GET(req: Request) {
 
     const db = getAdminFirestore();
     const trackerSnap = await db.collection('drafts').doc('draftTracker').get();
-    const filled = Number((trackerSnap.data() as { FilledLeaguesCount?: number } | undefined)?.FilledLeaguesCount ?? 0);
+    const filled = Number(
+      (trackerSnap.data() as { FilledLeaguesCount?: number } | undefined)?.FilledLeaguesCount ?? 0,
+    );
     if (filled <= 0) return json({ drafts: [] }, 200);
 
-    // Year prefix matches what Go API mints (lib/draftApi callsites use
-    // bare draftIds, the prefix lives in the Firestore doc IDs). Read
-    // any one recent doc ID via collection list to derive the prefix.
-    const recent = await db.collection('drafts').orderBy('__name__', 'desc').limit(50).get();
-    const sampleId = recent.docs.map(d => d.id).find(id => id.includes('-draft-'));
-    const yearPrefix = sampleId ? sampleId.split('-')[0] : new Date().getFullYear().toString();
+    const yearPrefix = new Date().getFullYear().toString();
+    const apiBase = getServerDraftsApiUrl();
 
     const candidates: { id: string; speed: 'fast' | 'slow'; num: number }[] = [];
     for (const speed of SPEEDS) {
       for (let i = 0; i < PROBE_DEPTH; i++) {
-        const num = filled - i;
+        const num = filled - i + 1; // include the currently-filling draft (filled+1)
         if (num <= 0) break;
         candidates.push({ id: `${yearPrefix}-${speed}-draft-${num}`, speed, num });
       }
     }
 
-    // Read Firestore docs in parallel to grab Level + filter to existing
-    const docSnaps = await Promise.all(
-      candidates.map(c => db.collection('drafts').doc(c.id).get().catch(() => null)),
-    );
-    const present = candidates
-      .map((c, i) => {
+    // Probe both Firestore (for Level/DisplayName) and the Go API (for
+    // pickNumber/currentDrafter) in one parallel sweep.
+    const [docSnaps, infoResults] = await Promise.all([
+      Promise.all(
+        candidates.map(c => db.collection('drafts').doc(c.id).get().catch(() => null)),
+      ),
+      Promise.all(
+        candidates.map(c =>
+          fetchJson<DraftInfoResponse>(`${apiBase}/draft/${encodeURIComponent(c.id)}/state/info`),
+        ),
+      ),
+    ]);
+
+    const drafts: ActiveDraft[] = candidates
+      .map((c, i): ActiveDraft | null => {
         const snap = docSnaps[i];
-        if (!snap || !snap.exists) return null;
-        const data = snap.data() as { Level?: string; DisplayName?: string } | undefined;
-        return {
-          ...c,
-          level: data?.Level ?? null,
-          displayName: data?.DisplayName ?? c.id,
-        };
-      })
-      .filter((c): c is NonNullable<typeof c> => c !== null);
-
-    // Probe the Go API for each present draft to get pickNumber + currentDrafter.
-    // getDraftInfo throws 404 for drafts that haven't reached info init yet
-    // (filling phase) — treat those as filling=true.
-    const infoResults = await Promise.allSettled(present.map(c => getDraftInfo(c.id)));
-
-    const drafts: ActiveDraft[] = present.map((c, i) => {
-      const r = infoResults[i];
-      if (r.status === 'fulfilled') {
+        const info = infoResults[i];
+        const docExists = !!snap?.exists;
+        if (!docExists && !info) return null;
+        const data = snap?.exists ? (snap.data() as { Level?: string; DisplayName?: string } | undefined) : undefined;
+        const pickNumber = info?.pickNumber ?? 0;
         return {
           draftId: c.id,
-          displayName: c.displayName,
+          displayName: info?.displayName ?? data?.DisplayName ?? c.id,
           speed: c.speed,
-          level: c.level,
-          pickNumber: r.value.pickNumber ?? 0,
-          currentDrafter: r.value.currentDrafter ?? '',
-          filling: false,
+          level: data?.Level ?? null,
+          pickNumber,
+          currentDrafter: info?.currentDrafter ?? '',
+          filling: !info,
         };
-      }
-      return {
-        draftId: c.id,
-        displayName: c.displayName,
-        speed: c.speed,
-        level: c.level,
-        pickNumber: 0,
-        currentDrafter: '',
-        filling: true,
-      };
-    });
+      })
+      .filter((d): d is ActiveDraft => d !== null);
 
-    // Active = currently drafting (1 <= pickNumber <= 150) OR filling.
     const active = drafts
       .filter(d => d.filling || (d.pickNumber > 0 && d.pickNumber <= 150))
       .sort((a, b) => b.draftId.localeCompare(a.draftId));
