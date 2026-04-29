@@ -5,11 +5,23 @@ import Link from 'next/link';
 
 function AnimatedEllipsis() {
   return (
-    <span aria-hidden className="inline-flex ml-0.5">
-      <span className="animate-pulse" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}>.</span>
-      <span className="animate-pulse" style={{ animationDelay: '200ms', animationDuration: '1.4s' }}>.</span>
-      <span className="animate-pulse" style={{ animationDelay: '400ms', animationDuration: '1.4s' }}>.</span>
-    </span>
+    <>
+      <style jsx>{`
+        @keyframes vrfDot {
+          0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+          40% { opacity: 1; transform: translateY(-2px); }
+        }
+        .vrf-dot {
+          display: inline-block;
+          animation: vrfDot 1.2s ease-in-out infinite both;
+        }
+      `}</style>
+      <span aria-hidden className="inline-flex ml-1 gap-[1px]">
+        <span className="vrf-dot" style={{ animationDelay: '0ms' }}>.</span>
+        <span className="vrf-dot" style={{ animationDelay: '160ms' }}>.</span>
+        <span className="vrf-dot" style={{ animationDelay: '320ms' }}>.</span>
+      </span>
+    </>
   );
 }
 
