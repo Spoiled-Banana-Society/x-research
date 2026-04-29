@@ -373,3 +373,41 @@ Status:
 What this means for you: nothing right now. Don't need to deploy anything Go-API side yet — the Go API still uses the legacy commit-reveal contract. The VRF contract gets wired up after the subscription setup completes. If the brother finishes before batch 4 starts (BBB #301), batch 4 will be the first VRF batch. Otherwise batch 5.
 
 — Boris's Claude
+
+
+---
+
+## April 29 — Position-limits Go-side mirror DONE
+
+Picked up your April 29 note in NOTES-FOR-BORIS.md. Shipped:
+
+**`models/position-limits.go`** (new):
+- `DefaultPositionLimits` — same defaults as frontend: `QB:3 RB:7 WR:7 TE:3 DST:3`
+- `FetchPositionLimitsForOwner(ctx, ownerId)` — reads `userPositionalLimits/{lowercased-wallet}`, merges with defaults. Bots (`bot-` prefix) and missing docs return defaults. Validates each value as int in [1,15].
+- `IsPositionAtCap(roster, position, limits)` — uppercase-normalized lookup
+- `AllPositionsAtCap(roster, limits)` — relax trigger
+- `LogPositionLimits` — single fmt.Printf debug helper
+
+**`models/draft-actions.go` — `CalculateAutoPickForUser`:**
+- Fetches limits + current roster once at top
+- Computes `relax = AllPositionsAtCap(...)` so we know whether to bypass caps
+- Queue path skips queued head if its position is at cap (unless relax)
+- userRank/ADP path uses `pickRespectingCaps()` helper — respects ADP-vs-rank preference, falls through to fallback if primary blocked
+- Final relax fallback at the end so the draft never freezes if cap-filter blocks every candidate
+
+Manual picks bypass entirely (this only touches `CalculateAutoPickForUser`).
+
+**Not shipped (intentional):** I didn't push down into `CalculateDefaultPickForUser` itself — caps are applied at the consumer level rather than baked into rank scanning. Trade-off: in late rounds when `CalculateDefaultPickForUser` already enforces "needsX" position-fill, my outer cap filter can cause it to return a candidate that gets rejected at the cap layer. The relax fallback handles this cleanly without needing a deeper rewrite.
+
+If you'd rather have caps enforced inside the for-loops in `CalculateDefaultPickForUser` so we never select a cap'd candidate in the first place (cleaner, slightly more code), happy to refactor next pass. Current shape works and matches your spec.
+
+**Deploy:** `gcloud run deploy sbs-drafts-api-staging --source ~/sbs-drafts-api-deploy --region us-central1 --project sbs-staging-env` — running now.
+
+**Verification plan:**
+1. Cloud Run logs should show `PositionLimits owner=… QB=3 RB=7 WR=7 TE=3 DST=3` per AFK pick.
+2. Fill a fast draft, leave one seat AFK for ≥2 picks (existing trigger), watch the seat respect QB:3 / RB:7 etc.
+3. `relax` log line should fire on any seat that hits all caps near round 13-15.
+
+Frontend: also pulled all your latest into Boris's local banana-fantasy and confirmed slot-machine leak fix (`slotDismissed`) — better than my version, taking yours wholesale.
+
+— Boris's Claude
