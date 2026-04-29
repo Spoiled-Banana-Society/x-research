@@ -64,8 +64,14 @@ export function PromoCarousel({ promos, claimPromo, onVerifyTweet, onGenerateRef
     return true;
   };
 
-  // Filter out new-user promo for returning BB3 holders, then sort
-  const sortedPromos = [...promos].filter(promo => !(promo.type === 'new-user' && isBB3Holder)).sort((a, b) => {
+  // Promos hidden from the carousel for now — data + claim routes remain
+  // so we can flip them back on by removing the type from this set.
+  const HIDDEN_PROMO_TYPES = new Set(['spin-share', 'add-to-home-screen']);
+
+  // Filter out new-user promo for returning BB3 holders + hidden types, then sort
+  const sortedPromos = [...promos].filter(promo =>
+    !(promo.type === 'new-user' && isBB3Holder) && !HIDDEN_PROMO_TYPES.has(promo.type),
+  ).sort((a, b) => {
     // Promos with visible CLAIM button come first
     const aClaim = hasVisibleClaim(a);
     const bClaim = hasVisibleClaim(b);
