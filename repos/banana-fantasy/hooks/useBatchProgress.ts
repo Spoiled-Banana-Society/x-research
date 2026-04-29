@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getBatchProgress, type BatchProgress } from '@/lib/api/leagues';
+import { useEffect, useState, useCallback } from 'react';
+import { type BatchProgress } from '@/lib/api/leagues';
 
 interface UseBatchProgressReturn {
   data: BatchProgress | null;
@@ -8,55 +8,87 @@ interface UseBatchProgressReturn {
   refresh: () => void;
 }
 
+/**
+ * Real-time batch progress stream. Subscribes to the SSE endpoint at
+ * /api/league/batchProgress/stream which is itself listening to the
+ * Firestore drafts/draftTracker doc via onSnapshot. Each push lands in
+ * the browser within ~200ms of the Go API writing JP/HOF arrays at a
+ * draft fill — every user sees the "X JP / Y HOF remaining" header
+ * decrement at the same moment the slot machine reveals the type, no
+ * 30s polling lag.
+ *
+ * Why this matters: in the last few drafts of a batch with the JP
+ * still unhit, users will rush to enter. If the header lags, someone
+ * could pay $25 for a draft AFTER the JP just hit elsewhere and feel
+ * cheated. Real-time eliminates the race.
+ *
+ * Falls back to a single fetch if EventSource is unavailable (older
+ * browsers, server-side rendering, etc.) but every modern browser
+ * supports SSE natively. No reconnect logic needed — EventSource auto-
+ * reconnects on transient errors.
+ */
 export function useBatchProgress(): UseBatchProgressReturn {
   const [data, setData] = useState<BatchProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const refresh = useCallback(() => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setIsLoading(true);
-    setError(null);
-
-    getBatchProgress(controller.signal)
-      .then(result => {
-        if (controller.signal.aborted) return;
-        setData(result);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err : new Error('Unknown error'));
-        setIsLoading(false);
-      })
-      .finally(() => {
-        if (controllerRef.current === controller) {
-          controllerRef.current = null;
-        }
-      });
+    // Forces a fresh EventSource connection. Rarely needed (the stream
+    // already pushes updates) but exposed for any consumer that wants
+    // to manually re-sync.
+    setRefreshTick((t) => t + 1);
   }, []);
 
   useEffect(() => {
-    refresh();
-    // Poll every 30 seconds for live updates
-    const interval = setInterval(refresh, 30_000);
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+      // SSR / unsupported browser — degrade to a single fetch.
+      let cancelled = false;
+      fetch('/league/batchProgress', { signal: AbortSignal.timeout(5000) }).catch(() => null)
+        .then(async (res) => {
+          if (cancelled || !res || !res.ok) {
+            setIsLoading(false);
+            return;
+          }
+          const body = (await res.json()) as BatchProgress;
+          setData(body);
+          setIsLoading(false);
+        });
+      return () => { cancelled = true; };
+    }
 
-    // Slot machine completion in /draft-room dispatches this event;
-    // gives the JP/HOF counter an instant refresh instead of waiting
-    // for the next poll cycle. See app/draft-room/page.tsx.
-    const onTypeRevealed = () => refresh();
-    window.addEventListener('bbb:type-revealed', onTypeRevealed);
+    const url = '/api/league/batchProgress/stream';
+    const es = new EventSource(url);
+
+    const handle = (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data) as BatchProgress;
+        setData(payload);
+        setIsLoading(false);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('parse error'));
+      }
+    };
+
+    es.addEventListener('snapshot', handle);
+    es.addEventListener('update', handle);
+
+    es.onerror = (ev) => {
+      // EventSource auto-reconnects on transient failures. Only surface
+      // a hard failure if we never got initial data.
+      if (es.readyState === EventSource.CLOSED) {
+        setError(new Error('Stream closed'));
+      }
+      void ev;
+    };
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('bbb:type-revealed', onTypeRevealed);
-      controllerRef.current?.abort();
-      controllerRef.current = null;
+      es.removeEventListener('snapshot', handle);
+      es.removeEventListener('update', handle);
+      es.close();
     };
-  }, [refresh]);
+  }, [refreshTick]);
 
   return { data, isLoading, error, refresh };
 }
