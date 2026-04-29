@@ -2,9 +2,12 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+import { createPublicClient, http, type Address } from 'viem';
 import { json, jsonError } from '@/lib/api/routeUtils';
 import { getAdminFirestore, isFirestoreConfigured } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { BASE, BASE_RPC_URL } from '@/lib/contracts/bbb4';
+import { BBB4_BATCH_PROOF_VRF_COMMIT_ABI } from '@/lib/contracts/bbb4BatchProofVRFCommitArtifact';
 
 /**
  * GET /api/batches/{batchNumber}/proof
@@ -112,14 +115,41 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
       data.variant === 'vrf' ? 'vrf'
       : data.variant === 'vrf-commit' ? 'vrf-commit'
       : 'commit-reveal';
+
+    // Firestore status flips from "requested" → "fulfilled" only when our
+    // Go API processes the VRF callback (next batch boundary fill). But
+    // Chainlink may have already delivered randomness on-chain seconds
+    // after the request — so Firestore can lag behind reality for minutes
+    // or days depending on draft cadence. Reflect on-chain truth: if the
+    // doc says "requested" and the contract reports a non-zero
+    // fulfilledAt, treat it as fulfilled (vrf-only) or sealed (vrf-commit,
+    // which keeps the salt hidden until reveal).
+    let effectiveStatus: ProofStatus = data.status;
+    let effectiveFulfilledAt = data.vrfFulfilledAt;
+    let effectiveRandomness = data.vrfRandomness;
+    if (data.status === 'requested' && (variant === 'vrf' || variant === 'vrf-commit')) {
+      const cfgSnap = await db.collection('system_config').doc('batchProof').get();
+      const contractAddress = cfgSnap.exists
+        ? (cfgSnap.data()?.contractAddress as Address | undefined)
+        : undefined;
+      if (contractAddress) {
+        const onChain = await readBatchOnChain(contractAddress, BigInt(batchNumber));
+        if (onChain && onChain.fulfilledAt > 0n) {
+          effectiveStatus = 'fulfilled';
+          effectiveFulfilledAt = Number(onChain.fulfilledAt);
+          effectiveRandomness = '0x' + onChain.randomness.toString(16).padStart(64, '0');
+        }
+      }
+    }
+
     const isPubliclyVerifiable =
       variant === 'vrf'
-        ? data.status === 'fulfilled'
-        : data.status === 'revealed';
+        ? effectiveStatus === 'fulfilled'
+        : effectiveStatus === 'revealed';
 
     return json({
       batchNumber,
-      status: data.status,
+      status: effectiveStatus,
       variant,
 
       // Legacy commit-reveal fields
@@ -143,10 +173,10 @@ export async function GET(req: Request, ctx: { params: { batchNumber: string } }
         // vrf-only: gate on fulfillment. vrf-commit: only meaningful once
         // combined with the salt, but the randomness itself is on-chain
         // anyway so we expose it as soon as we have it.
-        (variant === 'vrf' || variant === 'vrf-commit') && data.vrfFulfilledAt
-          ? data.vrfRandomness
+        (variant === 'vrf' || variant === 'vrf-commit') && effectiveFulfilledAt
+          ? effectiveRandomness
           : undefined,
-      vrfFulfilledAt: data.vrfFulfilledAt,
+      vrfFulfilledAt: effectiveFulfilledAt,
       vrfCoordinator: data.vrfCoordinator,
 
       // VRF+commit fields. SaltHash is public from request time;
@@ -175,4 +205,41 @@ function prelaunch(batchNumber: number, note?: string) {
       note ??
       'Batch fills predate the Chainlink VRF rollout. Distribution constraint (94/5/1 per 100) was enforced in code.',
   };
+}
+
+interface OnChainBatchState {
+  vrfRequestId: bigint;
+  randomness: bigint;
+  saltHash: `0x${string}`;
+  salt: `0x${string}`;
+  requestedAt: bigint;
+  fulfilledAt: bigint;
+  revealedAt: bigint;
+}
+
+async function readBatchOnChain(
+  contractAddress: Address,
+  batchNumber: bigint,
+): Promise<OnChainBatchState | null> {
+  try {
+    const client = createPublicClient({ chain: BASE, transport: http(BASE_RPC_URL) });
+    const result = (await client.readContract({
+      address: contractAddress,
+      abi: BBB4_BATCH_PROOF_VRF_COMMIT_ABI,
+      functionName: 'getBatch',
+      args: [batchNumber],
+    })) as readonly [bigint, bigint, `0x${string}`, `0x${string}`, bigint, bigint, bigint];
+    return {
+      vrfRequestId: result[0],
+      randomness: result[1],
+      saltHash: result[2],
+      salt: result[3],
+      requestedAt: result[4],
+      fulfilledAt: result[5],
+      revealedAt: result[6],
+    };
+  } catch (err) {
+    logger.warn('batches.proof.onchain_read_failed', { err });
+    return null;
+  }
 }

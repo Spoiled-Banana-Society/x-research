@@ -167,12 +167,12 @@ export default function ProofPage() {
     <div className="w-full px-4 sm:px-8 lg:px-12 py-8 max-w-3xl mx-auto space-y-6">
       <div>
         <Link href="/drafting" className="text-xs text-white/50 hover:text-white/80">← Back</Link>
-        <h1 className="text-2xl font-semibold text-white mt-2">Provably Fair · BBB #{locator.draftNumber}</h1>
+        <h1 className="text-2xl font-semibold text-white mt-2">
+          Provably Fair · BBB #{locator.batchStartDraftNumber}–#{locator.batchStartDraftNumber + 99}
+        </h1>
         <p className="text-sm text-white/60 mt-1">
-          Draft #{locator.draftNumber} is position{' '}
-          <span className="font-mono text-white">{locator.positionInBatch}</span> in batch{' '}
-          <span className="font-mono text-white">#{locator.batchNumber}</span>{' '}
-          (BBB #{locator.batchStartDraftNumber}–#{locator.batchStartDraftNumber + 99}).
+          Batch #{locator.batchNumber} — randomization for drafts BBB #{locator.batchStartDraftNumber} through BBB #{locator.batchStartDraftNumber + 99}.
+          You're viewing this from BBB #{locator.draftNumber}.
         </p>
         {proof && proof.status !== 'pre-launch' && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
