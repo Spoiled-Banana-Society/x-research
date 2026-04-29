@@ -1471,8 +1471,15 @@ function DraftRoomContent() {
   // 'filling' and 'countdown' phases — defeating the slot-machine
   // reveal. Now we only show the type after the slot animation
   // completes, drafting has actually started, an explicit URL override
-  // sets it, or the slot machine is disabled entirely.
-  const visibleDraftType = specialTypeParam || slotAnimationDone || phase === 'drafting' || !showSlotMachine ? draftType : null;
+  // sets it, or the user has explicitly dismissed the slot machine.
+  //
+  // Earlier version checked `!showSlotMachine`, which was true BEFORE
+  // the slot machine first mounts (set to true in the spinning
+  // transition at line ~1214) — so during 'countdown' the JP/HOF logo
+  // leaked through bannerControls. Switching to slotDismissed (set in
+  // draftStore when the user closes the modal) fixes the leak.
+  const slotDismissed = !!(draftId && draftStore.getDraft(draftId)?.slotDismissed);
+  const visibleDraftType = specialTypeParam || slotAnimationDone || phase === 'drafting' || slotDismissed ? draftType : null;
   const [rosterViewPlayer, setRosterViewPlayer] = useState<string | undefined>(undefined);
   const handleViewRoster = (playerName: string) => {
     setRosterViewPlayer(playerName);
