@@ -107,7 +107,7 @@ export function BatchProofBanner() {
     );
   } else {
     icon = '✓';
-    copy = <>Batch #{info.currentBatchNumber} randomizing done · verified by Chainlink VRF</>;
+    copy = <>Batch #{info.currentBatchNumber} done randomizing · verified by Chainlink VRF</>;
   }
 
   return (

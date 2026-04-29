@@ -373,7 +373,7 @@ export default function ProofPage() {
             <dt className="text-white/50">Status</dt>
             <dd>
               {proof?.status === 'revealed' || proof?.status === 'fulfilled' ? (
-                <span className="text-emerald-300">✓ Randomizing done — verified by Chainlink VRF</span>
+                <span className="text-emerald-300">✓ Done randomizing — verified by Chainlink VRF</span>
               ) : (
                 <span className="text-amber-300">⏳ Randomizing<AnimatedEllipsis /></span>
               )}
