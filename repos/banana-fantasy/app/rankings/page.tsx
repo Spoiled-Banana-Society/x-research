@@ -7,6 +7,8 @@ import { Modal } from '@/components/ui/Modal';
 import { TeamPosition } from '@/types';
 import { useRankings } from '@/hooks/useRankings';
 import { PositionLimitsPanel } from '@/components/rankings/PositionLimitsPanel';
+import { useAuth } from '@/hooks/useAuth';
+import { Rankings } from '@/utils/api';
 
 // Position color mapping
 const getPositionColor = (position: string): string => {
@@ -20,6 +22,7 @@ const getPositionColor = (position: string): string => {
 
 export default function RankingsPage() {
   const rankingsQuery = useRankings();
+  const { walletAddress } = useAuth();
   const [rankings, setRankings] = useState<TeamPosition[]>([]);
   const [showCsvMenu, setShowCsvMenu] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -28,8 +31,13 @@ export default function RankingsPage() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<TeamPosition | null>(null);
+  const [savingRankings, setSavingRankings] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userOrderLoadedRef = useRef(false);
 
+  // Initial seed: sort the global rankings by seasonPoints. Replaced by
+  // the user's saved order once it loads (below).
   useEffect(() => {
     if (!rankingsQuery.data?.length) return;
     setRankings((prev) => {
@@ -37,6 +45,51 @@ export default function RankingsPage() {
       return [...rankingsQuery.data].sort((a, b) => b.seasonPoints - a.seasonPoints);
     });
   }, [rankingsQuery.data]);
+
+  // Build the playerId the Go API uses for a TeamPosition row.
+  const playerIdFor = (pos: TeamPosition) => `${pos.team}-${pos.position}`;
+
+  // Apply the user's saved rank order to the global rankings list once
+  // both the global data and the user's saved rankings have loaded.
+  useEffect(() => {
+    if (userOrderLoadedRef.current) return;
+    if (!walletAddress || !rankingsQuery.data?.length) return;
+    let cancelled = false;
+    Rankings.getRankings(walletAddress).then(saved => {
+      if (cancelled || !saved || saved.length === 0) return;
+      const orderMap = new Map<string, number>();
+      for (const r of saved as { playerId: string; rank: number }[]) {
+        orderMap.set(r.playerId, r.rank);
+      }
+      setRankings(prev => {
+        if (prev.length === 0) return prev;
+        return [...prev].sort((a, b) => {
+          const aRank = orderMap.get(playerIdFor(a)) ?? Number.MAX_SAFE_INTEGER;
+          const bRank = orderMap.get(playerIdFor(b)) ?? Number.MAX_SAFE_INTEGER;
+          return aRank - bRank;
+        });
+      });
+      userOrderLoadedRef.current = true;
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [walletAddress, rankingsQuery.data]);
+
+  // Persist the current order to the Go API. Fires after every reorder.
+  const persistRankings = (next: TeamPosition[]) => {
+    if (!walletAddress) return;
+    setSavingRankings(true);
+    const payload = {
+      ranking: next.map((pos, i) => ({
+        playerId: playerIdFor(pos),
+        rank: i + 1,
+        score: pos.seasonPoints,
+      })),
+    };
+    Rankings.updateRankings(walletAddress, payload)
+      .then(() => setSavedAt(Date.now()))
+      .catch(() => { /* swallow — UI shows "saving…" indicator */ })
+      .finally(() => setSavingRankings(false));
+  };
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
@@ -54,6 +107,7 @@ export default function RankingsPage() {
       const [draggedItem] = newRankings.splice(draggedIndex, 1);
       newRankings.splice(dragOverIndex, 0, draggedItem);
       setRankings(newRankings);
+      persistRankings(newRankings);
     }
     setDraggedIndex(null);
     setDragOverIndex(null);
@@ -67,6 +121,7 @@ export default function RankingsPage() {
     const newRankings = [...rankings];
     [newRankings[index], newRankings[newIndex]] = [newRankings[newIndex], newRankings[index]];
     setRankings(newRankings);
+    persistRankings(newRankings);
   };
 
   // CSV Download function
@@ -139,8 +194,19 @@ export default function RankingsPage() {
 
       <PositionLimitsPanel />
 
-      {/* CSV Controls */}
-      <div className="flex items-center justify-end mb-6">
+      {/* CSV Controls + save status */}
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="text-xs text-text-muted">
+          {!walletAddress ? (
+            <span>Sign in to save your custom rankings.</span>
+          ) : savingRankings ? (
+            <span className="italic">Saving rankings…</span>
+          ) : savedAt ? (
+            <span className="text-text-secondary">Rankings saved</span>
+          ) : (
+            <span>Drag rows or use the arrows to reorder. Auto-saves to your account.</span>
+          )}
+        </div>
         {/* CSV Upload/Download Button */}
         <div className="relative">
           <Button
